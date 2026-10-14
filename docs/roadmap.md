@@ -1,14 +1,14 @@
 # Roadmap and status
 
 - Updated: 2026-10-14
-- Current milestone: **M0 complete** (pending merge of `spike/ios-vault`); next: **M1 – Core editor**
+- Current milestone: **M1 – Core editor** (M0 complete and merged)
 
 Each milestone ends in a usable build. Scope can move between milestones; the order should not.
 
 | Milestone | Content | Status |
 | --- | --- | --- |
 | M0 – Foundations | Decisions (ADR-0001…0014), format spec, repository and CI, iOS feasibility spike | Done 2026-10-14 |
-| M1 – Core editor | Open a vault, CodeMirror editor with live preview, images, autosave, safe writes, change detection | Next |
+| M1 – Core editor | Open a vault, CodeMirror editor with live preview, images, autosave, safe writes, change detection | In progress |
 | M2 – Index and organization | SQLite/FTS5 index, tag folders with combination subfolders, full-text search | |
 | M3 – Smart folders | Query language, saved searches | |
 | M4 – Import | Apple Notes (macOS 26 Markdown export), Simplenote, HTML, Markdown folders | |
@@ -45,5 +45,5 @@ Editor:
 
 Housekeeping:
 
-- [ ] Merge `spike/ios-vault` into `main` via pull request (first PR run of the commit-message check)
+- [x] Merge `spike/ios-vault` into `main` via pull request (first PR run of the commit-message check)
 - [ ] Merge the Dependabot pull requests for GitHub Actions
