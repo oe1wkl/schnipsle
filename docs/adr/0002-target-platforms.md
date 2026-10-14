@@ -24,3 +24,7 @@ The primary user works on a Mac and an iPhone. Notes must be available and edita
 - The stack must cover macOS and iOS from one code base and must not rule out Linux and Android (see ADR-0003).
 - Nothing may depend on desktop-only abilities without an iOS fallback, e.g. starting external programs (see ADR-0010).
 - iOS sandboxing rules shape file access (see ADR-0004, ADR-0006).
+
+## Amendments
+
+- 2026-10-14: Minimum iOS version is **16.0** (`bundle.iOS.minimumSystemVersion`). Xcode 27 no longer builds for iOS 14, and the UI is built for Safari 16 (`vite.config.ts`). iOS 16 runs on iPhone 8 and later.

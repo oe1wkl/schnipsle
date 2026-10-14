@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Merged by the Tauri CLI into the generated iOS Info.plist on every build.
+
+  UIApplicationSceneManifest: iOS 27 refuses to launch apps built with its SDK
+  that do not use the UIScene life cycle. tao >= 0.37 provides the scene
+  delegate itself, so no configuration list is needed here.
+  UIApplicationSupportsMultipleScenes must be true; with false, tao's startup
+  runs twice and the app aborts.
+  See https://github.com/tauri-apps/tao/issues/1340
+-->
+<plist version="1.0">
+<dict>
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<true/>
+	</dict>
+</dict>
+</plist>

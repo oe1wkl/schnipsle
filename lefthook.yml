@@ -11,7 +11,7 @@ pre-commit:
       glob: "*.rs"
       run: cargo fmt --all -- --check
     prettier:
-      glob: "*.{ts,js,json,css,html,yml,yaml}"
+      glob: "*.{ts,js,json,css,html,yml,yaml,md}"
       run: node_modules/.bin/prettier --check {staged_files}
     eslint:
       glob: "*.{ts,js}"

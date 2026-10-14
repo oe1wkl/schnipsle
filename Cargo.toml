@@ -1,13 +1,19 @@
 [workspace]
 resolver = "3"
-members = ["crates/core", "crates/import", "crates/export", "src-tauri"]
+members = [
+  "crates/core",
+  "crates/import",
+  "crates/export",
+  "crates/tauri-plugin-vault-access",
+  "src-tauri",
+]
 # The app shell needs platform WebView libraries; core crates build anywhere.
 default-members = ["crates/core", "crates/import", "crates/export"]
 
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.89"
+rust-version = "1.90"
 license = "Apache-2.0"
 repository = "https://github.com/oe1wkl/schnipsle"
 authors = ["Willi Kraml <willi@kraml.cc>"]
@@ -20,6 +26,8 @@ unicode-normalization = "0.1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
+sha2 = "0.10"
+tempfile = "3"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

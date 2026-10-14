@@ -54,24 +54,55 @@ Then add the two lines it prints to `~/.zshrc` and open a new terminal.
 | Command | What it does |
 | --- | --- |
 | `pnpm tauri dev` | Run the desktop app with hot reload |
-| `pnpm tauri ios init` | Once: generate the Xcode project in `src-tauri/gen/apple` (committed) |
-| `pnpm tauri ios dev` | Run in the iOS simulator |
-| `pnpm tauri ios dev --open` | Open in Xcode, choose your iPhone as the run destination |
+| `pnpm tauri ios dev` | Run in the iOS simulator (pick one from the list) |
+| `pnpm tauri ios dev --open --host` | Build for your iPhone and open Xcode; see §6 |
 | `cargo test --workspace` | Rust tests |
 | `cargo clippy --workspace --all-targets -- -D warnings` | Rust lints, as in CI |
 | `pnpm check` | TypeScript type check, ESLint, Prettier |
 | `cargo deny check` | Dependency licences and security advisories |
 
-Running on a real iPhone: in Xcode select the `schnipsle_iOS` target → Signing & Capabilities → choose your team (your Apple ID), then pick the phone as the run destination. The phone must have Developer Mode enabled (Settings → Privacy & Security → Developer Mode).
+## 6. iOS
 
-## 6. Commit conventions
+The Xcode project lives in `src-tauri/gen/apple` and is committed. **Do not regenerate it** with `pnpm tauri ios init`: its "Build Rust Code" phase was changed to load `scripts/hook-env.sh`, because Xcode runs build scripts without your shell's PATH (see `docs/spikes/ios-vault.md`).
+
+One-time setup for a real iPhone:
+
+1. Xcode → Settings → Accounts → add your Apple ID (a free account is enough for your own devices).
+2. Find your team ID: open `src-tauri/gen/apple/schnipsle.xcodeproj`, target `schnipsle_iOS` → Signing & Capabilities → choose your team; the ID then appears as `DEVELOPMENT_TEAM` in `project.pbxproj`. Put it in `~/.zshrc`, so it survives project regeneration and stays out of the repository:
+
+   ```sh
+   echo 'export APPLE_DEVELOPMENT_TEAM=<your team id>' >> ~/.zshrc
+   ```
+
+3. On the iPhone: Settings → Privacy & Security → Developer Mode → on; after the first install, trust your certificate under Settings → General → VPN & Device Management.
+
+Running on the iPhone:
+
+```sh
+pnpm tauri ios dev --open --host
+```
+
+In Xcode, choose the phone as run destination and press ▶. Keep the Terminal command running: the phone loads the UI from the Mac over Wi-Fi (`--host`), and Xcode's build phase talks to it. Phone and Mac must be on the same network.
+
+Troubleshooting:
+
+| Message | Remedy |
+| --- | --- |
+| `Port 1420 is already in use` | An old dev server is still running: `lsof -nP -iTCP:1420 -sTCP:LISTEN`, then `kill <PID>` |
+| `Signing for "schnipsle_iOS" requires a development team` | `APPLE_DEVELOPMENT_TEAM` not set in this shell (`source ~/.zshrc`) |
+| App shows a blank screen | Started without `--host`, or the build is older than Tauri 2.12 (iOS 27 needs the UIScene life cycle) |
+| Xcode build failed, no details | Xcode → Report navigator (⌘9) → latest build; the red line names the cause |
+
+Minimum iOS version: 16 (ADR-0002).
+
+## 7. Commit conventions
 
 - [Conventional Commits](https://www.conventionalcommits.org/) subjects: `feat(core): …`, `fix(ui): …`, `docs(adr): …`.
 - Every commit is signed off: `git commit -s` (Developer Certificate of Origin, see [CONTRIBUTING.md](../CONTRIBUTING.md)).
 - The commit-message hook checks both.
 - The hooks load [`scripts/hook-env.sh`](../scripts/hook-env.sh) first, so they also work from Git apps (VS Code, Fork, Tower) that do not read `~/.zshrc`.
 
-## 7. Linux (desirable platform)
+## 8. Linux (desirable platform)
 
 Install the WebView and build dependencies (Debian/Ubuntu):
 
@@ -82,6 +113,6 @@ sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev
 
 Then install rustup, Node (per `.nvmrc`) and pnpm, and run `pnpm install && pnpm tauri dev`. The Rust core crates need none of the WebView libraries.
 
-## 8. Android (later)
+## 9. Android (later)
 
 Android Studio, the NDK and a JDK are only needed once Android work starts; see the [Tauri prerequisites](https://v2.tauri.app/guides/prerequisites/).

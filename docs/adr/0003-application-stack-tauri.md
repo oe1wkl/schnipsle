@@ -1,6 +1,6 @@
 # ADR-0003: Application stack: Tauri 2, Rust core, TypeScript UI
 
-- Status: Accepted, conditional on the M0 iOS feasibility spike
+- Status: Accepted (iOS confirmed by the M0 spike, 2026-10-14)
 - Date: 2026-10-13
 - Deciders: Willi Kraml
 - Related: ADR-0002, N-03, N-05
@@ -31,3 +31,8 @@ We need one code base for macOS and iOS (must), with Linux and Android possible 
 - Positive: all musts and desirables reachable; the core is testable without UI and reusable by a native shell if ever needed.
 - Negative: contributors need Rust and TypeScript.
 - Risk: Tauri on iOS. **Mitigation:** M0 spike — a Tauri app that opens a vault folder in iCloud Drive on a real iPhone, edits a note with CodeMirror, and sees changes made on the Mac. If the spike fails, a follow-up ADR evaluates a native Swift shell on top of the same Rust core (via UniFFI).
+
+## Amendments
+
+- 2026-10-14: iOS 27 requires the UIScene life cycle; **Tauri ≥ 2.12 (tao ≥ 0.37)** is needed, together with `UIApplicationSceneManifest` in `src-tauri/Info.ios.plist`. Earlier versions stop at launch. Details: `docs/spikes/ios-vault.md`.
+- 2026-10-14: The iOS spike (`docs/spikes/ios-vault.md`) passed its decisive tests on an iPhone with iOS 27: a folder in iCloud Drive is picked, listed, edited with changes syncing to the Mac, and reopened after force-quit and after a device restart. The condition on this ADR is lifted; the native Swift fallback is not needed. Folder access on iOS uses the project's own `tauri-plugin-vault-access`.

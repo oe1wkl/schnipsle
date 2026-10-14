@@ -13,9 +13,11 @@ publish.workspace = true
 comrak.workspace = true
 unicode-normalization.workspace = true
 serde.workspace = true
+sha2.workspace = true
 
 [dev-dependencies]
 serde_json.workspace = true
+tempfile.workspace = true
 
 [lints]
 workspace = true

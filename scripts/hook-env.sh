@@ -1,3 +1,4 @@
+# shellcheck shell=sh
 # SPDX-License-Identifier: Apache-2.0
 # Sourced by every git hook (lefthook `rc`, see lefthook.yml) before the checks run.
 #

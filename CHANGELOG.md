@@ -10,3 +10,6 @@ All notable changes to this project are documented here. The format follows [Kee
 - Architecture decision records ADR-0001 to ADR-0014.
 - Vault format specification, draft revision 0.4 (notes, front matter, tags, links, attachments, music in ABC, song sheets in ChordPro, history, trash, smart folders).
 - Hashtag extraction in `schnipsle-core` following format.md §5.3, with the specification examples as tests.
+- Vault access in `schnipsle-core`: list notes (with iCloud placeholders), read, atomic write with conflict detection, create (spike, see docs/spikes/ios-vault.md).
+- `tauri-plugin-vault-access`: iOS folder picker with security-scoped bookmarks and iCloud download requests (spike).
+- Test UI: open a vault folder, edit notes with autosave, reload external changes, resolve conflicts (spike).

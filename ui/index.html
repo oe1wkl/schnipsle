@@ -2,24 +2,42 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Schnipsle</title>
     <link rel="stylesheet" href="/src/styles.css" />
     <script type="module" src="/src/main.ts"></script>
   </head>
   <body>
-    <main>
-      <h1>Schnipsle</h1>
-      <p class="hint">Walking skeleton (M0): type Markdown, the Rust core extracts the hashtags.</p>
-      <label for="note">Note</label>
-      <textarea id="note" spellcheck="false">
-# Antenna test #radio
+    <header class="bar">
+      <button id="back" class="icon" type="button" aria-label="Back to notes" hidden>‹</button>
+      <div class="vault">
+        <strong id="vault-name">Schnipsle</strong>
+        <span id="vault-hint" class="muted">Spike: vault folder access</span>
+      </div>
+      <button id="new-note" type="button" disabled>New</button>
+      <button id="pick-vault" type="button">Open folder</button>
+    </header>
 
-Tuner works on 40 m. #projects/tuner
+    <div id="conflict" class="banner" role="alert" hidden>
+      <span>This note was changed on another device while you were editing.</span>
+      <button id="use-theirs" type="button">Use other version</button>
+      <button id="keep-mine" type="button">Keep mine</button>
+    </div>
 
-`#notatag` and C# stay untagged.</textarea>
-      <h2>Tags</h2>
-      <ul id="tags" aria-live="polite"></ul>
+    <main class="layout" data-view="list">
+      <nav class="list" aria-label="Notes">
+        <p id="empty" class="muted">
+          Open a folder to start. On iPhone, pick a folder in iCloud Drive.
+        </p>
+        <ul id="notes"></ul>
+      </nav>
+      <section class="editor" aria-label="Editor">
+        <textarea id="text" spellcheck="true" disabled placeholder="Select a note"></textarea>
+        <footer class="status">
+          <span id="status" aria-live="polite"></span>
+          <span id="tags" class="tags"></span>
+        </footer>
+      </section>
     </main>
   </body>
 </html>

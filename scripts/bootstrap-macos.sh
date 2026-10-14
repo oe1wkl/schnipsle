@@ -75,10 +75,10 @@ Setup complete.
 Add these lines to ~/.zshrc so new terminals find the tools:
   export PATH="$(brew --prefix rustup)/bin:$HOME/.cargo/bin:$PATH"
   eval "$(fnm env --use-on-cd --shell zsh)"
+  export APPLE_DEVELOPMENT_TEAM=<your team id>   # for iPhone builds, see docs/dev-setup.md §6
 
 Next:
-  pnpm tauri dev                 run the desktop app
-  pnpm tauri ios init            once: create the Xcode project (src-tauri/gen/apple)
-  pnpm tauri ios dev             run in the iOS simulator
-  pnpm tauri ios dev --open      open in Xcode, e.g. to run on your iPhone
+  pnpm tauri dev                     run the desktop app
+  pnpm tauri ios dev                 run in the iOS simulator
+  pnpm tauri ios dev --open --host   build for your iPhone and open Xcode
 EOF

@@ -20,8 +20,13 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 schnipsle-core.workspace = true
 tauri = { version = "2", features = [] }
+tauri-plugin-vault-access = { path = "../crates/tauri-plugin-vault-access" }
 serde.workspace = true
 serde_json.workspace = true
+
+# Folder picker on desktop; iOS uses tauri-plugin-vault-access instead.
+[target.'cfg(not(any(target_os = "ios", target_os = "android")))'.dependencies]
+tauri-plugin-dialog = "2"
 
 [lints]
 workspace = true

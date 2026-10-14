@@ -5,5 +5,7 @@
 //! This crate must build and test on every platform without a `WebView`.
 
 pub mod tags;
+pub mod vault;
 
 pub use tags::{Tag, extract_tags};
+pub use vault::{NoteContent, NoteEntry, Vault, VaultError};
