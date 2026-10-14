@@ -25,3 +25,7 @@ node_modules/
 
 # Local test vaults
 /scratch/
+
+# Claude Code personal settings
+.claude/settings.local.json
+CLAUDE.local.md
