@@ -61,7 +61,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: EmbarkStudios/cargo-deny-action@v2
         with:
-          command: check --workspace
+          # Global flags go in `arguments` (before the subcommand), not in `command`.
+          arguments: --all-features --workspace
 
   app-macos:
     name: App build (macOS)
