@@ -1,0 +1,7 @@
+dist/
+target/
+src-tauri/gen/
+pnpm-lock.yaml
+docs/adr/
+docs/*.md
+CHANGELOG.md

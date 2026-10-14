@@ -1,0 +1,40 @@
+[workspace]
+resolver = "3"
+members = ["crates/core", "crates/import", "crates/export", "src-tauri"]
+# The app shell needs platform WebView libraries; core crates build anywhere.
+default-members = ["crates/core", "crates/import", "crates/export"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.89"
+license = "Apache-2.0"
+repository = "https://github.com/oe1wkl/schnipsle"
+authors = ["Willi Kraml <willi@kraml.cc>"]
+publish = false
+
+[workspace.dependencies]
+schnipsle-core = { path = "crates/core" }
+comrak = { version = "0.56", default-features = false }
+unicode-normalization = "0.1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+module_name_repetitions = "allow"
+
+# Profiles must live in the workspace root.
+# https://tauri.app/concept/size/#cargo-configuration
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+panic = "abort"
+strip = true

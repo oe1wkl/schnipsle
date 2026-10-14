@@ -1,0 +1,30 @@
+# Architecture Decision Records
+
+This folder records every significant architectural decision of the project, one file per decision, in the [MADR](https://adr.github.io/madr/) style.
+
+## Rules
+
+- File name: `NNNN-short-title.md`, numbered consecutively, never renumbered.
+- An accepted ADR is not edited in substance. A changed decision gets a **new** ADR that supersedes the old one; the old one is marked `Superseded by ADR-NNNN`.
+- Status values: `Proposed`, `Accepted`, `Deprecated`, `Superseded by ADR-NNNN`.
+- Every pull request that changes the file format, the tech stack or a public interface references an ADR.
+- New ADRs start from [`template.md`](template.md).
+
+## Index
+
+| ADR | Title | Status | Date |
+| --- | --- | --- | --- |
+| [0001](0001-record-architecture-decisions.md) | Record architecture decisions | Accepted | 2026-10-13 |
+| [0002](0002-target-platforms.md) | Target platforms and priorities | Accepted | 2026-10-13 |
+| [0003](0003-application-stack-tauri.md) | Application stack: Tauri 2, Rust core, TypeScript UI | Accepted (pending M0 iOS spike) | 2026-10-13 |
+| [0004](0004-plain-markdown-files-as-source-of-truth.md) | Plain Markdown files as the source of truth | Accepted | 2026-10-13 |
+| [0005](0005-license-apache-2.md) | License: Apache-2.0 | Accepted | 2026-10-13 |
+| [0006](0006-sync-via-file-sync-services.md) | Sync through file-sync services, no own sync in v1 | Accepted | 2026-10-13 |
+| [0007](0007-editing-mode-inline-live-preview.md) | Editing mode: inline live preview with source toggle | Accepted | 2026-10-13 |
+| [0008](0008-tag-syntax-and-virtual-folders.md) | Tag syntax, tag hierarchy and combination folders | Accepted | 2026-10-13 |
+| [0009](0009-search-index-sqlite-fts5.md) | Search index: SQLite FTS5 as a rebuildable cache | Accepted | 2026-10-13 |
+| [0010](0010-export-engines.md) | Export engines: Pandoc on desktop, built-in on iOS | Accepted | 2026-10-13 |
+| [0011](0011-version-history-and-trash.md) | Version history and trash inside the vault | Accepted | 2026-10-13 |
+| [0012](0012-import-pipeline.md) | Import through adapters and a common pipeline | Accepted | 2026-10-13 |
+| [0013](0013-music-notation-abc.md) | Music notation as ABC in fenced code blocks | Accepted | 2026-10-14 |
+| [0014](0014-lyrics-with-chords-chordpro.md) | Lyrics with chords as ChordPro in fenced code blocks | Accepted | 2026-10-14 |

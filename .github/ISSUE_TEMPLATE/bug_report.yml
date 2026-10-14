@@ -1,0 +1,27 @@
+name: Bug report
+description: Something does not work as described
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations: { required: true }
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Include a minimal note (Markdown) if the problem is about parsing, tags or export.
+    validations: { required: true }
+  - type: input
+    id: version
+    attributes:
+      label: App version and platform
+      placeholder: "0.1.0, macOS 26.1 / iOS 26.1"
+    validations: { required: true }
+  - type: checkboxes
+    id: data
+    attributes:
+      label: Data safety
+      options:
+        - label: This bug lost or changed note content (we treat these with top priority)

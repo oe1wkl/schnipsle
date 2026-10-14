@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Schnipsle</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+    <script type="module" src="/src/main.ts"></script>
+  </head>
+  <body>
+    <main>
+      <h1>Schnipsle</h1>
+      <p class="hint">Walking skeleton (M0): type Markdown, the Rust core extracts the hashtags.</p>
+      <label for="note">Note</label>
+      <textarea id="note" spellcheck="false">
+# Antenna test #radio
+
+Tuner works on 40 m. #projects/tuner
+
+`#notatag` and C# stay untagged.</textarea>
+      <h2>Tags</h2>
+      <ul id="tags" aria-live="polite"></ul>
+    </main>
+  </body>
+</html>

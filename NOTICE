@@ -1,0 +1,6 @@
+Schnipsle
+Copyright 2026 Willi Kraml and the Schnipsle contributors
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+Third-party components keep their own licences; see the dependency manifests
+(Cargo.lock, pnpm-lock.yaml) and `cargo deny list` for details.

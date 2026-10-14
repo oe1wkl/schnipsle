@@ -1,0 +1,27 @@
+[package]
+name = "schnipsle"
+description = "Schnipsle app shell (Tauri 2): commands and platform glue around schnipsle-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[lib]
+# The `_lib` suffix keeps the library name distinct from the binary (Windows, cargo#8519).
+name = "schnipsle_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+schnipsle-core.workspace = true
+tauri = { version = "2", features = [] }
+serde.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true

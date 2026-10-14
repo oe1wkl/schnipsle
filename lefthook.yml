@@ -1,0 +1,18 @@
+# Git hooks, installed by `lefthook install` (done by scripts/bootstrap-macos.sh).
+pre-commit:
+  parallel: true
+  commands:
+    rustfmt:
+      glob: "*.rs"
+      run: cargo fmt --all -- --check
+    prettier:
+      glob: "*.{ts,js,json,css,html,yml,yaml}"
+      run: pnpm exec prettier --check {staged_files}
+    eslint:
+      glob: "*.{ts,js}"
+      run: pnpm exec eslint {staged_files}
+
+commit-msg:
+  commands:
+    conventional-and-signed:
+      run: scripts/check-commit-msg.sh {1}

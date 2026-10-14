@@ -1,0 +1,38 @@
+# cargo-deny configuration: https://embarkstudios.github.io/cargo-deny/
+# Licences must be compatible with Apache-2.0 and App Store distribution (ADR-0005).
+
+[graph]
+all-features = true
+
+[advisories]
+yanked = "deny"
+# Vulnerabilities always fail. "Unmaintained" notices fail only for crates we depend on
+# directly; deep transitive ones (e.g. inside Tauri's GTK stack) are tracked upstream.
+unmaintained = "workspace"
+
+[licenses]
+confidence-threshold = 0.93
+allow = [
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "MIT",
+  "MIT-0",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "Zlib",
+  "0BSD",
+  "CC0-1.0",
+  "Unicode-3.0",
+  "Unicode-DFS-2016",
+  # File-level copyleft, compatible with Apache-2.0 and the App Store (used by Tauri's HTML tooling).
+  "MPL-2.0",
+]
+
+[bans]
+multiple-versions = "allow"
+wildcards = "deny"
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

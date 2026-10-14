@@ -1,0 +1,27 @@
+# Rust
+/target/
+
+# Tauri generated
+/src-tauri/gen/schemas
+/src-tauri/gen/apple/build/
+/src-tauri/gen/apple/Pods/
+/src-tauri/gen/apple/*.xcodeproj/xcuserdata/
+/src-tauri/gen/apple/*.xcworkspace/xcuserdata/
+/src-tauri/gen/android/.gradle/
+/src-tauri/gen/android/build/
+
+# Node / Vite
+node_modules/
+/dist/
+*.local
+*.log
+
+# Editors and OS
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+.DS_Store
+
+# Local test vaults
+/scratch/
