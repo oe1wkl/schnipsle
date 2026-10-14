@@ -31,3 +31,7 @@ We need one code base for macOS and iOS (must), with Linux and Android possible 
 - Positive: all musts and desirables reachable; the core is testable without UI and reusable by a native shell if ever needed.
 - Negative: contributors need Rust and TypeScript.
 - Risk: Tauri on iOS. **Mitigation:** M0 spike — a Tauri app that opens a vault folder in iCloud Drive on a real iPhone, edits a note with CodeMirror, and sees changes made on the Mac. If the spike fails, a follow-up ADR evaluates a native Swift shell on top of the same Rust core (via UniFFI).
+
+## Amendments
+
+- 2026-10-14: iOS 27 requires the UIScene life cycle; **Tauri ≥ 2.12 (tao ≥ 0.37)** is needed, together with `UIApplicationSceneManifest` in `src-tauri/Info.ios.plist`. Earlier versions stop at launch. Details: `docs/spikes/ios-vault.md`.

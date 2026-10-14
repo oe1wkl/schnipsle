@@ -3,7 +3,7 @@
 - Branch: `spike/ios-vault`
 - Started: 2026-10-14
 - Decides: whether ADR-0003 (Tauri 2) holds for iOS, or a native Swift shell around the Rust core is needed
-- Status: **built and tested on desktop (Linux); waiting for macOS and iOS runs**
+- Status: **runs on macOS and on an iPhone with iOS 27 (2026-10-14); iPhone tests C1–C8 pending**
 
 ## Question
 
@@ -39,6 +39,26 @@ All passed with a test vault, driven automatically in a virtual display:
 - [x] File changed externally while editing → conflict banner, the other version is **not** overwritten
 - [x] "Keep mine" writes the local version; no temporary files left in the folder
 
+## Getting it to run on iOS 27 (2026-10-14)
+
+Each step below stopped the first device build; all are fixed on this branch. They matter for anyone setting up the project.
+
+| Symptom                                                                                                   | Cause                                                                             | Fix                                                                                                                                                    |
+| --------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Folder dialog missing on iOS                                                                              | Tauri's dialog plugin has no folder picker on mobile                              | Own plugin `tauri-plugin-vault-access`                                                                                                                 |
+| Xcode: deployment target 14.0 not supported                                                               | Tauri's default iOS target is 14; Xcode 27 supports 15+                           | `bundle.iOS.minimumSystemVersion = "16.0"` (ADR-0002)                                                                                                  |
+| Swift: `'v16' is unavailable`                                                                             | Plugin manifest used swift-tools-version 5.3                                      | swift-tools-version 5.9                                                                                                                                |
+| Signing requires a development team                                                                       | Team not set; Xcode's setting is lost on regeneration                             | `APPLE_DEVELOPMENT_TEAM` environment variable                                                                                                          |
+| "Build Rust Code": `pnpm: command not found`                                                              | Xcode runs build scripts without the shell's PATH                                 | Build phase sources `scripts/hook-env.sh` (in `project.yml` and `project.pbxproj`)                                                                     |
+| Blank screen with `tauri ios dev` on the phone                                                            | Without `--host` the phone looks for the dev server on itself                     | `pnpm tauri ios dev --open --host`                                                                                                                     |
+| `tauri ios run`: export fails (missing `.tmp…` plist)                                                     | Tauri CLI issue at the export step; the app itself was built                      | Install with `xcrun devicectl device install app`, or use the Xcode route                                                                              |
+| App stops at launch (`EXC_BREAKPOINT` in `_UIApplicationEvaluateRuntimeIssueForNoSceneLifecycleAdoption`) | iOS 27 requires the UIScene life cycle; Tauri 2.11 (tao 0.35) does not provide it | Tauri 2.12.3 (tao 0.37.1) and `src-tauri/Info.ios.plist` with `UIApplicationSceneManifest` ([tao#1340](https://github.com/tauri-apps/tao/issues/1340)) |
+
+Consequences:
+
+- **Do not run `pnpm tauri ios init` again** without re-applying the PATH fix to the "Build Rust Code" phase; the regenerated `project.yml` would lose it. M1 moves this into a Tauri iOS template override so it survives.
+- Minimum Rust version is 1.90 (required by Tauri 2.12).
+
 ## Test plan on the Mac and iPhone
 
 Prerequisites: `scripts/bootstrap-macos.sh` has run; you are on the branch (`git switch spike/ios-vault`), then `pnpm install`.
@@ -58,19 +78,20 @@ pnpm tauri dev
 ### B. iOS simulator
 
 ```sh
-pnpm tauri ios init          # once; creates src-tauri/gen/apple (commit it afterwards)
-pnpm tauri ios dev           # pick an iPhone simulator when asked
+pnpm tauri ios dev           # pick an iPhone simulator from the list
 ```
 
 The simulator's Files app has "On My iPhone" only; create a folder there with a note (Files → ⋯ → New Folder; drag a `.md` file from the Mac onto the simulator to add it). Repeat steps 1–5.
 
 ### C. Real iPhone with iCloud Drive (the actual question)
 
+One-time setup: `APPLE_DEVELOPMENT_TEAM` in `~/.zshrc` and the phone in Developer Mode (see [dev-setup.md §6](../dev-setup.md#6-ios)).
+
 ```sh
-pnpm tauri ios dev --open    # opens Xcode
+pnpm tauri ios dev --open --host   # --host: the phone loads the UI from the Mac over Wi-Fi
 ```
 
-In Xcode: target `schnipsle_iOS` → Signing & Capabilities → Team: your Apple ID; select your iPhone as the run destination and press Run. On the phone, enable Settings → Privacy & Security → Developer Mode if asked, and trust the developer certificate under Settings → General → VPN & Device Management.
+In Xcode choose the phone as run destination and press ▶. Keep the Terminal command running while testing.
 
 | #   | Test                                                             | Expected                                               | Result |
 | --- | ---------------------------------------------------------------- | ------------------------------------------------------ | ------ |
