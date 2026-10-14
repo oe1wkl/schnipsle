@@ -16,7 +16,7 @@ This folder records every significant architectural decision of the project, one
 | --- | --- | --- | --- |
 | [0001](0001-record-architecture-decisions.md) | Record architecture decisions | Accepted | 2026-10-13 |
 | [0002](0002-target-platforms.md) | Target platforms and priorities | Accepted | 2026-10-13 |
-| [0003](0003-application-stack-tauri.md) | Application stack: Tauri 2, Rust core, TypeScript UI | Accepted (pending M0 iOS spike) | 2026-10-13 |
+| [0003](0003-application-stack-tauri.md) | Application stack: Tauri 2, Rust core, TypeScript UI | Accepted | 2026-10-13 |
 | [0004](0004-plain-markdown-files-as-source-of-truth.md) | Plain Markdown files as the source of truth | Accepted | 2026-10-13 |
 | [0005](0005-license-apache-2.md) | License: Apache-2.0 | Accepted | 2026-10-13 |
 | [0006](0006-sync-via-file-sync-services.md) | Sync through file-sync services, no own sync in v1 | Accepted | 2026-10-13 |

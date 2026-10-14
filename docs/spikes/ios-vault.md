@@ -3,7 +3,7 @@
 - Branch: `spike/ios-vault`
 - Started: 2026-10-14
 - Decides: whether ADR-0003 (Tauri 2) holds for iOS, or a native Swift shell around the Rust core is needed
-- Status: **runs on macOS and on an iPhone with iOS 27 (2026-10-14); iPhone tests C1–C8 pending**
+- Status: **concluded 2026-10-14: ADR-0003 confirmed for iOS** (C1–C6 passed on an iPhone with iOS 27; C7, C8 open, not decisive)
 
 ## Question
 
@@ -93,16 +93,16 @@ pnpm tauri ios dev --open --host   # --host: the phone loads the UI from the Mac
 
 In Xcode choose the phone as run destination and press ▶. Keep the Terminal command running while testing.
 
-| #   | Test                                                             | Expected                                               | Result |
-| --- | ---------------------------------------------------------------- | ------------------------------------------------------ | ------ |
-| C1  | Open folder → pick the same iCloud Drive folder as on the Mac    | Notes listed                                           |        |
-| C2  | Open and edit a note on the iPhone                               | Change appears on the Mac within seconds to a minute   |        |
-| C3  | Edit a note on the Mac, keep it open on the iPhone (not editing) | iPhone reloads it after iCloud syncs                   |        |
-| C4  | Note created on the Mac, not yet on the iPhone                   | Listed with ☁; tapping downloads it; opens on next tap |        |
-| C5  | Force-quit the app and start again                               | Folder reopens without the picker                      |        |
-| C6  | Restart the iPhone, start the app                                | Folder still reopens (bookmark survives)               |        |
-| C7  | Edit the same note on both devices within a few seconds          | Conflict banner on one side; nothing lost              |        |
-| C8  | Airplane mode, edit, then back online                            | Saved locally; syncs afterwards                        |        |
+| #   | Test                                                             | Expected                                               | Result            |
+| --- | ---------------------------------------------------------------- | ------------------------------------------------------ | ----------------- |
+| C1  | Open folder → pick the same iCloud Drive folder as on the Mac    | Notes listed                                           | pass (2026-10-14) |
+| C2  | Open and edit a note on the iPhone                               | Change appears on the Mac within seconds to a minute   | pass (2026-10-14) |
+| C3  | Edit a note on the Mac, keep it open on the iPhone (not editing) | iPhone reloads it after iCloud syncs                   | pass (2026-10-14) |
+| C4  | Note created on the Mac, not yet on the iPhone                   | Listed with ☁; tapping downloads it; opens on next tap | pass (2026-10-14) |
+| C5  | Force-quit the app and start again                               | Folder reopens without the picker                      | pass (2026-10-14) |
+| C6  | Restart the iPhone, start the app                                | Folder still reopens (bookmark survives)               | pass (2026-10-14) |
+| C7  | Edit the same note on both devices within a few seconds          | Conflict banner on one side; nothing lost              |                   |
+| C8  | Airplane mode, edit, then back online                            | Saved locally; syncs afterwards                        |                   |
 
 ## Decision rule
 
