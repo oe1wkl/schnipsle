@@ -13,7 +13,7 @@ default-members = ["crates/core", "crates/import", "crates/export"]
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.89"
+rust-version = "1.90"
 license = "Apache-2.0"
 repository = "https://github.com/oe1wkl/schnipsle"
 authors = ["Willi Kraml <willi@kraml.cc>"]
