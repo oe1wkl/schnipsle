@@ -1,4 +1,9 @@
 # Git hooks, installed by `lefthook install` (done by scripts/bootstrap-macos.sh).
+
+# Loaded before every hook so that Git apps that do not read ~/.zshrc still find
+# Homebrew, Rust and the project's Node version. Hooks run in the repository root.
+rc: scripts/hook-env.sh
+
 pre-commit:
   parallel: true
   commands:
@@ -7,10 +12,10 @@ pre-commit:
       run: cargo fmt --all -- --check
     prettier:
       glob: "*.{ts,js,json,css,html,yml,yaml}"
-      run: pnpm exec prettier --check {staged_files}
+      run: node_modules/.bin/prettier --check {staged_files}
     eslint:
       glob: "*.{ts,js}"
-      run: pnpm exec eslint {staged_files}
+      run: node_modules/.bin/eslint {staged_files}
 
 commit-msg:
   commands:

@@ -69,6 +69,7 @@ Running on a real iPhone: in Xcode select the `schnipsle_iOS` target → Signing
 - [Conventional Commits](https://www.conventionalcommits.org/) subjects: `feat(core): …`, `fix(ui): …`, `docs(adr): …`.
 - Every commit is signed off: `git commit -s` (Developer Certificate of Origin, see [CONTRIBUTING.md](../CONTRIBUTING.md)).
 - The commit-message hook checks both.
+- The hooks load [`scripts/hook-env.sh`](../scripts/hook-env.sh) first, so they also work from Git apps (VS Code, Fork, Tower) that do not read `~/.zshrc`.
 
 ## 7. Linux (desirable platform)
 
