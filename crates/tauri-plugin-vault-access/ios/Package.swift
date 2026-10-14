@@ -1,4 +1,4 @@
-// swift-tools-version:5.3
+// swift-tools-version:5.9
 // SPDX-License-Identifier: Apache-2.0
 
 import PackageDescription
@@ -6,7 +6,7 @@ import PackageDescription
 let package = Package(
   name: "tauri-plugin-vault-access",
   platforms: [
-    .iOS(.v14)
+    .iOS(.v16)
   ],
   products: [
     .library(

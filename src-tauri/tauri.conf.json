@@ -28,6 +28,9 @@
     "active": true,
     "targets": "all",
     "category": "Productivity",
+    "iOS": {
+      "minimumSystemVersion": "16.0"
+    },
     "copyright": "Copyright 2026 Willi Kraml and contributors. Apache-2.0.",
     "icon": [
       "icons/32x32.png",
