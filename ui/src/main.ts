@@ -2,6 +2,7 @@
 // iOS spike UI: open a vault folder, list notes, edit with autosave, detect
 // changes made elsewhere (other device, other editor) and resolve conflicts.
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 
 interface VaultInfo {
   name: string;
@@ -294,6 +295,12 @@ ui.newNote.addEventListener("click", () => {
     .catch((e: unknown) => {
       setStatus(asError(e).message);
     });
+});
+
+// File menu (desktop): same actions as the buttons.
+void listen<string>("menu", (event) => {
+  if (event.payload === "open-vault") ui.pick.click();
+  else if (event.payload === "new-note" && !ui.newNote.disabled) ui.newNote.click();
 });
 
 document.addEventListener("visibilitychange", () => {

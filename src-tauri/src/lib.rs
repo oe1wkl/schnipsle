@@ -161,6 +161,57 @@ fn extract_tags(markdown: &str) -> Vec<Tag> {
     schnipsle_core::extract_tags(markdown)
 }
 
+/// Puts "New Note" (⌘N) and "Open Folder…" (⌘O) at the top of the File menu.
+/// Tauri's default menu has a File menu (with Close Window) on macOS but none on
+/// Linux, where one is created. A click is sent to the UI as a `menu` event
+/// carrying the item id.
+#[cfg(desktop)]
+fn install_menu(app: &tauri::App) -> tauri::Result<()> {
+    use tauri::Emitter as _;
+    use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
+
+    let menu = Menu::default(app.handle())?;
+    let new_note = MenuItem::with_id(app, "new-note", "New Note", true, Some("CmdOrCtrl+N"))?;
+    let open = MenuItem::with_id(app, "open-vault", "Open Folder…", true, Some("CmdOrCtrl+O"))?;
+    let separator = PredefinedMenuItem::separator(app)?;
+
+    let mut file_menu = None;
+    for item in menu.items()? {
+        if let Some(submenu) = item.as_submenu()
+            && submenu.text()? == "File"
+        {
+            file_menu = Some(submenu.clone());
+        }
+    }
+    if let Some(file) = file_menu {
+        file.insert_items(&[&new_note, &open, &separator], 0)?;
+    } else {
+        let file = Submenu::with_items(
+            app,
+            "File",
+            true,
+            &[
+                &new_note,
+                &open,
+                &separator,
+                &PredefinedMenuItem::close_window(app, None)?,
+                &PredefinedMenuItem::quit(app, None)?,
+            ],
+        )?;
+        // After the application menu on macOS, first elsewhere.
+        let position = usize::from(cfg!(target_os = "macos"));
+        menu.insert(&file, position)?;
+    }
+    app.set_menu(menu)?;
+    app.on_menu_event(|app, event| {
+        let id = event.id().as_ref();
+        if matches!(id, "new-note" | "open-vault") {
+            let _ = app.emit("menu", id);
+        }
+    });
+    Ok(())
+}
+
 /// Builds and runs the application. Also the iOS/Android entry point.
 ///
 /// # Panics
@@ -171,7 +222,9 @@ pub fn run() {
         .manage(AppState::default())
         .plugin(tauri_plugin_vault_access::init());
     #[cfg(desktop)]
-    let builder = builder.plugin(tauri_plugin_dialog::init());
+    let builder = builder
+        .plugin(tauri_plugin_dialog::init())
+        .setup(|app| Ok(install_menu(app)?));
     builder
         .invoke_handler(tauri::generate_handler![
             pick_vault,
