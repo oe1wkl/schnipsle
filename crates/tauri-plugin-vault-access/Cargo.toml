@@ -1,0 +1,32 @@
+[package]
+name = "tauri-plugin-vault-access"
+description = "Folder access for Schnipsle vaults on iOS: folder picker, security-scoped bookmarks, iCloud downloads"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish.workspace = true
+# Required by tauri-plugin's build script to name the native plugin.
+links = "tauri-plugin-vault-access"
+
+[build-dependencies]
+tauri-plugin = { version = "2", features = ["build"] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde.workspace = true
+
+# `PluginApi::register_ios_plugin` exists only with the `wry` feature.
+[target.'cfg(target_os = "ios")'.dependencies]
+tauri = { version = "2", features = ["wry"] }
+
+# Not `workspace = true`: the workspace forbids `unsafe`, but the Swift bridge
+# (`tauri::ios_plugin_binding!`, via swift-rs) declares a foreign function.
+[lints.rust]
+missing_docs = "warn"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }

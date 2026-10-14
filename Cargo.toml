@@ -1,6 +1,12 @@
 [workspace]
 resolver = "3"
-members = ["crates/core", "crates/import", "crates/export", "src-tauri"]
+members = [
+  "crates/core",
+  "crates/import",
+  "crates/export",
+  "crates/tauri-plugin-vault-access",
+  "src-tauri",
+]
 # The app shell needs platform WebView libraries; core crates build anywhere.
 default-members = ["crates/core", "crates/import", "crates/export"]
 
@@ -20,6 +26,8 @@ unicode-normalization = "0.1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
+sha2 = "0.10"
+tempfile = "3"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

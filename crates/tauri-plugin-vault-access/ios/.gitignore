@@ -1,0 +1,7 @@
+/.build
+/.tauri
+/Packages
+xcuserdata/
+DerivedData/
+Package.resolved
+.swiftpm/
