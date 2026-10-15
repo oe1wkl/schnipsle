@@ -6,6 +6,7 @@
 //! so they run off the main thread.
 
 mod vault_location;
+mod watching;
 
 use std::sync::Mutex;
 
@@ -13,10 +14,11 @@ use schnipsle_core::{NoteContent, NoteEntry, Tag, Vault, VaultError};
 use serde::Serialize;
 use tauri::State;
 
-/// The currently opened vault, if any.
+/// The currently opened vault, if any, and the watch reporting its changes.
 #[derive(Default)]
 struct AppState {
     vault: Mutex<Option<Vault>>,
+    watch: Mutex<Option<watching::VaultWatch>>,
 }
 
 /// Error sent to the UI: a machine-readable `kind` plus a message.
@@ -77,7 +79,11 @@ fn open_vault(path: &std::path::Path) -> Result<Vault, VaultError> {
     return Vault::open(path);
 }
 
-fn open_and_remember(state: &AppState, path: &std::path::Path) -> CmdResult<VaultInfo> {
+fn open_and_remember(
+    app: &tauri::AppHandle,
+    state: &AppState,
+    path: &std::path::Path,
+) -> CmdResult<VaultInfo> {
     let vault = open_vault(path)?;
     let info = VaultInfo {
         name: path.file_name().map_or_else(
@@ -86,6 +92,14 @@ fn open_and_remember(state: &AppState, path: &std::path::Path) -> CmdResult<Vaul
         ),
         path: path.display().to_string(),
     };
+    // Stop watching the previous vault before the new one is reported.
+    let mut watch = state.watch.lock().map_err(CommandError::other)?;
+    *watch = None;
+    // Without events the UI still re-checks when it becomes visible, so a
+    // watch that fails to start must not keep the vault from opening.
+    *watch = watching::start(app, &vault)
+        .inspect_err(|e| eprintln!("vault changes will not be reported: {e}"))
+        .ok();
     *state.vault.lock().map_err(CommandError::other)? = Some(vault);
     Ok(info)
 }
@@ -113,7 +127,7 @@ async fn pick_vault(
     state: State<'_, AppState>,
 ) -> CmdResult<Option<VaultInfo>> {
     match vault_location::pick(&app)? {
-        Some(path) => open_and_remember(&state, &path).map(Some),
+        Some(path) => open_and_remember(&app, &state, &path).map(Some),
         None => Ok(None),
     }
 }
@@ -125,7 +139,7 @@ async fn restore_vault(
     state: State<'_, AppState>,
 ) -> CmdResult<Option<VaultInfo>> {
     match vault_location::restore(&app)? {
-        Some(path) => open_and_remember(&state, &path).map(Some),
+        Some(path) => open_and_remember(&app, &state, &path).map(Some),
         None => Ok(None),
     }
 }

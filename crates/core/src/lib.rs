@@ -7,7 +7,9 @@
 pub mod coordination;
 pub mod tags;
 pub mod vault;
+pub mod watch;
 
 pub use coordination::{Coordinator, Uncoordinated};
 pub use tags::{Tag, extract_tags};
-pub use vault::{NoteContent, NoteEntry, Vault, VaultError};
+pub use vault::{NoteContent, NoteEntry, PathKind, Vault, VaultError};
+pub use watch::{Hint, VaultChanges};

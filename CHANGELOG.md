@@ -13,6 +13,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - Vault access in `schnipsle-core`: list notes (with iCloud placeholders), read, atomic write with conflict detection, create (spike, see docs/spikes/ios-vault.md).
 - `tauri-plugin-vault-access`: iOS folder picker with security-scoped bookmarks and iCloud download requests (spike).
 - File coordination on macOS and iOS (ADR-0015): notes are read and saved through `NSFileCoordinator`, so iCloud Drive and other apps cannot change a note between the conflict check and the save. New crate `schnipsle-apple`; `schnipsle-core` gains a `Coordinator` trait.
+- Changes made elsewhere now arrive as file events instead of being polled every 3 s: `notify` on desktop, an `NSFilePresenter` on macOS and iOS. The UI gets one `vault-changed` event per burst of changes.
 - Test UI: open a vault folder, edit notes with autosave, reload external changes, resolve conflicts (spike).
 
 ### Changed

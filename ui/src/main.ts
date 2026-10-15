@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
-// iOS spike UI: open a vault folder, list notes, edit with autosave, detect
-// changes made elsewhere (other device, other editor) and resolve conflicts.
+// iOS spike UI: open a vault folder, list notes, edit with autosave, react to
+// changes made elsewhere (`vault-changed` events, ADR-0015) and resolve conflicts.
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
@@ -23,6 +23,11 @@ interface Tag {
   name: string;
   key: string;
 }
+/** Payload of the `vault-changed` event (schnipsle-core `VaultChanges`). */
+interface VaultChanges {
+  paths: string[];
+  rescan: boolean;
+}
 interface CommandError {
   kind: string;
   message: string;
@@ -30,7 +35,6 @@ interface CommandError {
 }
 
 const AUTOSAVE_MS = 1000;
-const POLL_MS = 3000;
 
 function el(id: string): HTMLElement {
   const found = document.getElementById(id);
@@ -225,13 +229,18 @@ ui.keepMine.addEventListener("click", () => {
     });
 });
 
-/** Picks up changes made on other devices or in other editors. */
-async function poll(): Promise<void> {
+/**
+ * Picks up changes made on other devices or in other editors. `changes` comes
+ * from a `vault-changed` event; without it (the app became visible again, and
+ * events may have been missed) the open note is always re-checked.
+ */
+async function checkForChanges(changes?: VaultChanges): Promise<void> {
   if (ui.newNote.disabled) return; // no vault open
   try {
     await refreshList();
     if (!current || conflictHash !== undefined) return;
     const path = current.path;
+    if (changes && !changes.rescan && !changes.paths.includes(path)) return;
     const onDisk = entries.find((n) => n.path === path);
     if (!onDisk) {
       setStatus("This note was deleted or moved elsewhere.");
@@ -240,6 +249,12 @@ async function poll(): Promise<void> {
     if (!onDisk.available) return;
     const content = await invoke<NoteContent>("read_note", { path });
     if (content.hash === current.hash) return;
+    if (content.text === ui.text.value) {
+      // Same text as in the editor: the echo of our own save, or an identical edit.
+      current.hash = content.hash;
+      current.savedText = content.text;
+      return;
+    }
     if (isDirty()) {
       showConflict(content.hash);
     } else {
@@ -303,11 +318,19 @@ void listen<string>("menu", (event) => {
   else if (event.payload === "new-note" && !ui.newNote.disabled) ui.newNote.click();
 });
 
+/** Runs a check after any save in progress, so a save's own echo is not mistaken for a change. */
+function queueCheck(changes?: VaultChanges): void {
+  saving = saving.then(() => checkForChanges(changes));
+}
+
+void listen<VaultChanges>("vault-changed", (event) => {
+  queueCheck(event.payload);
+});
+
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible") void poll();
+  if (document.visibilityState === "visible") queueCheck();
   else void flushSave();
 });
-window.setInterval(() => void poll(), POLL_MS);
 
 invoke<VaultInfo | null>("restore_vault")
   .then(async (info) => {

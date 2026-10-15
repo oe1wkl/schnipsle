@@ -21,6 +21,8 @@ objc2-foundation = { version = "0.3", default-features = false, features = [
   "block2",
   "NSError",
   "NSFileCoordinator",
+  "NSFilePresenter",
+  "NSOperation",
   "NSString",
   "NSURL",
 ] }

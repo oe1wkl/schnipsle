@@ -26,7 +26,7 @@ Each milestone ends in a usable build. Scope can move between milestones; the or
 
 Carried over from the spike:
 
-- [ ] Replace polling with file events: `notify` on desktop, `NSFilePresenter` on iOS
+- [x] Replace polling with file events: `notify` on desktop, `NSFilePresenter` on macOS and iOS (ADR-0015)
 - [x] Use `NSFileCoordinator` for reads and writes on Apple platforms (format.md §10, ADR-0015: `schnipsle-apple`)
 - [x] Make check-and-rename atomic enough: hash re-checked after the temp file is flushed, creates never replace (file coordination still open above)
 - [ ] Move the iOS bookmark from `UserDefaults` to Application Support

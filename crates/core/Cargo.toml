@@ -15,6 +15,10 @@ unicode-normalization.workspace = true
 serde.workspace = true
 sha2.workspace = true
 
+# File events on desktop (ADR-0015); Apple platforms add NSFilePresenter on top.
+[target.'cfg(not(any(target_os = "ios", target_os = "android")))'.dependencies]
+notify = "8.2"
+
 [dev-dependencies]
 serde_json.workspace = true
 tempfile.workspace = true

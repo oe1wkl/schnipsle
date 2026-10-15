@@ -92,7 +92,7 @@ UI (TypeScript, CodeMirror 6, WebView)
    │  Tauri commands and events
 App shell (src-tauri, Tauri 2)  ── platform glue: dialog plugin (desktop),
    │                                tauri-plugin-vault-access (iOS, Swift),
-   │                                schnipsle-apple (NSFileCoordinator, ADR-0015)
+   │                                schnipsle-apple (file coordination and presenter, ADR-0015)
 Core (Rust crates: core, import, export)
    │
 Vault on disk (source of truth)      Index cache (SQLite FTS5, per device)

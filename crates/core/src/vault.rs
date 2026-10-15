@@ -98,6 +98,17 @@ pub struct NoteContent {
     pub hash: String,
 }
 
+/// What a changed path means for the vault, see [`Vault::classify`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PathKind {
+    /// A note (or its iCloud placeholder); vault-relative path.
+    Note(String),
+    /// The root or a folder: any notes below it may have changed.
+    Folder,
+    /// Outside the vault, hidden, or not a note.
+    Ignored,
+}
+
 /// An opened vault folder. Cheap to clone; clones share the coordinator.
 #[derive(Debug, Clone)]
 pub struct Vault {
@@ -262,6 +273,55 @@ impl Vault {
         outcome.unwrap_or_else(|| {
             Err(io::Error::other("file coordination did not grant access").into())
         })
+    }
+
+    /// Classifies an absolute path reported by a file watcher (ADR-0015).
+    ///
+    /// Paths may arrive in canonical form (`/private/var/…` on macOS) even if the
+    /// vault was opened through a symlink, so both forms of the root are tried.
+    #[must_use]
+    pub fn classify(&self, file: &Path) -> PathKind {
+        let canonical_root = fs::canonicalize(&self.root).ok();
+        let Some(rel) = file.strip_prefix(&self.root).ok().or_else(|| {
+            canonical_root
+                .as_deref()
+                .and_then(|root| file.strip_prefix(root).ok())
+        }) else {
+            return PathKind::Ignored;
+        };
+        let mut parts: Vec<String> = Vec::new();
+        for component in rel.components() {
+            match component {
+                Component::Normal(part) => parts.push(part.to_string_lossy().into_owned()),
+                _ => return PathKind::Ignored,
+            }
+        }
+        let Some(last) = parts.pop() else {
+            return PathKind::Folder; // the vault root itself
+        };
+        if parts.iter().any(|p| p.starts_with('.')) {
+            return PathKind::Ignored; // inside .notesapp/ or another hidden folder
+        }
+        let prefix = if parts.is_empty() {
+            String::new()
+        } else {
+            format!("{}/", parts.join("/"))
+        };
+        if let Some(real) = placeholder_note_name(&last) {
+            return PathKind::Note(format!("{prefix}{real}"));
+        }
+        if last.starts_with('.') {
+            return PathKind::Ignored; // temporary files, .DS_Store, …
+        }
+        if has_md_extension(&last) {
+            return PathKind::Note(format!("{prefix}{last}"));
+        }
+        // Gone or a folder: either way we cannot tell which notes it held.
+        if file.is_dir() || Path::new(&last).extension().is_none() {
+            PathKind::Folder
+        } else {
+            PathKind::Ignored // attachments and other files
+        }
     }
 
     /// Maps a vault-relative note path to a file path, rejecting anything that
