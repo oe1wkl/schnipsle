@@ -9,7 +9,7 @@ Work as a professional software developer: follow the decisions below, keep docs
 | File                       | What it holds                                                                                               |
 | -------------------------- | ----------------------------------------------------------------------------------------------------------- |
 | `docs/roadmap.md`          | Current milestone, open tasks, what is next                                                                 |
-| `docs/adr/`                | Architecture decisions (ADR-0001 … 0014). Do not contradict an accepted ADR; propose a new one              |
+| `docs/adr/`                | Architecture decisions (ADR-0001 … 0015). Do not contradict an accepted ADR; propose a new one              |
 | `docs/format.md`           | Vault file format (normative): notes, tags §5.3, music §5.6, chords §5.7, history, trash, writing rules §10 |
 | `docs/design/hld.md`       | High-level design snapshot (requirements F-xx / N-xx, architecture)                                         |
 | `docs/spikes/ios-vault.md` | iOS findings, including the iOS 27 build pitfalls                                                           |
@@ -19,6 +19,7 @@ Work as a professional software developer: follow the decisions below, keep docs
 
 ```text
 crates/core/                     schnipsle-core: vault access, tags, (later) index, query. No UI deps
+crates/apple/                    schnipsle-apple: NSFileCoordinator (later NSFilePresenter) via objc2, ADR-0015
 crates/import/, crates/export/   importer and exporter crates (empty until M4/M5)
 crates/tauri-plugin-vault-access iOS folder picker + security-scoped bookmark (Swift in ios/)
 src-tauri/                       Tauri 2 app shell: commands (lib.rs), platform glue (vault_location.rs)
@@ -49,7 +50,7 @@ Before reporting work as done, run tests, clippy, fmt and `pnpm check`; all must
 - **Core first:** logic goes into `schnipsle-core` with unit tests; `src-tauri` only wraps it as commands. The UI never touches files.
 - **Data safety:** writes are atomic and must not overwrite a note changed elsewhere (format.md §10). Never discard user text silently.
 - **Format changes** need an update of `docs/format.md`, an ADR, and fixtures.
-- **Rust:** edition 2024, MSRV 1.90 (toolchain pinned in `rust-toolchain.toml`), clippy pedantic, `unsafe` forbidden (except the Swift bridge crate), every file starts with `// SPDX-License-Identifier: Apache-2.0`.
+- **Rust:** edition 2024, MSRV 1.90 (toolchain pinned in `rust-toolchain.toml`), clippy pedantic, `unsafe` forbidden except in the Swift bridge crate and `schnipsle-apple` (ADR-0015: `// SAFETY:` on every block, safe public API), every file starts with `// SPDX-License-Identifier: Apache-2.0`.
 - **TypeScript:** strict, ESLint strictTypeChecked, Prettier (width 100).
 - **Licences:** no GPL/AGPL/LGPL/SSPL dependencies (App Store, ADR-0005); cargo-deny and `scripts/check-npm-licenses.mjs` check this. Pandoc may only be called as an external program on desktop, never bundled.
 - **Commits:** Conventional Commits (`feat(core): …`), signed off with `git commit -s`; the commit-msg hook checks both. Do not push, open pull requests or merge without being asked.
