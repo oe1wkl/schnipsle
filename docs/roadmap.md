@@ -20,7 +20,7 @@ Each milestone ends in a usable build. Scope can move between milestones; the or
 
 - Tauri 2 confirmed for iOS by the spike (`docs/spikes/ios-vault.md`); ADR-0003 unconditional.
 - Working: folder picker and persistent access on iOS, list/read/write with conflict detection, test UI on macOS, Linux and iPhone.
-- Open, not blocking: spike tests C7 (simultaneous edits on two devices) and C8 (offline editing).
+- Open, not blocking: spike test C7 (simultaneous edits on two devices). C8 (offline editing) passed on 2026-10-15 with the M1 build.
 
 ## M1 backlog
 
@@ -32,7 +32,7 @@ Carried over from the spike:
 - [ ] Move the iOS bookmark from `UserDefaults` to Application Support
 - [ ] Tauri iOS template override so the "Build Rust Code" PATH fix survives `ios init`
 - [ ] Own menu bar instead of Tauri's default (duplicate Close Window in File and Window menus)
-- [ ] Re-test C7 and C8 on the iPhone
+- [ ] Re-test C7 on the iPhone (C8 passed 2026-10-15)
 
 Editor:
 
