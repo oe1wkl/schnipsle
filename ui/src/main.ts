@@ -14,10 +14,18 @@ interface NoteEntry {
   modifiedMs: number;
   available: boolean;
 }
+/** A version a sync service kept because it conflicts (schnipsle-core `ConflictVersion`). */
+interface ConflictVersion {
+  text: string;
+  hash: string;
+  modifiedMs: number;
+  device: string | null;
+}
 interface NoteContent {
   path: string;
   text: string;
   hash: string;
+  conflicts: ConflictVersion[];
 }
 interface Tag {
   name: string;
@@ -57,11 +65,17 @@ const ui = {
   conflict: el("conflict"),
   useTheirs: el("use-theirs") as HTMLButtonElement,
   keepMine: el("keep-mine") as HTMLButtonElement,
+  syncConflict: el("sync-conflict"),
+  syncConflictText: el("sync-conflict-text"),
+  syncOther: el("sync-other") as HTMLTextAreaElement,
+  syncKeepMine: el("sync-keep-mine") as HTMLButtonElement,
+  syncUseOther: el("sync-use-other") as HTMLButtonElement,
 };
 
 /** The note in the editor. `savedText` is what is on disk (as far as we know). */
 let current: { path: string; hash: string; savedText: string } | null = null;
 let conflictHash: string | null | undefined; // set while the conflict banner shows
+let syncConflict: ConflictVersion | undefined; // shown in the sync conflict banner
 let entries: NoteEntry[] = [];
 let saveTimer: number | undefined;
 let saving: Promise<void> = Promise.resolve();
@@ -146,6 +160,7 @@ function load(content: NoteContent): void {
   ui.text.value = content.text;
   ui.text.disabled = false;
   hideConflict();
+  showSyncConflicts(content.conflicts);
   setStatus(`Opened ${content.path}`);
   void showTags();
   void refreshList();
@@ -199,6 +214,46 @@ function hideConflict(): void {
   ui.conflict.hidden = true;
 }
 
+/** Shows the first conflict version a sync service kept for the open note, if any. */
+function showSyncConflicts(conflicts: ConflictVersion[]): void {
+  syncConflict = conflicts[0];
+  ui.syncConflict.hidden = syncConflict === undefined;
+  if (!syncConflict) return;
+  const who = syncConflict.device ?? "Another device";
+  const when = new Date(syncConflict.modifiedMs).toLocaleString();
+  const more = conflicts.length > 1 ? ` (1 of ${String(conflicts.length)})` : "";
+  ui.syncConflictText.textContent = `${who} saved a different version at ${when}${more}.`;
+  ui.syncOther.value = syncConflict.text;
+}
+
+/** Keeps `text` as the note; every other version goes into the note's history. */
+function resolveSyncConflict(pick: "mine" | "other"): void {
+  saving = saving.then(save).then(async () => {
+    if (!current || !syncConflict) return;
+    const text = pick === "mine" ? ui.text.value : syncConflict.text;
+    try {
+      const content = await invoke<NoteContent>("resolve_conflict", {
+        path: current.path,
+        text,
+        expectedHash: current.hash,
+      });
+      load(content);
+      setStatus("Conflict resolved – the other version is kept in the note's history.");
+    } catch (e) {
+      const err = asError(e);
+      setStatus(`Not resolved: ${err.message}`);
+      if (err.kind === "conflict") queueCheck();
+    }
+  });
+}
+
+ui.syncKeepMine.addEventListener("click", () => {
+  resolveSyncConflict("mine");
+});
+ui.syncUseOther.addEventListener("click", () => {
+  resolveSyncConflict("other");
+});
+
 ui.useTheirs.addEventListener("click", () => {
   if (!current) return;
   const path = current.path;
@@ -248,6 +303,7 @@ async function checkForChanges(changes?: VaultChanges): Promise<void> {
     }
     if (!onDisk.available) return;
     const content = await invoke<NoteContent>("read_note", { path });
+    showSyncConflicts(content.conflicts);
     if (content.hash === current.hash) return;
     if (content.text === ui.text.value) {
       // Same text as in the editor: the echo of our own save, or an identical edit.
@@ -303,7 +359,7 @@ ui.newNote.addEventListener("click", () => {
   void flushSave()
     .then(() => invoke<string>("create_note", { path, text }))
     .then((hash) => {
-      load({ path, text, hash });
+      load({ path, text, hash, conflicts: [] });
       showView("editor");
       ui.text.focus();
     })

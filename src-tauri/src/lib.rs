@@ -52,6 +52,7 @@ impl From<VaultError> for CommandError {
             VaultError::AlreadyExists(_) => ("alreadyExists", None),
             VaultError::InvalidPath(_) => ("invalidPath", None),
             VaultError::NotADirectory(_) => ("notADirectory", None),
+            VaultError::InvalidId(_) => ("invalidId", None),
             VaultError::Io(_) => ("io", None),
         };
         Self {
@@ -71,10 +72,14 @@ struct VaultInfo {
     path: String,
 }
 
-/// Opens a vault with the platform's file coordination (ADR-0015).
+/// Opens a vault with the platform's file coordination (ADR-0015) and sync
+/// conflict versions (ADR-0006).
 fn open_vault(path: &std::path::Path) -> Result<Vault, VaultError> {
     #[cfg(any(target_os = "macos", target_os = "ios"))]
-    return Vault::open_with(path, std::sync::Arc::new(schnipsle_apple::FileCoordinator));
+    return Ok(
+        Vault::open_with(path, std::sync::Arc::new(schnipsle_apple::FileCoordinator))?
+            .with_sync_conflicts(std::sync::Arc::new(schnipsle_apple::ICloudVersions)),
+    );
     #[cfg(not(any(target_os = "macos", target_os = "ios")))]
     return Vault::open(path);
 }
@@ -172,6 +177,20 @@ async fn create_note(state: State<'_, AppState>, path: String, text: String) -> 
     with_vault(&state, |v| Ok(v.create_note(&path, &text)?))
 }
 
+/// Settles a sync conflict: `text` becomes the note, every other version goes
+/// into its history (ADR-0006, ADR-0011). Returns the note as now on disk.
+#[tauri::command]
+async fn resolve_conflict(
+    state: State<'_, AppState>,
+    path: String,
+    text: String,
+    expected_hash: String,
+) -> CmdResult<NoteContent> {
+    with_vault(&state, |v| {
+        Ok(v.resolve_conflict(&path, &text, &expected_hash)?)
+    })
+}
+
 /// Asks iCloud to download a note that is only a placeholder (iOS); no-op elsewhere.
 #[tauri::command]
 async fn download_note(
@@ -261,6 +280,7 @@ pub fn run() {
             read_note,
             save_note,
             create_note,
+            resolve_conflict,
             download_note,
             extract_tags
         ])

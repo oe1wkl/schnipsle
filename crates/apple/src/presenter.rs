@@ -12,7 +12,7 @@ use objc2::rc::Retained;
 use objc2::runtime::{NSObject, NSObjectProtocol, ProtocolObject};
 use objc2::{AnyThread, DefinedClass, define_class, msg_send};
 use objc2_foundation::{
-    NSError, NSFileCoordinator, NSFilePresenter, NSOperationQueue, NSString, NSURL,
+    NSError, NSFileCoordinator, NSFilePresenter, NSFileVersion, NSOperationQueue, NSString, NSURL,
 };
 use schnipsle_core::Hint;
 
@@ -78,6 +78,23 @@ define_class!(
         fn accommodate_subitem_deletion(&self, url: &NSURL, done: &DynBlock<dyn Fn(*mut NSError)>) {
             self.ivars().report(url);
             done.call((ptr::null_mut(),));
+        }
+
+        // iCloud reports sync conflicts as new versions; the file itself may
+        // not change at all on the device whose text was kept.
+        #[unsafe(method(presentedSubitemAtURL:didGainVersion:))]
+        fn subitem_did_gain_version(&self, url: &NSURL, _version: &NSFileVersion) {
+            self.ivars().report(url);
+        }
+
+        #[unsafe(method(presentedSubitemAtURL:didLoseVersion:))]
+        fn subitem_did_lose_version(&self, url: &NSURL, _version: &NSFileVersion) {
+            self.ivars().report(url);
+        }
+
+        #[unsafe(method(presentedSubitemAtURL:didResolveConflictVersion:))]
+        fn subitem_did_resolve_conflict_version(&self, url: &NSURL, _version: &NSFileVersion) {
+            self.ivars().report(url);
         }
 
         #[unsafe(method(presentedItemDidChange))]

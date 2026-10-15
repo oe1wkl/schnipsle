@@ -100,6 +100,13 @@ button.icon {
 .banner[hidden] {
   display: none;
 }
+.banner details {
+  flex-basis: 100%;
+}
+.banner textarea {
+  width: 100%;
+  font: inherit;
+}
 
 .layout {
   flex: 1;

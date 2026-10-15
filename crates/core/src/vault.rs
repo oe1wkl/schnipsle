@@ -23,6 +23,7 @@ use std::time::UNIX_EPOCH;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 
+use crate::conflicts::{ConflictVersion, NoSyncConflicts, SyncConflicts};
 use crate::coordination::{Coordinator, Uncoordinated};
 
 /// Errors from vault operations.
@@ -43,6 +44,8 @@ pub enum VaultError {
     },
     /// A note to be created already exists.
     AlreadyExists(String),
+    /// A note's front matter `id` is not a ULID, so it cannot name its history folder.
+    InvalidId(String),
     /// Any other file-system error.
     Io(io::Error),
 }
@@ -57,6 +60,7 @@ impl std::fmt::Display for VaultError {
                 write!(f, "changed elsewhere since it was opened: {path}")
             }
             Self::AlreadyExists(p) => write!(f, "a note with this name already exists: {p}"),
+            Self::InvalidId(id) => write!(f, "the note's id is not valid: {id}"),
             Self::Io(e) => write!(f, "{e}"),
         }
     }
@@ -96,6 +100,9 @@ pub struct NoteContent {
     pub text: String,
     /// SHA-256 of the content as hex; pass it back to [`Vault::write_note`].
     pub hash: String,
+    /// Versions a sync service kept because they conflict with this one
+    /// (ADR-0006); resolve them with [`Vault::resolve_conflict`].
+    pub conflicts: Vec<ConflictVersion>,
 }
 
 /// What a changed path means for the vault, see [`Vault::classify`].
@@ -114,6 +121,7 @@ pub enum PathKind {
 pub struct Vault {
     root: PathBuf,
     coordinator: Arc<dyn Coordinator>,
+    sync: Arc<dyn SyncConflicts>,
 }
 
 impl Vault {
@@ -132,10 +140,25 @@ impl Vault {
     pub fn open_with(root: impl Into<PathBuf>, coordinator: Arc<dyn Coordinator>) -> Result<Self> {
         let root = root.into();
         if root.is_dir() {
-            Ok(Self { root, coordinator })
+            Ok(Self {
+                root,
+                coordinator,
+                sync: Arc::new(NoSyncConflicts),
+            })
         } else {
             Err(VaultError::NotADirectory(root))
         }
+    }
+
+    /// Uses `sync` to find conflict versions kept by a sync service.
+    #[must_use]
+    pub fn with_sync_conflicts(mut self, sync: Arc<dyn SyncConflicts>) -> Self {
+        self.sync = sync;
+        self
+    }
+
+    pub(crate) fn sync(&self) -> &dyn SyncConflicts {
+        self.sync.as_ref()
     }
 
     /// The vault's root folder.
@@ -177,20 +200,25 @@ impl Vault {
         if !full.exists() && placeholder_of(&full).exists() {
             return Err(VaultError::NotDownloaded(path.to_owned()));
         }
-        self.coordinated(Access::Read, &full, |file| match fs::read(file) {
+        let mut note = self.coordinated(Access::Read, &full, |file| match fs::read(file) {
             Ok(bytes) => {
                 let text = String::from_utf8_lossy(&bytes).into_owned();
                 Ok(NoteContent {
                     path: path.to_owned(),
                     hash: sha256_hex(&bytes),
                     text,
+                    conflicts: Vec::new(),
                 })
             }
             Err(e) if e.kind() == io::ErrorKind::NotFound && placeholder_of(file).exists() => {
                 Err(VaultError::NotDownloaded(path.to_owned()))
             }
             Err(e) => Err(e.into()),
-        })
+        })?;
+        // Conflict versions stay with the sync service until resolved, so a
+        // failure to list them loses nothing; it must not make the note unreadable.
+        note.conflicts = self.conflicts_at(&full).unwrap_or_default();
+        Ok(note)
     }
 
     /// Writes a note atomically, but only if it still has the content that was read.
@@ -253,7 +281,7 @@ impl Vault {
 
     /// Runs `f` inside the coordinator and passes its result through. `f` gets
     /// the path to use, which the coordinator may have updated.
-    fn coordinated<T>(
+    pub(crate) fn coordinated<T>(
         &self,
         access: Access,
         path: &Path,
@@ -326,7 +354,7 @@ impl Vault {
 
     /// Maps a vault-relative note path to a file path, rejecting anything that
     /// could leave the vault or is not a Markdown note.
-    fn resolve(&self, path: &str) -> Result<PathBuf> {
+    pub(crate) fn resolve(&self, path: &str) -> Result<PathBuf> {
         let invalid = || VaultError::InvalidPath(path.to_owned());
         let rel = Path::new(path);
         if path.is_empty() || !has_md_extension(path) || path.contains('\\') {
@@ -472,24 +500,24 @@ pub fn sha256_hex(bytes: &[u8]) -> String {
 }
 
 #[derive(Debug, Clone, Copy)]
-enum Access {
+pub(crate) enum Access {
     Read,
     Write,
 }
 
 /// A coordinator broke its contract and called an accessor a second time.
-fn accessor_ran_twice() -> VaultError {
+pub(crate) fn accessor_ran_twice() -> VaultError {
     io::Error::other("file coordination ran the same write twice").into()
 }
 
 /// A fully written and flushed temporary file next to its target (format.md §10).
 /// Dropping it without placing it removes the file.
-struct TempFile {
+pub(crate) struct TempFile {
     path: PathBuf,
 }
 
 impl TempFile {
-    fn write(target: &Path, bytes: &[u8]) -> io::Result<Self> {
+    pub(crate) fn write(target: &Path, bytes: &[u8]) -> io::Result<Self> {
         static COUNTER: AtomicU64 = AtomicU64::new(0);
         let dir = target.parent().unwrap_or_else(|| Path::new("."));
         let name = target
@@ -513,7 +541,7 @@ impl TempFile {
     }
 
     /// Renames the file over `target`, replacing what is there.
-    fn replace(self, target: &Path) -> io::Result<()> {
+    pub(crate) fn replace(self, target: &Path) -> io::Result<()> {
         fs::rename(&self.path, target)
         // on success Drop finds nothing left to remove
     }
@@ -522,7 +550,7 @@ impl TempFile {
     /// atomically with `AlreadyExists`, so a note created elsewhere in the meantime
     /// is never replaced. File systems without hard links fall back to an
     /// exclusive create, which is equally safe but not atomic for the content.
-    fn place_new(self, target: &Path) -> io::Result<()> {
+    pub(crate) fn place_new(self, target: &Path) -> io::Result<()> {
         match fs::hard_link(&self.path, target) {
             Ok(()) => Ok(()),
             Err(e) if e.kind() == io::ErrorKind::AlreadyExists => Err(e),

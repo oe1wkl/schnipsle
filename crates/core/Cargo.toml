@@ -14,6 +14,8 @@ comrak.workspace = true
 unicode-normalization.workspace = true
 serde.workspace = true
 sha2.workspace = true
+getrandom = "0.3"
+ruzstd = "0.9"
 
 # File events on desktop (ADR-0015); Apple platforms add NSFilePresenter on top.
 [target.'cfg(not(any(target_os = "ios", target_os = "android")))'.dependencies]

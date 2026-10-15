@@ -54,12 +54,7 @@ fn coordinate(
     f: &mut dyn FnMut(&Path) -> io::Result<()>,
     intent: Intent,
 ) -> io::Result<()> {
-    let url = NSURL::from_file_path(path).ok_or_else(|| {
-        io::Error::new(
-            io::ErrorKind::InvalidInput,
-            format!("not a usable file path: {}", path.display()),
-        )
-    })?;
+    let url = file_url(path)?;
     let f = RefCell::new(f);
     let outcome: Cell<Option<io::Result<()>>> = Cell::new(None);
 
@@ -104,6 +99,16 @@ fn coordinate(
             "file coordination returned without granting access",
         )),
     }
+}
+
+/// `path` as a file URL.
+pub(crate) fn file_url(path: &Path) -> io::Result<Retained<NSURL>> {
+    NSURL::from_file_path(path).ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("not a usable file path: {}", path.display()),
+        )
+    })
 }
 
 /// POSIX errors keep their error number, so `io::ErrorKind` stays meaningful.

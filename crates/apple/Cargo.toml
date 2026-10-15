@@ -1,6 +1,6 @@
 [package]
 name = "schnipsle-apple"
-description = "Apple platform services: NSFileCoordinator through objc2 (ADR-0015)"
+description = "Apple platform services: file coordination, presenter and iCloud versions through objc2 (ADR-0015)"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -19,9 +19,13 @@ objc2 = "0.6"
 objc2-foundation = { version = "0.3", default-features = false, features = [
   "std",
   "block2",
+  "NSArray",
+  "NSDate",
+  "NSEnumerator",
   "NSError",
   "NSFileCoordinator",
   "NSFilePresenter",
+  "NSFileVersion",
   "NSOperation",
   "NSString",
   "NSURL",
