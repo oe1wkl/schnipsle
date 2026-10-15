@@ -13,3 +13,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - Vault access in `schnipsle-core`: list notes (with iCloud placeholders), read, atomic write with conflict detection, create (spike, see docs/spikes/ios-vault.md).
 - `tauri-plugin-vault-access`: iOS folder picker with security-scoped bookmarks and iCloud download requests (spike).
 - Test UI: open a vault folder, edit notes with autosave, reload external changes, resolve conflicts (spike).
+
+### Changed
+
+- Safer saving: the conflict check now runs after the new text is flushed to disk, right before the rename, and creating a note can no longer replace one created at the same moment by another device or process.

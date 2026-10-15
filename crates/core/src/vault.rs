@@ -169,6 +169,9 @@ impl Vault {
     /// nothing is written in that case.
     pub fn write_note(&self, path: &str, text: &str, expected_hash: &str) -> Result<String> {
         let full = self.resolve(path)?;
+        // Write and flush first, check last: the window in which a change made
+        // elsewhere could be overwritten shrinks to one read plus the rename.
+        let tmp = TempFile::write(&full, text.as_bytes())?;
         let current_hash = match fs::read(&full) {
             Ok(bytes) => Some(sha256_hex(&bytes)),
             Err(e) if e.kind() == io::ErrorKind::NotFound => None,
@@ -180,7 +183,7 @@ impl Vault {
                 current_hash,
             });
         }
-        atomic_write(&full, text.as_bytes())?;
+        tmp.replace(&full)?;
         Ok(sha256_hex(text.as_bytes()))
     }
 
@@ -196,8 +199,15 @@ impl Vault {
         if let Some(parent) = full.parent() {
             fs::create_dir_all(parent)?;
         }
-        atomic_write(&full, text.as_bytes())?;
-        Ok(sha256_hex(text.as_bytes()))
+        match TempFile::write(&full, text.as_bytes())?.place_new(&full) {
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
+                Err(VaultError::AlreadyExists(path.to_owned()))
+            }
+            result => {
+                result?;
+                Ok(sha256_hex(text.as_bytes()))
+            }
+        }
     }
 
     /// Maps a vault-relative note path to a file path, rejecting anything that
@@ -347,30 +357,71 @@ pub fn sha256_hex(bytes: &[u8]) -> String {
     hex
 }
 
-/// Writes via a temporary file in the same folder, flushes it to disk, then
-/// renames it over the target (format.md §10).
-fn atomic_write(target: &Path, bytes: &[u8]) -> io::Result<()> {
-    static COUNTER: AtomicU64 = AtomicU64::new(0);
-    let dir = target.parent().unwrap_or_else(|| Path::new("."));
-    let name = target
-        .file_name()
-        .map(|n| n.to_string_lossy().into_owned())
-        .unwrap_or_default();
-    let tmp = dir.join(format!(
-        ".{name}.tmp-{}-{}",
-        std::process::id(),
-        COUNTER.fetch_add(1, Ordering::Relaxed)
-    ));
-    let result = (|| {
-        let mut file = fs::File::create(&tmp)?;
+/// A fully written and flushed temporary file next to its target (format.md §10).
+/// Dropping it without placing it removes the file.
+struct TempFile {
+    path: PathBuf,
+}
+
+impl TempFile {
+    fn write(target: &Path, bytes: &[u8]) -> io::Result<Self> {
+        static COUNTER: AtomicU64 = AtomicU64::new(0);
+        let dir = target.parent().unwrap_or_else(|| Path::new("."));
+        let name = target
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let tmp = Self {
+            path: dir.join(format!(
+                ".{name}.tmp-{}-{}",
+                std::process::id(),
+                COUNTER.fetch_add(1, Ordering::Relaxed)
+            )),
+        };
+        let mut file = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&tmp.path)?;
         file.write_all(bytes)?;
         file.sync_all()?;
-        fs::rename(&tmp, target)
-    })();
-    if result.is_err() {
-        let _ = fs::remove_file(&tmp);
+        Ok(tmp)
     }
-    result
+
+    /// Renames the file over `target`, replacing what is there.
+    fn replace(self, target: &Path) -> io::Result<()> {
+        fs::rename(&self.path, target)
+        // on success Drop finds nothing left to remove
+    }
+
+    /// Puts the file at `target` only if nothing is there yet. A hard link fails
+    /// atomically with `AlreadyExists`, so a note created elsewhere in the meantime
+    /// is never replaced. File systems without hard links fall back to an
+    /// exclusive create, which is equally safe but not atomic for the content.
+    fn place_new(self, target: &Path) -> io::Result<()> {
+        match fs::hard_link(&self.path, target) {
+            Ok(()) => Ok(()),
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => Err(e),
+            Err(_) => {
+                let bytes = fs::read(&self.path)?;
+                let mut file = fs::OpenOptions::new()
+                    .write(true)
+                    .create_new(true)
+                    .open(target)?;
+                let result = file.write_all(&bytes).and_then(|()| file.sync_all());
+                if result.is_err() {
+                    // We created this file a moment ago; never leave half of it behind.
+                    let _ = fs::remove_file(target);
+                }
+                result
+            }
+        }
+    }
+}
+
+impl Drop for TempFile {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.path);
+    }
 }
 
 #[cfg(test)]
@@ -477,6 +528,45 @@ mod tests {
             .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
             .collect();
         assert_eq!(names, ["new.md"]);
+    }
+
+    #[test]
+    fn conflict_leaves_no_temp_file() {
+        let (dir, vault) = vault();
+        let h = vault.create_note("n.md", "one").unwrap();
+        fs::write(dir.path().join("n.md"), "changed elsewhere").unwrap();
+        assert!(vault.write_note("n.md", "mine", &h).is_err());
+        let names: Vec<_> = fs::read_dir(dir.path())
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(names, ["n.md"]);
+    }
+
+    #[test]
+    fn concurrent_creates_never_replace_each_other() {
+        let (dir, vault) = vault();
+        let winners: Vec<_> = std::thread::scope(|s| {
+            let handles: Vec<_> = (0..16)
+                .map(|i| {
+                    let vault = &vault;
+                    s.spawn(move || vault.create_note("race.md", &format!("writer {i}")))
+                })
+                .collect();
+            handles.into_iter().map(|h| h.join().unwrap()).collect()
+        });
+        let ok: Vec<_> = winners.iter().filter_map(|r| r.as_ref().ok()).collect();
+        assert_eq!(ok.len(), 1, "exactly one create may succeed");
+        assert!(
+            winners
+                .iter()
+                .filter(|r| r.is_err())
+                .all(|r| matches!(r, Err(VaultError::AlreadyExists(_))))
+        );
+        // The file on disk is the winner's, untouched by the others.
+        let on_disk = fs::read(dir.path().join("race.md")).unwrap();
+        assert_eq!(&sha256_hex(&on_disk), ok[0]);
+        assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 1);
     }
 
     #[test]

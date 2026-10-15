@@ -1,6 +1,6 @@
 # Roadmap and status
 
-- Updated: 2026-10-14
+- Updated: 2026-10-15
 - Current milestone: **M1 – Core editor** (M0 complete and merged)
 
 Each milestone ends in a usable build. Scope can move between milestones; the order should not.
@@ -28,7 +28,7 @@ Carried over from the spike:
 
 - [ ] Replace polling with file events: `notify` on desktop, `NSFilePresenter` on iOS
 - [ ] Use `NSFileCoordinator` for reads and writes on Apple platforms (format.md §10)
-- [ ] Make check-and-rename atomic enough (re-check hash right before rename, or file coordination)
+- [x] Make check-and-rename atomic enough: hash re-checked after the temp file is flushed, creates never replace (file coordination still open above)
 - [ ] Move the iOS bookmark from `UserDefaults` to Application Support
 - [ ] Tauri iOS template override so the "Build Rust Code" PATH fix survives `ios init`
 - [ ] Own menu bar instead of Tauri's default (duplicate Close Window in File and Window menus)
@@ -46,4 +46,4 @@ Editor:
 Housekeeping:
 
 - [x] Merge `spike/ios-vault` into `main` via pull request (first PR run of the commit-message check)
-- [ ] Merge the Dependabot pull requests for GitHub Actions
+- [x] Merge the Dependabot pull requests for GitHub Actions
