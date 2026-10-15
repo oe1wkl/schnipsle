@@ -69,8 +69,16 @@ struct VaultInfo {
     path: String,
 }
 
+/// Opens a vault with the platform's file coordination (ADR-0015).
+fn open_vault(path: &std::path::Path) -> Result<Vault, VaultError> {
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    return Vault::open_with(path, std::sync::Arc::new(schnipsle_apple::FileCoordinator));
+    #[cfg(not(any(target_os = "macos", target_os = "ios")))]
+    return Vault::open(path);
+}
+
 fn open_and_remember(state: &AppState, path: &std::path::Path) -> CmdResult<VaultInfo> {
-    let vault = Vault::open(path)?;
+    let vault = open_vault(path)?;
     let info = VaultInfo {
         name: path.file_name().map_or_else(
             || path.display().to_string(),
@@ -83,13 +91,19 @@ fn open_and_remember(state: &AppState, path: &std::path::Path) -> CmdResult<Vaul
 }
 
 fn with_vault<T>(state: &AppState, f: impl FnOnce(&Vault) -> CmdResult<T>) -> CmdResult<T> {
-    let guard = state.vault.lock().map_err(CommandError::other)?;
-    let vault = guard.as_ref().ok_or_else(|| CommandError {
-        kind: "noVault",
-        message: "No vault folder is open".into(),
-        current_hash: None,
-    })?;
-    f(vault)
+    // Clone out of the lock: file coordination can wait for iCloud, and that
+    // must not hold up every other command.
+    let vault = state
+        .vault
+        .lock()
+        .map_err(CommandError::other)?
+        .clone()
+        .ok_or_else(|| CommandError {
+            kind: "noVault",
+            message: "No vault folder is open".into(),
+            current_hash: None,
+        })?;
+    f(&vault)
 }
 
 /// Lets the user pick a vault folder; `None` if cancelled.

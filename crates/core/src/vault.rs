@@ -9,16 +9,21 @@
 //! iCloud Drive keeps notes that are not downloaded yet as hidden placeholder files
 //! (`.Name.md.icloud`). They are listed with `available: false` so the app can ask
 //! the system to download them.
+//!
+//! Every file access runs inside the vault's [`Coordinator`] (ADR-0015).
 
 use std::fmt::Write as _;
 use std::fs;
 use std::io::{self, Write as _};
 use std::path::{Component, Path, PathBuf};
+use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::UNIX_EPOCH;
 
 use serde::Serialize;
 use sha2::{Digest, Sha256};
+
+use crate::coordination::{Coordinator, Uncoordinated};
 
 /// Errors from vault operations.
 #[derive(Debug)]
@@ -93,21 +98,30 @@ pub struct NoteContent {
     pub hash: String,
 }
 
-/// An opened vault folder.
+/// An opened vault folder. Cheap to clone; clones share the coordinator.
 #[derive(Debug, Clone)]
 pub struct Vault {
     root: PathBuf,
+    coordinator: Arc<dyn Coordinator>,
 }
 
 impl Vault {
-    /// Opens the vault at `root`.
+    /// Opens the vault at `root` without file coordination.
     ///
     /// # Errors
     /// [`VaultError::NotADirectory`] if `root` is not an existing folder.
     pub fn open(root: impl Into<PathBuf>) -> Result<Self> {
+        Self::open_with(root, Arc::new(Uncoordinated))
+    }
+
+    /// Opens the vault at `root`; all file access goes through `coordinator`.
+    ///
+    /// # Errors
+    /// [`VaultError::NotADirectory`] if `root` is not an existing folder.
+    pub fn open_with(root: impl Into<PathBuf>, coordinator: Arc<dyn Coordinator>) -> Result<Self> {
         let root = root.into();
         if root.is_dir() {
-            Ok(Self { root })
+            Ok(Self { root, coordinator })
         } else {
             Err(VaultError::NotADirectory(root))
         }
@@ -126,8 +140,12 @@ impl Vault {
     /// # Errors
     /// I/O errors while reading the root folder; unreadable subfolders are skipped.
     pub fn list_notes(&self) -> Result<Vec<NoteEntry>> {
-        let mut notes = Vec::new();
-        collect(&self.root, "", &mut notes, true)?;
+        // One coordinated read of the folder covers the files inside it.
+        let mut notes = self.coordinated(Access::Read, &self.root, |root| {
+            let mut notes = Vec::new();
+            collect(root, "", &mut notes, true)?;
+            Ok(notes)
+        })?;
         notes.sort_by(|a, b| {
             b.modified_ms
                 .cmp(&a.modified_ms)
@@ -143,7 +161,12 @@ impl Vault {
     /// or I/O errors (e.g. the note does not exist).
     pub fn read_note(&self, path: &str) -> Result<NoteContent> {
         let full = self.resolve(path)?;
-        match fs::read(&full) {
+        // Checked before coordinating: a coordinated read of a placeholder waits
+        // for the download, which can take forever when offline.
+        if !full.exists() && placeholder_of(&full).exists() {
+            return Err(VaultError::NotDownloaded(path.to_owned()));
+        }
+        self.coordinated(Access::Read, &full, |file| match fs::read(file) {
             Ok(bytes) => {
                 let text = String::from_utf8_lossy(&bytes).into_owned();
                 Ok(NoteContent {
@@ -152,11 +175,11 @@ impl Vault {
                     text,
                 })
             }
-            Err(e) if e.kind() == io::ErrorKind::NotFound && placeholder_of(&full).exists() => {
+            Err(e) if e.kind() == io::ErrorKind::NotFound && placeholder_of(file).exists() => {
                 Err(VaultError::NotDownloaded(path.to_owned()))
             }
             Err(e) => Err(e.into()),
-        }
+        })
     }
 
     /// Writes a note atomically, but only if it still has the content that was read.
@@ -169,22 +192,26 @@ impl Vault {
     /// nothing is written in that case.
     pub fn write_note(&self, path: &str, text: &str, expected_hash: &str) -> Result<String> {
         let full = self.resolve(path)?;
-        // Write and flush first, check last: the window in which a change made
-        // elsewhere could be overwritten shrinks to one read plus the rename.
-        let tmp = TempFile::write(&full, text.as_bytes())?;
-        let current_hash = match fs::read(&full) {
-            Ok(bytes) => Some(sha256_hex(&bytes)),
-            Err(e) if e.kind() == io::ErrorKind::NotFound => None,
-            Err(e) => return Err(e.into()),
-        };
-        if current_hash.as_deref() != Some(expected_hash) {
-            return Err(VaultError::Conflict {
-                path: path.to_owned(),
-                current_hash,
-            });
-        }
-        tmp.replace(&full)?;
-        Ok(sha256_hex(text.as_bytes()))
+        // Write and flush first, then check and replace while holding exclusive
+        // access: with a real coordinator nothing can change the note in between;
+        // without one the window shrinks to one read plus the rename.
+        let mut tmp = Some(TempFile::write(&full, text.as_bytes())?);
+        self.coordinated(Access::Write, &full, |file| {
+            let current_hash = match fs::read(file) {
+                Ok(bytes) => Some(sha256_hex(&bytes)),
+                Err(e) if e.kind() == io::ErrorKind::NotFound => None,
+                Err(e) => return Err(e.into()),
+            };
+            if current_hash.as_deref() != Some(expected_hash) {
+                return Err(VaultError::Conflict {
+                    path: path.to_owned(),
+                    current_hash,
+                });
+            }
+            let tmp = tmp.take().ok_or_else(accessor_ran_twice)?;
+            tmp.replace(file)?;
+            Ok(sha256_hex(text.as_bytes()))
+        })
     }
 
     /// Creates a new note; fails if the file already exists.
@@ -193,21 +220,48 @@ impl Vault {
     /// [`VaultError::AlreadyExists`], [`VaultError::InvalidPath`] or I/O errors.
     pub fn create_note(&self, path: &str, text: &str) -> Result<String> {
         let full = self.resolve(path)?;
-        if full.exists() || placeholder_of(&full).exists() {
-            return Err(VaultError::AlreadyExists(path.to_owned()));
-        }
         if let Some(parent) = full.parent() {
             fs::create_dir_all(parent)?;
         }
-        match TempFile::write(&full, text.as_bytes())?.place_new(&full) {
-            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
-                Err(VaultError::AlreadyExists(path.to_owned()))
+        let mut tmp = Some(TempFile::write(&full, text.as_bytes())?);
+        self.coordinated(Access::Write, &full, |file| {
+            let exists = || VaultError::AlreadyExists(path.to_owned());
+            if placeholder_of(file).exists() {
+                return Err(exists());
             }
-            result => {
-                result?;
-                Ok(sha256_hex(text.as_bytes()))
+            let tmp = tmp.take().ok_or_else(accessor_ran_twice)?;
+            match tmp.place_new(file) {
+                Err(e) if e.kind() == io::ErrorKind::AlreadyExists => Err(exists()),
+                result => {
+                    result?;
+                    Ok(sha256_hex(text.as_bytes()))
+                }
+            }
+        })
+    }
+
+    /// Runs `f` inside the coordinator and passes its result through. `f` gets
+    /// the path to use, which the coordinator may have updated.
+    fn coordinated<T>(
+        &self,
+        access: Access,
+        path: &Path,
+        mut f: impl FnMut(&Path) -> Result<T>,
+    ) -> Result<T> {
+        let mut outcome = None;
+        {
+            let mut accessor = |file: &Path| {
+                outcome = Some(f(file));
+                Ok(())
+            };
+            match access {
+                Access::Read => self.coordinator.read(path, &mut accessor)?,
+                Access::Write => self.coordinator.write(path, &mut accessor)?,
             }
         }
+        outcome.unwrap_or_else(|| {
+            Err(io::Error::other("file coordination did not grant access").into())
+        })
     }
 
     /// Maps a vault-relative note path to a file path, rejecting anything that
@@ -355,6 +409,17 @@ pub fn sha256_hex(bytes: &[u8]) -> String {
         let _ = write!(hex, "{b:02x}");
     }
     hex
+}
+
+#[derive(Debug, Clone, Copy)]
+enum Access {
+    Read,
+    Write,
+}
+
+/// A coordinator broke its contract and called an accessor a second time.
+fn accessor_ran_twice() -> VaultError {
+    io::Error::other("file coordination ran the same write twice").into()
 }
 
 /// A fully written and flushed temporary file next to its target (format.md §10).
@@ -567,6 +632,145 @@ mod tests {
         let on_disk = fs::read(dir.path().join("race.md")).unwrap();
         assert_eq!(&sha256_hex(&on_disk), ok[0]);
         assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 1);
+    }
+
+    /// A coordinator for tests: logs every call, and can act like another
+    /// device (change the file before granting access), refuse access, or
+    /// report that the file moved while waiting.
+    #[derive(Debug, Default)]
+    struct Scripted {
+        log: std::sync::Mutex<Vec<(&'static str, PathBuf)>>,
+        before_write: Option<fn(&Path) -> PathBuf>,
+        refuse: bool,
+    }
+
+    impl Scripted {
+        fn run(
+            &self,
+            kind: &'static str,
+            path: &Path,
+            f: &mut dyn FnMut(&Path) -> io::Result<()>,
+        ) -> io::Result<()> {
+            self.log.lock().unwrap().push((kind, path.to_owned()));
+            if self.refuse {
+                return Err(io::Error::other("refused"));
+            }
+            let path = match (kind, self.before_write) {
+                ("write", Some(hook)) => hook(path),
+                _ => path.to_owned(),
+            };
+            f(&path)
+        }
+
+        fn calls(&self) -> Vec<(&'static str, PathBuf)> {
+            self.log.lock().unwrap().clone()
+        }
+    }
+
+    impl Coordinator for Scripted {
+        fn read(&self, path: &Path, f: &mut dyn FnMut(&Path) -> io::Result<()>) -> io::Result<()> {
+            self.run("read", path, f)
+        }
+        fn write(&self, path: &Path, f: &mut dyn FnMut(&Path) -> io::Result<()>) -> io::Result<()> {
+            self.run("write", path, f)
+        }
+    }
+
+    fn scripted_vault(coordinator: Scripted) -> (tempfile::TempDir, Vault, Arc<Scripted>) {
+        let dir = tempfile::tempdir().unwrap();
+        let coordinator = Arc::new(coordinator);
+        let vault = Vault::open_with(dir.path(), coordinator.clone()).unwrap();
+        (dir, vault, coordinator)
+    }
+
+    fn names_in(dir: &Path) -> Vec<String> {
+        let mut names: Vec<_> = fs::read_dir(dir)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        names.sort();
+        names
+    }
+
+    #[test]
+    fn every_access_is_coordinated() {
+        let (dir, vault, c) = scripted_vault(Scripted::default());
+        let root = dir.path();
+        let h = vault.create_note("n.md", "one").unwrap();
+        let note = vault.read_note("n.md").unwrap();
+        vault.write_note("n.md", "two", &note.hash).unwrap();
+        vault.list_notes().unwrap();
+        assert_eq!(h, note.hash);
+        assert_eq!(
+            c.calls(),
+            [
+                ("write", root.join("n.md")),
+                ("read", root.join("n.md")),
+                ("write", root.join("n.md")),
+                ("read", root.to_owned()),
+            ]
+        );
+    }
+
+    #[test]
+    fn change_made_while_waiting_for_access_is_a_conflict() {
+        let (dir, vault, _) = scripted_vault(Scripted {
+            before_write: Some(|p| {
+                fs::write(p, "saved by iCloud while we waited").unwrap();
+                p.to_owned()
+            }),
+            ..Scripted::default()
+        });
+        fs::write(dir.path().join("n.md"), "one").unwrap();
+        let note = vault.read_note("n.md").unwrap();
+        let err = vault.write_note("n.md", "mine", &note.hash).unwrap_err();
+        assert!(matches!(err, VaultError::Conflict { .. }));
+        assert_eq!(
+            fs::read_to_string(dir.path().join("n.md")).unwrap(),
+            "saved by iCloud while we waited"
+        );
+        assert_eq!(names_in(dir.path()), ["n.md"]);
+    }
+
+    #[test]
+    fn refused_access_writes_nothing() {
+        let (dir, vault, _) = scripted_vault(Scripted {
+            refuse: true,
+            ..Scripted::default()
+        });
+        fs::write(dir.path().join("n.md"), "one").unwrap();
+        let hash = sha256_hex(b"one");
+        assert!(matches!(
+            vault.write_note("n.md", "two", &hash),
+            Err(VaultError::Io(_))
+        ));
+        assert!(matches!(
+            vault.create_note("new.md", "x"),
+            Err(VaultError::Io(_))
+        ));
+        assert_eq!(fs::read_to_string(dir.path().join("n.md")).unwrap(), "one");
+        assert_eq!(names_in(dir.path()), ["n.md"]);
+    }
+
+    #[test]
+    fn write_follows_a_note_moved_while_waiting() {
+        let (dir, vault, _) = scripted_vault(Scripted {
+            before_write: Some(|p| {
+                let moved = p.with_file_name("moved.md");
+                fs::rename(p, &moved).unwrap();
+                moved
+            }),
+            ..Scripted::default()
+        });
+        fs::write(dir.path().join("n.md"), "one").unwrap();
+        vault
+            .write_note("n.md", "two", &sha256_hex(b"one"))
+            .unwrap();
+        assert_eq!(names_in(dir.path()), ["moved.md"]);
+        assert_eq!(
+            fs::read_to_string(dir.path().join("moved.md")).unwrap(),
+            "two"
+        );
     }
 
     #[test]

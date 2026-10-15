@@ -2727,6 +2727,7 @@ dependencies = [
 name = "schnipsle"
 version = "0.1.0"
 dependencies = [
+ "schnipsle-apple",
  "schnipsle-core",
  "serde",
  "serde_json",
@@ -2734,6 +2735,17 @@ dependencies = [
  "tauri-build",
  "tauri-plugin-dialog",
  "tauri-plugin-vault-access",
+]
+
+[[package]]
+name = "schnipsle-apple"
+version = "0.1.0"
+dependencies = [
+ "block2",
+ "objc2",
+ "objc2-foundation",
+ "schnipsle-core",
+ "tempfile",
 ]
 
 [[package]]

@@ -24,6 +24,10 @@ tauri-plugin-vault-access = { path = "../crates/tauri-plugin-vault-access" }
 serde.workspace = true
 serde_json.workspace = true
 
+# File coordination on Apple platforms (ADR-0015).
+[target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
+schnipsle-apple.workspace = true
+
 # Folder picker on desktop; iOS uses tauri-plugin-vault-access instead.
 [target.'cfg(not(any(target_os = "ios", target_os = "android")))'.dependencies]
 tauri-plugin-dialog = "2"

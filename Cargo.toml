@@ -2,13 +2,14 @@
 resolver = "3"
 members = [
   "crates/core",
+  "crates/apple",
   "crates/import",
   "crates/export",
   "crates/tauri-plugin-vault-access",
   "src-tauri",
 ]
 # The app shell needs platform WebView libraries; core crates build anywhere.
-default-members = ["crates/core", "crates/import", "crates/export"]
+default-members = ["crates/core", "crates/apple", "crates/import", "crates/export"]
 
 [workspace.package]
 version = "0.1.0"
@@ -21,6 +22,7 @@ publish = false
 
 [workspace.dependencies]
 schnipsle-core = { path = "crates/core" }
+schnipsle-apple = { path = "crates/apple" }
 comrak = { version = "0.56", default-features = false }
 unicode-normalization = "0.1"
 serde = { version = "1", features = ["derive"] }
