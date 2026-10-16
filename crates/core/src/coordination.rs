@@ -41,6 +41,22 @@ pub trait Coordinator: Send + Sync + fmt::Debug {
     fn delete(&self, path: &Path, f: &mut dyn FnMut(&Path) -> io::Result<()>) -> io::Result<()> {
         self.write(path, f)
     }
+
+    /// Runs `f` with exclusive access to both `from`, which `f` moves away, and
+    /// `to`, where it goes; `f` gets both paths to use. Implementations tell
+    /// others about the move once `f` succeeded. Defaults to a delete of `from`
+    /// around a write of `to`.
+    ///
+    /// # Errors
+    /// The error from `f`, or an error if access could not be obtained.
+    fn relocate(
+        &self,
+        from: &Path,
+        to: &Path,
+        f: &mut dyn FnMut(&Path, &Path) -> io::Result<()>,
+    ) -> io::Result<()> {
+        self.delete(from, &mut |from| self.write(to, &mut |to| f(from, to)))
+    }
 }
 
 /// No coordination: runs every operation directly. Used off Apple platforms.

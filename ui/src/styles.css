@@ -123,6 +123,21 @@ button.icon {
 .list p {
   padding: 8px;
 }
+.list-tools {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.list-tools select {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 13px;
+}
+.list .restore {
+  margin: 0 4px 6px;
+}
 .list ul {
   list-style: none;
   margin: 0;

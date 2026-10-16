@@ -28,6 +28,7 @@ interface ConflictVersion {
 }
 interface NoteContent {
   path: string;
+  title: string;
   text: string;
   hash: string;
   conflicts: ConflictVersion[];
@@ -47,6 +48,18 @@ interface SavedNote {
   text: string;
   hash: string;
 }
+/** A note in the trash (schnipsle-core `TrashedNote`). */
+interface TrashedNote {
+  key: string;
+  title: string;
+  originalPath: string;
+  deleted: string;
+}
+interface NewNote {
+  path: string;
+  saved: SavedNote;
+}
+type SortOrder = "modified" | "title";
 interface CommandError {
   kind: string;
   message: string;
@@ -72,6 +85,10 @@ const ui = {
   notes: el("notes") as HTMLUListElement,
   editorHost: el("editor-host"),
   mode: el("mode") as HTMLButtonElement,
+  sort: el("sort") as HTMLSelectElement,
+  showTrash: el("show-trash") as HTMLButtonElement,
+  deleteNote: el("delete-note") as HTMLButtonElement,
+  undoDelete: el("undo-delete") as HTMLButtonElement,
   status: el("status"),
   tags: el("tags"),
   conflict: el("conflict"),
@@ -85,8 +102,14 @@ const ui = {
   syncKeepBoth: el("sync-keep-both") as HTMLButtonElement,
 };
 
-/** The note in the editor. `savedText` is what is on disk (as far as we know). */
-let current: { path: string; hash: string; savedText: string } | null = null;
+/**
+ * The note in the editor. `savedText` is what is on disk (as far as we know);
+ * `titleAtOpen` decides whether leaving the note renames its file.
+ */
+let current: { path: string; hash: string; savedText: string; titleAtOpen: string } | null = null;
+let listMode: "notes" | "trash" = "notes";
+let sortOrder: SortOrder = "modified";
+let lastTrashed: TrashedNote | null = null;
 let conflictHash: string | null | undefined; // set while the conflict banner shows
 let syncConflict: ConflictVersion | undefined; // shown in the sync conflict banner
 let entries: NoteEntry[] = [];
@@ -126,7 +149,11 @@ function vaultOpened(info: VaultInfo): void {
 }
 
 async function refreshList(): Promise<void> {
-  entries = await invoke<NoteEntry[]>("list_notes");
+  if (listMode === "trash") {
+    await showTrashList();
+    return;
+  }
+  entries = await invoke<NoteEntry[]>("list_notes", { sort: sortOrder });
   ui.notes.replaceChildren(
     ...entries.map((note) => {
       const item = document.createElement("li");
@@ -149,13 +176,94 @@ async function refreshList(): Promise<void> {
   if (entries.length === 0) ui.empty.textContent = "No notes in this folder yet. Tap New.";
 }
 
+async function showTrashList(): Promise<void> {
+  const trashed = await invoke<TrashedNote[]>("list_trash");
+  ui.notes.replaceChildren(
+    ...trashed.map((note) => {
+      const item = document.createElement("li");
+      const title = document.createElement("strong");
+      title.textContent = note.title;
+      const meta = document.createElement("small");
+      const when = note.deleted === "" ? "" : new Date(note.deleted).toLocaleString();
+      meta.textContent = `Deleted ${when} · was ${note.originalPath || "?"}`;
+      const restore = document.createElement("button");
+      restore.type = "button";
+      restore.className = "small restore";
+      restore.textContent = "Restore";
+      restore.addEventListener("click", () => void restoreNote(note));
+      item.append(title, meta, restore);
+      return item;
+    }),
+  );
+  ui.empty.hidden = trashed.length > 0;
+  if (trashed.length === 0) ui.empty.textContent = "The trash is empty.";
+}
+
+async function restoreNote(note: TrashedNote): Promise<void> {
+  try {
+    const path = await invoke<string>("restore_note", { key: note.key });
+    setStatus(`Restored “${note.title}” to ${path}.`);
+    if (lastTrashed?.key === note.key) {
+      lastTrashed = null;
+      ui.undoDelete.hidden = true;
+    }
+    await refreshList();
+  } catch (e) {
+    setStatus(`Not restored: ${asError(e).message}`);
+  }
+}
+
+/** Shows the notes or the trash in the list. */
+function setListMode(mode: "notes" | "trash"): void {
+  listMode = mode;
+  ui.showTrash.textContent = mode === "trash" ? "Notes" : "Trash";
+  ui.showTrash.setAttribute("aria-pressed", String(mode === "trash"));
+  ui.sort.hidden = mode === "trash";
+  void refreshList();
+}
+
+/**
+ * Saves, then renames the note's file if its title changed while it was open
+ * (format.md §3). Runs whenever the user leaves a note, never while typing.
+ */
+function leaveNote(): Promise<void> {
+  saving = saving.then(save).then(async () => {
+    const note = current;
+    if (!note || conflictHash !== undefined || isDirty()) return;
+    try {
+      const path = await invoke<string>("rename_after_edit", {
+        path: note.path,
+        titleAtOpen: note.titleAtOpen,
+      });
+      if (path !== note.path) {
+        note.path = path;
+        setStatus(`Renamed to ${path}`);
+      }
+    } catch (e) {
+      setStatus(`Not renamed: ${asError(e).message}`);
+    }
+  });
+  return saving;
+}
+
+/** Empties the editor: no note open. */
+function closeEditor(): void {
+  current = null;
+  editor.load("");
+  editor.setEnabled(false);
+  ui.deleteNote.disabled = true;
+  hideConflict();
+  showSyncConflicts([]);
+  ui.tags.textContent = "";
+}
+
 async function showTags(): Promise<void> {
   const tags = await invoke<Tag[]>("extract_tags", { markdown: editor.text() });
   ui.tags.textContent = tags.map((t) => `#${t.name}`).join(" ");
 }
 
 async function openNote(note: NoteEntry): Promise<void> {
-  await flushSave();
+  await leaveNote();
   if (!note.available) {
     try {
       await invoke("download_note", { path: note.path });
@@ -178,9 +286,15 @@ async function openNote(note: NoteEntry): Promise<void> {
 }
 
 function load(content: NoteContent): void {
-  current = { path: content.path, hash: content.hash, savedText: content.text };
+  current = {
+    path: content.path,
+    hash: content.hash,
+    savedText: content.text,
+    titleAtOpen: content.title,
+  };
   editor.load(content.text);
   editor.setEnabled(true);
+  ui.deleteNote.disabled = false;
   hideConflict();
   showSyncConflicts(content.conflicts);
   setStatus(
@@ -386,19 +500,68 @@ async function checkForChanges(changes?: VaultChanges): Promise<void> {
 }
 
 ui.back.addEventListener("click", () => {
-  void flushSave().then(() => {
+  void leaveNote().then(async () => {
     showView("list");
+    await refreshList();
   });
 });
 
+ui.sort.addEventListener("change", () => {
+  sortOrder = ui.sort.value === "title" ? "title" : "modified";
+  try {
+    localStorage.setItem("schnipsle.sort", sortOrder);
+  } catch {
+    // storage unavailable: the choice lasts until the app closes
+  }
+  void refreshList();
+});
+try {
+  if (localStorage.getItem("schnipsle.sort") === "title") sortOrder = "title";
+} catch {
+  // storage unavailable
+}
+ui.sort.value = sortOrder;
+
+ui.showTrash.addEventListener("click", () => {
+  setListMode(listMode === "trash" ? "notes" : "trash");
+});
+
+ui.deleteNote.addEventListener("click", () => {
+  saving = saving.then(save).then(async () => {
+    const note = current;
+    if (!note) return;
+    if (conflictHash !== undefined || isDirty()) {
+      setStatus("Not deleted: resolve the conflict first, so no text is lost.");
+      return;
+    }
+    try {
+      const trashed = await invoke<TrashedNote>("trash_note", { path: note.path });
+      closeEditor();
+      lastTrashed = trashed;
+      ui.undoDelete.hidden = false;
+      setStatus(`Moved “${trashed.title}” to the trash.`);
+      showView("list");
+      await refreshList();
+    } catch (e) {
+      setStatus(`Not deleted: ${asError(e).message}`);
+    }
+  });
+});
+
+ui.undoDelete.addEventListener("click", () => {
+  const trashed = lastTrashed;
+  if (!trashed) return;
+  void restoreNote(trashed);
+});
+
 ui.pick.addEventListener("click", () => {
-  void flushSave()
+  void leaveNote()
     .then(() => invoke<VaultInfo | null>("pick_vault"))
     .then(async (info) => {
       if (!info) return;
-      current = null;
-      editor.load("");
-      editor.setEnabled(false);
+      closeEditor();
+      lastTrashed = null;
+      ui.undoDelete.hidden = true;
       vaultOpened(info);
       showView("list");
       await refreshList();
@@ -409,13 +572,18 @@ ui.pick.addEventListener("click", () => {
 });
 
 ui.newNote.addEventListener("click", () => {
-  const stamp = new Date().toISOString().slice(0, 19).replace("T", " ").replaceAll(":", "");
-  const path = `Note ${stamp}.md`;
   const text = "# New note\n\n";
-  void flushSave()
-    .then(() => invoke<SavedNote>("create_note", { path, text }))
-    .then((saved) => {
-      load({ path, ...saved, conflicts: [], conflictsError: null });
+  void leaveNote()
+    .then(() => invoke<NewNote>("new_note", { text }))
+    .then((created) => {
+      if (listMode === "trash") setListMode("notes");
+      load({
+        path: created.path,
+        title: "New note",
+        ...created.saved,
+        conflicts: [],
+        conflictsError: null,
+      });
       showView("editor");
       editor.focus();
       editor.cursorToEnd();
@@ -465,7 +633,7 @@ void listen<VaultChanges>("vault-changed", (event) => {
 
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") queueCheck();
-  else void flushSave();
+  else void leaveNote();
 });
 
 invoke<VaultInfo | null>("restore_vault")

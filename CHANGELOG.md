@@ -8,7 +8,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 - Repository foundation: Cargo workspace (`schnipsle-core`, `-import`, `-export`, Tauri 2 shell), TypeScript UI, CI, dependency licence checks, macOS bootstrap script.
 - Architecture decision records ADR-0001 to ADR-0015.
-- Vault format specification, draft revision 0.4 (notes, front matter, tags, links, attachments, music in ABC, song sheets in ChordPro, history, trash, smart folders).
+- Vault format specification, draft revision 0.5 (notes, front matter, tags, links, attachments, music in ABC, song sheets in ChordPro, history, trash, smart folders).
 - Hashtag extraction in `schnipsle-core` following format.md §5.3, with the specification examples as tests.
 - Vault access in `schnipsle-core`: list notes (with iCloud placeholders), read, atomic write with conflict detection, create (spike, see docs/spikes/ios-vault.md).
 - `tauri-plugin-vault-access`: iOS folder picker with security-scoped bookmarks and iCloud download requests (spike).
@@ -18,6 +18,8 @@ All notable changes to this project are documented here. The format follows [Kee
 - Every save keeps the note's front matter up to date (format.md §4): `id` and `created` are added the first time the app writes a note, `modified` on each change. Keys added by other tools are preserved, and a note is never rewritten just by opening it.
 - Copies of a note with the same `id` (format.md §4), such as the `Name 2.md` copies iCloud Drive makes in a sync conflict, are shown in the conflict banner: keep this version or the copy's (the other text goes into the note's history and the copy is removed), or keep both as separate notes, in which case the later one gets a new `id`. For now only copies in the same folder are found.
 - New note editor (CodeMirror 6, ADR-0007) with inline live preview: headings, emphasis, strikethrough, inline code and links are shown formatted, their Markdown markers appear only on the line being edited, and task boxes can be ticked. A button switches to plain Markdown source; the choice is remembered. The front matter is shown muted, and front matter written on save no longer moves the cursor or enters the undo history.
+- Note list: sort by recently changed or by title (ignoring case and accents). New notes are named after their title, and when you leave a note whose title changed, its file is renamed to match (format.md §3); renames never replace another file.
+- Trash (format.md §8): Delete moves a note unchanged to `.notesapp/trash/`, with Undo; a Trash view lists deleted notes and restores them. Notes without `id` and repeated ids get their own trash names (format.md 0.5).
 - Test UI: open a vault folder, edit notes with autosave, reload external changes, resolve conflicts (spike).
 
 ### Changed
