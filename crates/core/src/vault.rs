@@ -3,8 +3,12 @@
 //!
 //! Implements `docs/format.md` §3 (note files), §5.2 (title) and §10 (writing rules):
 //! writes are atomic (temporary file + rename) and refuse to overwrite a note that
-//! changed since it was read. Paths given to this module are relative to the vault
-//! root and use `/` as separator.
+//! changed since it was read. Note paths given to this module are relative to
+//! the vault's notes folder (`notes/`, format.md §1) and use `/` as separator.
+//!
+//! A vault is opened only if it has `.notesapp/vault.yaml` (§2, see
+//! [`crate::layout`]); one of a newer format or with a damaged `vault.yaml` is
+//! opened read-only, and every write then fails with [`VaultError::ReadOnly`].
 //!
 //! iCloud Drive keeps notes that are not downloaded yet as hidden placeholder files
 //! (`.Name.md.icloud`). They are listed with `available: false` so the app can ask
@@ -26,6 +30,7 @@ use sha2::{Digest, Sha256};
 use crate::conflicts::{ConflictVersion, NoSyncConflicts, SyncConflicts};
 use crate::coordination::{Coordinator, Uncoordinated};
 use crate::front_matter;
+use crate::layout::{FORMAT, NOTES_DIR, VAULT_FILE, VaultIdentity};
 use crate::stamp::{new_ulid, now_ms, rfc3339_utc};
 
 /// Errors from vault operations.
@@ -33,13 +38,19 @@ use crate::stamp::{new_ulid, now_ms, rfc3339_utc};
 pub enum VaultError {
     /// The vault root is missing or not a directory.
     NotADirectory(PathBuf),
+    /// The folder has no `.notesapp/vault.yaml`; see [`crate::layout::inspect`].
+    NotAVault(PathBuf),
+    /// The folder lies inside the vault at this root.
+    InsideVault(PathBuf),
+    /// The vault is open read-only; the message says why.
+    ReadOnly(String),
     /// A note path is absolute, leaves the vault, or does not end in `.md`.
     InvalidPath(String),
     /// The note exists only as a cloud placeholder and must be downloaded first.
     NotDownloaded(String),
     /// The note changed on disk since it was read; nothing was written.
     Conflict {
-        /// Path of the note, relative to the vault.
+        /// Path of the note, relative to `notes/`.
         path: String,
         /// Hash of the content now on disk, or `None` if the note was deleted.
         current_hash: Option<String>,
@@ -56,6 +67,13 @@ impl std::fmt::Display for VaultError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::NotADirectory(p) => write!(f, "not a folder: {}", p.display()),
+            Self::NotAVault(p) => write!(f, "not a Schnipsle vault yet: {}", p.display()),
+            Self::InsideVault(p) => write!(
+                f,
+                "this folder is inside the vault {}; open that one instead",
+                p.display()
+            ),
+            Self::ReadOnly(why) => write!(f, "{why}"),
             Self::InvalidPath(p) => write!(f, "invalid note path: {p}"),
             Self::NotDownloaded(p) => write!(f, "not downloaded yet: {p}"),
             Self::Conflict { path, .. } => {
@@ -105,7 +123,7 @@ fn title_sort_key(title: &str) -> String {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NoteEntry {
-    /// Path relative to the vault root, `/`-separated, e.g. `projects/tuner.md`.
+    /// Path relative to `notes/`, `/`-separated, e.g. `projects/tuner.md`.
     pub path: String,
     /// Title per format.md §5.2; the file name for placeholders.
     pub title: String,
@@ -118,7 +136,7 @@ pub struct NoteEntry {
 /// A note's content together with the hash used for conflict detection.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct NoteContent {
-    /// Path relative to the vault root.
+    /// Path relative to `notes/`.
     pub path: String,
     /// Title per format.md §5.2.
     pub title: String,
@@ -148,11 +166,11 @@ pub struct SavedNote {
 /// What a changed path means for the vault, see [`Vault::classify`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PathKind {
-    /// A note (or its iCloud placeholder); vault-relative path.
+    /// A note (or its iCloud placeholder); path relative to `notes/`.
     Note(String),
-    /// The root or a folder: any notes below it may have changed.
+    /// The root, `notes/` or a folder in it: any notes below it may have changed.
     Folder,
-    /// Outside the vault, hidden, or not a note.
+    /// Outside `notes/`, hidden, or not a note.
     Ignored,
 }
 
@@ -160,6 +178,9 @@ pub enum PathKind {
 #[derive(Debug, Clone)]
 pub struct Vault {
     root: PathBuf,
+    notes: PathBuf,
+    identity: Option<VaultIdentity>,
+    read_only: Option<String>,
     coordinator: Arc<dyn Coordinator>,
     sync: Arc<dyn SyncConflicts>,
 }
@@ -168,26 +189,68 @@ impl Vault {
     /// Opens the vault at `root` without file coordination.
     ///
     /// # Errors
-    /// [`VaultError::NotADirectory`] if `root` is not an existing folder.
+    /// As for [`Vault::open_with`].
     pub fn open(root: impl Into<PathBuf>) -> Result<Self> {
         Self::open_with(root, Arc::new(Uncoordinated))
     }
 
     /// Opens the vault at `root`; all file access goes through `coordinator`.
+    /// A vault of a newer format, or with a damaged `vault.yaml`, is opened
+    /// read-only (format.md §2), see [`Vault::read_only`].
     ///
     /// # Errors
-    /// [`VaultError::NotADirectory`] if `root` is not an existing folder.
+    /// [`VaultError::NotADirectory`] if `root` is not an existing folder,
+    /// [`VaultError::NotAVault`] if it has no `.notesapp/vault.yaml`,
+    /// [`VaultError::NotDownloaded`] if that file is only in iCloud, I/O errors.
     pub fn open_with(root: impl Into<PathBuf>, coordinator: Arc<dyn Coordinator>) -> Result<Self> {
-        let root = root.into();
-        if root.is_dir() {
-            Ok(Self {
-                root,
-                coordinator,
-                sync: Arc::new(NoSyncConflicts),
-            })
-        } else {
-            Err(VaultError::NotADirectory(root))
+        let mut vault = Self::unopened(root.into(), coordinator)?;
+        let file = vault.root.join(VAULT_FILE);
+        // Checked before coordinating, as for notes (see `read_note`).
+        if !file.exists() && placeholder_of(&file).exists() {
+            return Err(VaultError::NotDownloaded(VAULT_FILE.to_owned()));
         }
+        let text = vault.coordinated(Access::Read, &file, |file| match fs::read(file) {
+            Ok(bytes) => Ok(Some(String::from_utf8_lossy(&bytes).into_owned())),
+            Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(e.into()),
+        })?;
+        let Some(text) = text else {
+            return Err(VaultError::NotAVault(vault.root));
+        };
+        match VaultIdentity::parse(&text) {
+            Ok(identity) => {
+                if identity.format > FORMAT {
+                    vault.read_only = Some(format!(
+                        "This vault uses format {}, but this version of Schnipsle only knows \
+                         format {FORMAT}. It is open read-only; update Schnipsle to edit it.",
+                        identity.format
+                    ));
+                }
+                vault.identity = Some(identity);
+            }
+            Err(why) => {
+                vault.read_only = Some(format!(
+                    "The vault file {VAULT_FILE} is damaged: {why}. The vault is open read-only."
+                ));
+            }
+        }
+        Ok(vault)
+    }
+
+    /// The folder at `root` as a vault without reading `vault.yaml`, for
+    /// [`crate::layout`] and [`Vault::open_with`].
+    pub(crate) fn unopened(root: PathBuf, coordinator: Arc<dyn Coordinator>) -> Result<Self> {
+        if !root.is_dir() {
+            return Err(VaultError::NotADirectory(root));
+        }
+        Ok(Self {
+            notes: root.join(NOTES_DIR),
+            root,
+            identity: None,
+            read_only: None,
+            coordinator,
+            sync: Arc::new(NoSyncConflicts),
+        })
     }
 
     /// Uses `sync` to find conflict versions kept by a sync service.
@@ -207,12 +270,47 @@ impl Vault {
         &self.root
     }
 
-    /// Lists all notes (`*.md`) below the root, newest first. Hidden files and
-    /// folders (names starting with `.`, including `.notesapp/`) are skipped,
-    /// except iCloud placeholders of notes.
+    /// The folder holding the notes, `notes/` (format.md §1).
+    #[must_use]
+    pub fn notes_dir(&self) -> &Path {
+        &self.notes
+    }
+
+    /// What `vault.yaml` says; `None` if it is damaged.
+    #[must_use]
+    pub fn identity(&self) -> Option<&VaultIdentity> {
+        self.identity.as_ref()
+    }
+
+    /// Why the vault is open read-only, for the user; `None` if it is writable.
+    #[must_use]
+    pub fn read_only(&self) -> Option<&str> {
+        self.read_only.as_deref()
+    }
+
+    /// Fails with [`VaultError::ReadOnly`] if the vault must not be written.
+    pub(crate) fn check_writable(&self) -> Result<()> {
+        match &self.read_only {
+            Some(why) => Err(VaultError::ReadOnly(why.clone())),
+            None => Ok(()),
+        }
+    }
+
+    /// The file of the note at `path` (relative to `notes/`).
     ///
     /// # Errors
-    /// I/O errors while reading the root folder; unreadable subfolders are skipped.
+    /// [`VaultError::InvalidPath`] if `path` is not a note path inside `notes/`.
+    pub fn note_file(&self, path: &str) -> Result<PathBuf> {
+        self.resolve(path)
+    }
+
+    /// Lists all notes (`*.md`) in `notes/`, newest first. Hidden files and
+    /// folders (names starting with `.`) are skipped, except iCloud placeholders
+    /// of notes.
+    ///
+    /// # Errors
+    /// I/O errors while reading `notes/`; unreadable subfolders are skipped, and
+    /// a missing `notes/` has no notes.
     pub fn list_notes(&self) -> Result<Vec<NoteEntry>> {
         self.list_notes_by(SortOrder::Modified)
     }
@@ -220,14 +318,18 @@ impl Vault {
     /// Lists all notes like [`Vault::list_notes`], in the given order.
     ///
     /// # Errors
-    /// I/O errors while reading the root folder; unreadable subfolders are skipped.
+    /// As for [`Vault::list_notes`].
     pub fn list_notes_by(&self, order: SortOrder) -> Result<Vec<NoteEntry>> {
         // One coordinated read of the folder covers the files inside it.
-        let mut notes = self.coordinated(Access::Read, &self.root, |root| {
+        let listed = self.coordinated(Access::Read, &self.notes, |notes_dir| {
             let mut notes = Vec::new();
-            collect(root, "", &mut notes, true)?;
+            collect(notes_dir, "", &mut notes, true)?;
             Ok(notes)
-        })?;
+        });
+        let mut notes = match listed {
+            Err(VaultError::Io(e)) if e.kind() == io::ErrorKind::NotFound => Vec::new(),
+            other => other?,
+        };
         match order {
             SortOrder::Modified => notes.sort_by(|a, b| {
                 b.modified_ms
@@ -297,6 +399,7 @@ impl Vault {
     /// [`VaultError::Conflict`] if the note changed or disappeared since it was read;
     /// nothing is written in that case.
     pub fn write_note(&self, path: &str, text: &str, expected_hash: &str) -> Result<SavedNote> {
+        self.check_writable()?;
         let full = self.resolve(path)?;
         let current = self.coordinated(Access::Read, &full, |file| match fs::read(file) {
             Ok(bytes) => Ok(Some(bytes)),
@@ -356,6 +459,7 @@ impl Vault {
     /// # Errors
     /// [`VaultError::AlreadyExists`], [`VaultError::InvalidPath`] or I/O errors.
     pub fn create_note(&self, path: &str, text: &str) -> Result<SavedNote> {
+        self.check_writable()?;
         let full = self.resolve(path)?;
         if let Some(parent) = full.parent() {
             fs::create_dir_all(parent)?;
@@ -386,6 +490,7 @@ impl Vault {
     /// # Errors
     /// An I/O error of kind `AlreadyExists` if `to` is taken; other I/O errors.
     pub(crate) fn move_new(&self, from: &Path, to: &Path) -> Result<()> {
+        self.check_writable()?;
         if let Some(parent) = to.parent() {
             fs::create_dir_all(parent)?;
         }
@@ -402,6 +507,9 @@ impl Vault {
         path: &Path,
         mut f: impl FnMut(&Path) -> Result<T>,
     ) -> Result<T> {
+        if !matches!(access, Access::Read) {
+            self.check_writable()?; // public writers check first; this is the backstop
+        }
         let mut outcome = None;
         {
             let mut accessor = |file: &Path| {
@@ -419,7 +527,8 @@ impl Vault {
         })
     }
 
-    /// Classifies an absolute path reported by a file watcher (ADR-0015).
+    /// Classifies an absolute path reported by a file watcher (ADR-0015). Only
+    /// notes in `notes/` count.
     ///
     /// The root and the reported path may each be in canonical form or go
     /// through a symlink: iOS opens the vault as `/private/var/mobile/…` but its
@@ -443,8 +552,14 @@ impl Vault {
                 _ => return PathKind::Ignored,
             }
         }
+        match parts.first() {
+            None => return PathKind::Folder, // the vault root itself
+            Some(first) if first == NOTES_DIR => {}
+            Some(_) => return PathKind::Ignored, // .notesapp/, attachments/, …
+        }
+        parts.remove(0);
         let Some(last) = parts.pop() else {
-            return PathKind::Folder; // the vault root itself
+            return PathKind::Folder; // notes/ itself
         };
         if parts.iter().any(|p| p.starts_with('.')) {
             return PathKind::Ignored; // inside .notesapp/ or another hidden folder
@@ -471,15 +586,15 @@ impl Vault {
         }
     }
 
-    /// Maps a vault-relative note path to a file path, rejecting anything that
-    /// could leave the vault or is not a Markdown note.
+    /// Maps a note path (relative to `notes/`) to a file path, rejecting
+    /// anything that could leave `notes/` or is not a Markdown note.
     pub(crate) fn resolve(&self, path: &str) -> Result<PathBuf> {
         let invalid = || VaultError::InvalidPath(path.to_owned());
         let rel = Path::new(path);
         if path.is_empty() || !has_md_extension(path) || path.contains('\\') {
             return Err(invalid());
         }
-        let mut full = self.root.clone();
+        let mut full = self.notes.clone();
         for component in rel.components() {
             match component {
                 Component::Normal(part) if !part.to_string_lossy().starts_with('.') => {
@@ -570,7 +685,14 @@ fn canonical_lenient(path: &Path) -> Option<PathBuf> {
     }
 }
 
-/// Recursively collects notes below `dir`; `prefix` is `dir` relative to the vault.
+/// Number of notes below `dir`, iCloud placeholders included.
+pub(crate) fn count_notes(dir: &Path) -> Result<usize> {
+    let mut notes = Vec::new();
+    collect(dir, "", &mut notes, true)?;
+    Ok(notes.len())
+}
+
+/// Recursively collects notes below `dir`; `prefix` is `dir` relative to `notes/`.
 fn collect(dir: &Path, prefix: &str, out: &mut Vec<NoteEntry>, is_root: bool) -> Result<()> {
     let entries = match fs::read_dir(dir) {
         Ok(entries) => entries,
@@ -662,7 +784,7 @@ fn placeholder_note_name(name: &str) -> Option<&str> {
     has_md_extension(inner).then_some(inner)
 }
 
-fn placeholder_of(full: &Path) -> PathBuf {
+pub(crate) fn placeholder_of(full: &Path) -> PathBuf {
     let name = full
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
@@ -781,7 +903,7 @@ mod tests {
 
     fn vault() -> (tempfile::TempDir, Vault) {
         let dir = tempfile::tempdir().unwrap();
-        let vault = Vault::open(dir.path()).unwrap();
+        let vault = Vault::create(dir.path()).unwrap();
         (dir, vault)
     }
 
@@ -805,7 +927,7 @@ mod tests {
     #[test]
     fn lists_notes_and_skips_hidden() {
         let (dir, vault) = vault();
-        let root = dir.path();
+        let root = &dir.path().join("notes");
         fs::write(root.join("a.md"), "# Alpha\n").unwrap();
         fs::create_dir_all(root.join("sub")).unwrap();
         fs::write(root.join("sub/b.MD"), "Beta line\n").unwrap();
@@ -834,16 +956,16 @@ mod tests {
     #[test]
     fn read_write_roundtrip_and_conflict() {
         let (dir, vault) = vault();
-        fs::write(dir.path().join("n.md"), "one").unwrap();
+        fs::write(dir.path().join("notes").join("n.md"), "one").unwrap();
 
         let note = vault.read_note("n.md").unwrap();
         assert_eq!(note.text, "one");
         let h2 = vault.write_note("n.md", "two", &note.hash).unwrap().hash;
-        let on_disk = fs::read_to_string(dir.path().join("n.md")).unwrap();
+        let on_disk = fs::read_to_string(dir.path().join("notes").join("n.md")).unwrap();
         assert_eq!(front_matter::body(&on_disk), "two");
 
         // Someone else changes the file: our next save must not overwrite it.
-        fs::write(dir.path().join("n.md"), "changed on the Mac").unwrap();
+        fs::write(dir.path().join("notes").join("n.md"), "changed on the Mac").unwrap();
         let err = vault.write_note("n.md", "three", &h2).unwrap_err();
         assert!(matches!(
             err,
@@ -853,12 +975,12 @@ mod tests {
             }
         ));
         assert_eq!(
-            fs::read_to_string(dir.path().join("n.md")).unwrap(),
+            fs::read_to_string(dir.path().join("notes").join("n.md")).unwrap(),
             "changed on the Mac"
         );
 
         // Deleted elsewhere is a conflict too.
-        fs::remove_file(dir.path().join("n.md")).unwrap();
+        fs::remove_file(dir.path().join("notes").join("n.md")).unwrap();
         let err = vault.write_note("n.md", "four", &h2).unwrap_err();
         assert!(matches!(
             err,
@@ -867,14 +989,14 @@ mod tests {
                 ..
             }
         ));
-        assert!(!dir.path().join("n.md").exists());
+        assert!(!dir.path().join("notes").join("n.md").exists());
     }
 
     #[test]
     fn create_adds_front_matter() {
         let (dir, vault) = vault();
         let saved = vault.create_note("n.md", "# Title\n").unwrap();
-        let on_disk = fs::read_to_string(dir.path().join("n.md")).unwrap();
+        let on_disk = fs::read_to_string(dir.path().join("notes").join("n.md")).unwrap();
         assert_eq!(saved.text, on_disk);
         assert_eq!(saved.hash, sha256_hex(on_disk.as_bytes()));
         assert_eq!(front_matter::body(&on_disk), "# Title\n");
@@ -890,11 +1012,11 @@ mod tests {
     #[test]
     fn first_write_of_a_plain_note_adds_front_matter() {
         let (dir, vault) = vault();
-        fs::write(dir.path().join("n.md"), "plain").unwrap();
+        fs::write(dir.path().join("notes").join("n.md"), "plain").unwrap();
         let note = vault.read_note("n.md").unwrap();
         // Reading never adds front matter (format.md §3).
         assert_eq!(
-            fs::read_to_string(dir.path().join("n.md")).unwrap(),
+            fs::read_to_string(dir.path().join("notes").join("n.md")).unwrap(),
             "plain"
         );
         let saved = vault
@@ -913,7 +1035,7 @@ mod tests {
         let disk = format!(
             "---\nid: {id}\ncreated: 2026-01-01T00:00:00Z\npinned: true\nmodified: 2026-01-01T00:00:00Z\n---\nold\n"
         );
-        fs::write(dir.path().join("n.md"), &disk).unwrap();
+        fs::write(dir.path().join("notes").join("n.md"), &disk).unwrap();
         let hash = sha256_hex(disk.as_bytes());
 
         // The editor lost the whole block.
@@ -944,14 +1066,14 @@ mod tests {
     fn unchanged_text_is_not_written_again() {
         let (dir, vault) = vault();
         let saved = vault.create_note("n.md", "x").unwrap();
-        let before = fs::metadata(dir.path().join("n.md"))
+        let before = fs::metadata(dir.path().join("notes").join("n.md"))
             .unwrap()
             .modified()
             .unwrap();
         std::thread::sleep(std::time::Duration::from_millis(20));
         let again = vault.write_note("n.md", &saved.text, &saved.hash).unwrap();
         assert_eq!(again, saved);
-        let after = fs::metadata(dir.path().join("n.md"))
+        let after = fs::metadata(dir.path().join("notes").join("n.md"))
             .unwrap()
             .modified()
             .unwrap();
@@ -961,7 +1083,11 @@ mod tests {
     #[test]
     fn a_hand_edited_invalid_id_does_not_block_saving() {
         let (dir, vault) = vault();
-        fs::write(dir.path().join("n.md"), "---\nid: mine\n---\nx").unwrap();
+        fs::write(
+            dir.path().join("notes").join("n.md"),
+            "---\nid: mine\n---\nx",
+        )
+        .unwrap();
         let note = vault.read_note("n.md").unwrap();
         let saved = vault
             .write_note("n.md", "---\nid: mine\n---\ny", &note.hash)
@@ -977,7 +1103,7 @@ mod tests {
         let (dir, vault) = vault();
         let h = vault.create_note("deep/new.md", "x").unwrap().hash;
         vault.write_note("deep/new.md", "y", &h).unwrap();
-        let names: Vec<_> = fs::read_dir(dir.path().join("deep"))
+        let names: Vec<_> = fs::read_dir(dir.path().join("notes").join("deep"))
             .unwrap()
             .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
             .collect();
@@ -988,9 +1114,9 @@ mod tests {
     fn conflict_leaves_no_temp_file() {
         let (dir, vault) = vault();
         let h = vault.create_note("n.md", "one").unwrap().hash;
-        fs::write(dir.path().join("n.md"), "changed elsewhere").unwrap();
+        fs::write(dir.path().join("notes").join("n.md"), "changed elsewhere").unwrap();
         assert!(vault.write_note("n.md", "mine", &h).is_err());
-        let names: Vec<_> = fs::read_dir(dir.path())
+        let names: Vec<_> = fs::read_dir(dir.path().join("notes"))
             .unwrap()
             .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
             .collect();
@@ -1018,9 +1144,9 @@ mod tests {
                 .all(|r| matches!(r, Err(VaultError::AlreadyExists(_))))
         );
         // The file on disk is the winner's, untouched by the others.
-        let on_disk = fs::read(dir.path().join("race.md")).unwrap();
+        let on_disk = fs::read(dir.path().join("notes").join("race.md")).unwrap();
         assert_eq!(sha256_hex(&on_disk), ok[0].hash);
-        assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 1);
+        assert_eq!(fs::read_dir(dir.path().join("notes")).unwrap().count(), 1);
     }
 
     /// A coordinator for tests: logs every call, and can act like another
@@ -1030,7 +1156,7 @@ mod tests {
     struct Scripted {
         log: std::sync::Mutex<Vec<(&'static str, PathBuf)>>,
         before_write: Option<fn(&Path) -> PathBuf>,
-        refuse: bool,
+        refuse: std::sync::atomic::AtomicBool,
     }
 
     impl Scripted {
@@ -1041,7 +1167,7 @@ mod tests {
             f: &mut dyn FnMut(&Path) -> io::Result<()>,
         ) -> io::Result<()> {
             self.log.lock().unwrap().push((kind, path.to_owned()));
-            if self.refuse {
+            if self.refuse.load(Ordering::Relaxed) {
                 return Err(io::Error::other("refused"));
             }
             let path = match (kind, self.before_write) {
@@ -1068,7 +1194,9 @@ mod tests {
     fn scripted_vault(coordinator: Scripted) -> (tempfile::TempDir, Vault, Arc<Scripted>) {
         let dir = tempfile::tempdir().unwrap();
         let coordinator = Arc::new(coordinator);
+        Vault::create(dir.path()).unwrap();
         let vault = Vault::open_with(dir.path(), coordinator.clone()).unwrap();
+        coordinator.log.lock().unwrap().clear(); // reading vault.yaml
         (dir, vault, coordinator)
     }
 
@@ -1084,7 +1212,7 @@ mod tests {
     #[test]
     fn every_access_is_coordinated() {
         let (dir, vault, c) = scripted_vault(Scripted::default());
-        let root = dir.path();
+        let root = &dir.path().join("notes");
         let h = vault.create_note("n.md", "one").unwrap().hash;
         let note = vault.read_note("n.md").unwrap();
         vault.write_note("n.md", "two", &note.hash).unwrap();
@@ -1112,24 +1240,22 @@ mod tests {
             }),
             ..Scripted::default()
         });
-        fs::write(dir.path().join("n.md"), "one").unwrap();
+        fs::write(dir.path().join("notes").join("n.md"), "one").unwrap();
         let note = vault.read_note("n.md").unwrap();
         let err = vault.write_note("n.md", "mine", &note.hash).unwrap_err();
         assert!(matches!(err, VaultError::Conflict { .. }));
         assert_eq!(
-            fs::read_to_string(dir.path().join("n.md")).unwrap(),
+            fs::read_to_string(dir.path().join("notes").join("n.md")).unwrap(),
             "saved by iCloud while we waited"
         );
-        assert_eq!(names_in(dir.path()), ["n.md"]);
+        assert_eq!(names_in(&dir.path().join("notes")), ["n.md"]);
     }
 
     #[test]
     fn refused_access_writes_nothing() {
-        let (dir, vault, _) = scripted_vault(Scripted {
-            refuse: true,
-            ..Scripted::default()
-        });
-        fs::write(dir.path().join("n.md"), "one").unwrap();
+        let (dir, vault, c) = scripted_vault(Scripted::default());
+        c.refuse.store(true, Ordering::Relaxed);
+        fs::write(dir.path().join("notes").join("n.md"), "one").unwrap();
         let hash = sha256_hex(b"one");
         assert!(matches!(
             vault.write_note("n.md", "two", &hash),
@@ -1139,8 +1265,11 @@ mod tests {
             vault.create_note("new.md", "x"),
             Err(VaultError::Io(_))
         ));
-        assert_eq!(fs::read_to_string(dir.path().join("n.md")).unwrap(), "one");
-        assert_eq!(names_in(dir.path()), ["n.md"]);
+        assert_eq!(
+            fs::read_to_string(dir.path().join("notes").join("n.md")).unwrap(),
+            "one"
+        );
+        assert_eq!(names_in(&dir.path().join("notes")), ["n.md"]);
     }
 
     #[test]
@@ -1153,12 +1282,12 @@ mod tests {
             }),
             ..Scripted::default()
         });
-        fs::write(dir.path().join("n.md"), "one").unwrap();
+        fs::write(dir.path().join("notes").join("n.md"), "one").unwrap();
         vault
             .write_note("n.md", "two", &sha256_hex(b"one"))
             .unwrap();
-        assert_eq!(names_in(dir.path()), ["moved.md"]);
-        let on_disk = fs::read_to_string(dir.path().join("moved.md")).unwrap();
+        assert_eq!(names_in(&dir.path().join("notes")), ["moved.md"]);
+        let on_disk = fs::read_to_string(dir.path().join("notes").join("moved.md")).unwrap();
         assert_eq!(front_matter::body(&on_disk), "two");
     }
 
@@ -1170,7 +1299,7 @@ mod tests {
             vault.create_note("a.md", "y"),
             Err(VaultError::AlreadyExists(_))
         ));
-        fs::write(dir.path().join(".b.md.icloud"), "").unwrap();
+        fs::write(dir.path().join("notes").join(".b.md.icloud"), "").unwrap();
         assert!(matches!(
             vault.create_note("b.md", "y"),
             Err(VaultError::AlreadyExists(_))
@@ -1210,7 +1339,7 @@ mod tests {
             ("3.md", "Apfel"),
             ("4.md", "birne"),
         ] {
-            fs::write(dir.path().join(name), format!("# {title}\n")).unwrap();
+            fs::write(dir.path().join("notes").join(name), format!("# {title}\n")).unwrap();
         }
         let titles: Vec<_> = vault
             .list_notes_by(SortOrder::Title)

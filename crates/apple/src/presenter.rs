@@ -204,7 +204,7 @@ mod tests {
     fn reports_coordinated_writes_by_others() {
         let dir = tempfile::tempdir().unwrap();
         // "Another app": its writes are coordinated and must reach our presenter.
-        let other = Vault::open_with(dir.path(), Arc::new(FileCoordinator)).unwrap();
+        let other = Vault::create_with(dir.path(), Arc::new(FileCoordinator)).unwrap();
         let (tx, rx) = mpsc::channel();
         let _presenter = VaultPresenter::start(dir.path(), tx).unwrap();
 
@@ -217,7 +217,7 @@ mod tests {
     #[test]
     fn stops_reporting_after_drop() {
         let dir = tempfile::tempdir().unwrap();
-        let other = Vault::open_with(dir.path(), Arc::new(FileCoordinator)).unwrap();
+        let other = Vault::create_with(dir.path(), Arc::new(FileCoordinator)).unwrap();
         let (tx, rx) = mpsc::channel();
         drop(VaultPresenter::start(dir.path(), tx).unwrap());
         other.create_note("later.md", "x").unwrap();
@@ -225,6 +225,6 @@ mod tests {
             rx.recv_timeout(Duration::from_millis(500)),
             Err(mpsc::RecvTimeoutError::Disconnected | mpsc::RecvTimeoutError::Timeout)
         ));
-        fs::remove_file(dir.path().join("later.md")).unwrap();
+        fs::remove_file(dir.path().join("notes/later.md")).unwrap();
     }
 }

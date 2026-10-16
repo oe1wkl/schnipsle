@@ -210,7 +210,7 @@ mod tests {
 
     fn temp_vault() -> (tempfile::TempDir, Vault) {
         let dir = tempfile::tempdir().unwrap();
-        let vault = Vault::open_with(dir.path(), Arc::new(FileCoordinator)).unwrap();
+        let vault = Vault::create_with(dir.path(), Arc::new(FileCoordinator)).unwrap();
         (dir, vault)
     }
 
@@ -227,7 +227,7 @@ mod tests {
             ("# One\n", h1.as_str())
         );
         vault.write_note("a/n.md", "# Two\n", &h1).unwrap();
-        let on_disk = fs::read_to_string(dir.path().join("a/n.md")).unwrap();
+        let on_disk = fs::read_to_string(dir.path().join("notes").join("a/n.md")).unwrap();
         assert_eq!(schnipsle_core::front_matter::body(&on_disk), "# Two\n");
         let titles: Vec<_> = vault
             .list_notes()
@@ -248,12 +248,12 @@ mod tests {
             .unwrap();
         let path = vault.rename_after_edit(&note.path, "Draft").unwrap();
         assert_eq!(path, "antenna.md");
-        assert!(!dir.path().join("draft.md").exists());
+        assert!(!dir.path().join("notes").join("draft.md").exists());
 
         let trashed = vault.trash_note(&path).unwrap();
-        assert!(!dir.path().join("antenna.md").exists());
+        assert!(!dir.path().join("notes").join("antenna.md").exists());
         assert_eq!(vault.restore_note(&trashed.key).unwrap(), "antenna.md");
-        let restored = fs::read_to_string(dir.path().join("antenna.md")).unwrap();
+        let restored = fs::read_to_string(dir.path().join("notes").join("antenna.md")).unwrap();
         assert!(restored.ends_with("# Antenna\n"), "{restored}");
     }
 
@@ -261,7 +261,7 @@ mod tests {
     fn conflict_is_still_detected() {
         let (dir, vault) = temp_vault();
         let h = vault.create_note("n.md", "one").unwrap().hash;
-        fs::write(dir.path().join("n.md"), "changed elsewhere").unwrap();
+        fs::write(dir.path().join("notes/n.md"), "changed elsewhere").unwrap();
         assert!(matches!(
             vault.write_note("n.md", "mine", &h),
             Err(VaultError::Conflict { .. })

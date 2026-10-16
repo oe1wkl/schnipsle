@@ -1,7 +1,7 @@
 # Vault File Format Specification
 
 - Format version: **1** (draft)
-- Spec revision: 0.5, 2026-10-16 (§8 trash names for notes without `id` and for collisions; 0.4: §5.3 refined by the first implementation, §5.6 music notation, §5.7 lyrics with chords)
+- Spec revision: 0.6, 2026-10-16 (§8 `original_path` is relative to the vault root; 0.5: §8 trash names for notes without `id` and for collisions; 0.4: §5.3 refined by the first implementation, §5.6 music notation, §5.7 lyrics with chords)
 - Status: Draft — becomes normative when M1 ships
 - Related: ADR-0004, ADR-0008, ADR-0009, ADR-0011, ADR-0013, ADR-0014
 
@@ -222,9 +222,9 @@ Rules:
 
 ## 8. Trash
 
-- Deleting a note moves its file unchanged to `.notesapp/trash/<note-id>.md` and writes `.notesapp/trash/<note-id>.yaml` with `deleted` (timestamp) and `original_path`.
+- Deleting a note moves its file unchanged to `.notesapp/trash/<note-id>.md` and writes `.notesapp/trash/<note-id>.yaml` with `deleted` (timestamp) and `original_path`, relative to the vault root (e.g. `notes/projects/tuner.md`).
 - A note without a valid `id` is moved unchanged as well, under a newly generated ULID instead of `<note-id>`. If the name is already taken in the trash (e.g. two files with the same `id`), `-2`, `-3`, … is appended, as for note files (§3).
-- Restore moves it back to `original_path` (or `notes/` if that path is taken, resolving collisions as in §3) under the same `id`. Restoring never replaces an existing file.
+- Restore moves it back to `original_path` (or into `notes/` if that path is taken or does not lie inside `notes/`, resolving collisions as in §3) under the same `id`. Restoring never replaces an existing file.
 - The trash is emptied only by explicit user action or a user-configured period. Default: never.
 
 ## 9. Smart folders

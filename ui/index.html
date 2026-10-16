@@ -18,6 +18,20 @@
       <button id="pick-vault" type="button">Open folder</button>
     </header>
 
+    <div id="setup" class="banner" role="alertdialog" aria-labelledby="setup-text" hidden>
+      <span id="setup-text"></span>
+      <button id="setup-create" type="button">Make it a vault</button>
+      <button id="setup-cancel" type="button">Cancel</button>
+      <details id="setup-details">
+        <summary>What will be moved</summary>
+        <ul id="setup-items"></ul>
+      </details>
+    </div>
+
+    <div id="read-only" class="banner" role="status" hidden>
+      <span id="read-only-text"></span>
+    </div>
+
     <div id="conflict" class="banner" role="alert" hidden>
       <span>This note was changed on another device while you were editing.</span>
       <button id="use-theirs" type="button">Use other version</button>
