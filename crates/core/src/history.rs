@@ -25,6 +25,7 @@ impl Vault {
     /// # Errors
     /// [`VaultError::InvalidId`] if `id` is not a ULID, or I/O errors.
     pub fn snapshot(&self, id: &str, content: impl AsRef<[u8]>) -> Result<String> {
+        self.check_writable()?;
         let id = checked_id(id)?;
         let dir = self.root().join(HISTORY_DIR).join(&id);
         fs::create_dir_all(&dir)?;
@@ -121,7 +122,7 @@ mod tests {
 
     fn vault() -> (tempfile::TempDir, Vault) {
         let dir = tempfile::tempdir().unwrap();
-        let vault = Vault::open(dir.path()).unwrap();
+        let vault = Vault::create(dir.path()).unwrap();
         (dir, vault)
     }
 

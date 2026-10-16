@@ -5,18 +5,19 @@
 //! writes `.notesapp/trash/<key>.yaml` with `deleted` and `original_path`. The
 //! key is the note's `id`; a note without a valid id gets a new ULID instead,
 //! and a key already in use gets `-2`, `-3`, … . The note's history stays where
-//! it is. Restoring moves the file back to its original path or, if that is
-//! taken, to the notes folder (format.md §8: `notes/`; until the vault layout of
-//! §1 is in place, the vault root) with a `-n` suffix on collision. It never
+//! it is. `original_path` is relative to the vault root (`notes/…`). Restoring
+//! moves the file back there or, if that is taken or not inside `notes/`, into
+//! `notes/` under its file name, with a `-n` suffix on collision. It never
 //! replaces anything.
 
-use std::fmt::Write as _;
 use std::fs;
 use std::io;
 
 use serde::Serialize;
 
+use crate::flat_yaml::{quote as yaml_quote, value as record_value};
 use crate::front_matter;
+use crate::layout::NOTES_DIR;
 use crate::stamp::{is_ulid, new_ulid, now_ms, rfc3339_utc};
 use crate::vault::{Access, Result, TempFile, Vault, VaultError, accessor_ran_twice, title_of};
 
@@ -34,7 +35,7 @@ pub struct TrashedNote {
     pub key: String,
     /// Title per format.md §5.2.
     pub title: String,
-    /// Where it was, vault-relative; empty if unknown.
+    /// Where it was, relative to the vault root (`notes/…`); empty if unknown.
     pub original_path: String,
     /// When it was deleted, RFC 3339; empty if unknown.
     pub deleted: String,
@@ -47,6 +48,7 @@ impl Vault {
     /// [`VaultError::InvalidPath`], or I/O errors (e.g. the note is gone); the
     /// note stays where it is then.
     pub fn trash_note(&self, path: &str) -> Result<TrashedNote> {
+        self.check_writable()?;
         let full = self.resolve(path)?;
         let text = self.coordinated(Access::Read, &full, |file| {
             Ok(String::from_utf8_lossy(&fs::read(file)?).into_owned())
@@ -57,7 +59,11 @@ impl Vault {
         let dir = self.root().join(TRASH_DIR);
         fs::create_dir_all(&dir)?;
         let deleted = rfc3339_utc(now_ms());
-        let record = format!("deleted: {deleted}\noriginal_path: {}\n", yaml_quote(path));
+        let original_path = format!("{NOTES_DIR}/{path}");
+        let record = format!(
+            "deleted: {deleted}\noriginal_path: {}\n",
+            yaml_quote(&original_path)
+        );
 
         for n in 1..=MAX_SUFFIX {
             let key = if n == 1 {
@@ -80,7 +86,7 @@ impl Vault {
                 Ok(()) => Ok(TrashedNote {
                     title: title_of(&text, file_stem(path)),
                     key,
-                    original_path: path.to_owned(),
+                    original_path,
                     deleted,
                 }),
                 Err(e) => {
@@ -129,12 +135,14 @@ impl Vault {
     }
 
     /// Moves a note out of the trash, back to its original path or, if that
-    /// is taken or unknown, into the notes folder under its file name, with a
-    /// `-n` suffix on collision. Returns where it is now.
+    /// is taken, unknown or not inside `notes/`, into `notes/` under its file
+    /// name, with a `-n` suffix on collision. Returns its path relative to
+    /// `notes/`.
     ///
     /// # Errors
     /// [`VaultError::InvalidPath`] for a bad key, or I/O errors.
     pub fn restore_note(&self, key: &str) -> Result<String> {
+        self.check_writable()?;
         if !is_key(key) {
             return Err(VaultError::InvalidPath(key.to_owned()));
         }
@@ -142,14 +150,15 @@ impl Vault {
         let trashed = dir.join(format!("{key}.md"));
         let yaml = dir.join(format!("{key}.yaml"));
         let record = fs::read_to_string(&yaml).unwrap_or_default();
-        let original = record_value(&record, "original_path")
+        let recorded = record_value(&record, "original_path").unwrap_or_default();
+        let original = recorded
+            .strip_prefix(NOTES_DIR)
+            .and_then(|p| p.strip_prefix('/'))
             .filter(|p| self.resolve(p).is_ok())
-            .unwrap_or_else(|| format!("{key}.md"));
-        let stem = original
-            .strip_suffix(".md")
-            .map_or(key, |p| p.rsplit_once('/').map_or(p, |(_, name)| name));
-        // Then the notes folder of format.md §1: the vault root until that
-        // layout exists.
+            .map(str::to_owned);
+        let stem = Some(file_stem(&recorded))
+            .filter(|stem| self.resolve(&format!("{stem}.md")).is_ok())
+            .unwrap_or(key);
         let fallback = (1..=MAX_SUFFIX).map(|n| {
             if n == 1 {
                 format!("{stem}.md")
@@ -157,7 +166,7 @@ impl Vault {
                 format!("{stem}-{n}.md")
             }
         });
-        for target in std::iter::once(original.clone()).chain(fallback) {
+        for target in original.into_iter().chain(fallback) {
             match self.move_new(&trashed, &self.resolve(&target)?) {
                 Ok(()) => {
                     let _ = fs::remove_file(&yaml);
@@ -182,54 +191,6 @@ fn file_stem(path: &str) -> &str {
     name.strip_suffix(".md").unwrap_or(name)
 }
 
-/// A YAML double-quoted scalar.
-fn yaml_quote(s: &str) -> String {
-    let mut out = String::with_capacity(s.len() + 2);
-    out.push('"');
-    for c in s.chars() {
-        match c {
-            '"' => out.push_str("\\\""),
-            '\\' => out.push_str("\\\\"),
-            '\n' => out.push_str("\\n"),
-            c if c.is_control() => {
-                let _ = write!(out, "\\u{:04x}", u32::from(c));
-            }
-            c => out.push(c),
-        }
-    }
-    out.push('"');
-    out
-}
-
-/// The value of `key` in a record this module wrote (plain or double-quoted).
-fn record_value(record: &str, key: &str) -> Option<String> {
-    let value = record
-        .lines()
-        .find_map(|line| line.strip_prefix(key)?.strip_prefix(':'))?
-        .trim();
-    let Some(inner) = value.strip_prefix('"').and_then(|v| v.strip_suffix('"')) else {
-        return Some(value.to_owned());
-    };
-    let mut out = String::with_capacity(inner.len());
-    let mut chars = inner.chars();
-    while let Some(c) = chars.next() {
-        if c != '\\' {
-            out.push(c);
-            continue;
-        }
-        match chars.next() {
-            Some('n') => out.push('\n'),
-            Some('u') => {
-                let hex: String = chars.by_ref().take(4).collect();
-                out.extend(u32::from_str_radix(&hex, 16).ok().and_then(char::from_u32));
-            }
-            Some(other) => out.push(other),
-            None => {}
-        }
-    }
-    Some(out)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -239,7 +200,7 @@ mod tests {
 
     fn vault() -> (tempfile::TempDir, Vault) {
         let dir = tempfile::tempdir().unwrap();
-        let vault = Vault::open(dir.path()).unwrap();
+        let vault = Vault::create(dir.path()).unwrap();
         (dir, vault)
     }
 
@@ -247,14 +208,14 @@ mod tests {
     fn deleting_moves_the_file_unchanged_under_its_id() {
         let (dir, vault) = vault();
         let note = format!("---\nid: {ID}\n---\n# Antenna\n");
-        fs::create_dir(dir.path().join("projects")).unwrap();
-        fs::write(dir.path().join("projects/antenna.md"), &note).unwrap();
+        fs::create_dir(dir.path().join("notes/projects")).unwrap();
+        fs::write(dir.path().join("notes/projects/antenna.md"), &note).unwrap();
         vault.snapshot(ID, "older text").unwrap();
 
         let trashed = vault.trash_note("projects/antenna.md").unwrap();
         assert_eq!(trashed.key, ID);
         assert_eq!(trashed.title, "Antenna");
-        assert!(!dir.path().join("projects/antenna.md").exists());
+        assert!(!dir.path().join("notes/projects/antenna.md").exists());
         let trash = dir.path().join(TRASH_DIR);
         assert_eq!(
             fs::read_to_string(trash.join(format!("{ID}.md"))).unwrap(),
@@ -262,7 +223,7 @@ mod tests {
         );
         let record = fs::read_to_string(trash.join(format!("{ID}.yaml"))).unwrap();
         assert!(
-            record.contains("original_path: \"projects/antenna.md\""),
+            record.contains("original_path: \"notes/projects/antenna.md\""),
             "{record}"
         );
         assert!(record.starts_with("deleted: 20"), "{record}");
@@ -276,7 +237,7 @@ mod tests {
     #[test]
     fn a_note_without_id_gets_a_new_key_and_stays_unchanged() {
         let (dir, vault) = vault();
-        fs::write(dir.path().join("plain.md"), "no front matter").unwrap();
+        fs::write(dir.path().join("notes/plain.md"), "no front matter").unwrap();
         let trashed = vault.trash_note("plain.md").unwrap();
         assert!(is_ulid(&trashed.key));
         let moved = dir
@@ -290,8 +251,8 @@ mod tests {
     fn same_ids_get_numbered_keys() {
         let (dir, vault) = vault();
         let note = format!("---\nid: {ID}\n---\nx");
-        fs::write(dir.path().join("a.md"), &note).unwrap();
-        fs::write(dir.path().join("a 2.md"), &note).unwrap();
+        fs::write(dir.path().join("notes/a.md"), &note).unwrap();
+        fs::write(dir.path().join("notes/a 2.md"), &note).unwrap();
         assert_eq!(vault.trash_note("a.md").unwrap().key, ID);
         assert_eq!(vault.trash_note("a 2.md").unwrap().key, format!("{ID}-2"));
         assert_eq!(vault.list_trash().unwrap().len(), 2);
@@ -301,17 +262,21 @@ mod tests {
     fn restore_goes_back_or_next_to_a_taken_path() {
         let (dir, vault) = vault();
         let note = format!("---\nid: {ID}\n---\n# Antenna\n");
-        fs::write(dir.path().join("antenna.md"), &note).unwrap();
+        fs::write(dir.path().join("notes/antenna.md"), &note).unwrap();
         let trashed = vault.trash_note("antenna.md").unwrap();
-        fs::write(dir.path().join("antenna.md"), "# A new note meanwhile\n").unwrap();
+        fs::write(
+            dir.path().join("notes/antenna.md"),
+            "# A new note meanwhile\n",
+        )
+        .unwrap();
 
         assert_eq!(vault.restore_note(&trashed.key).unwrap(), "antenna-2.md");
         assert_eq!(
-            fs::read_to_string(dir.path().join("antenna-2.md")).unwrap(),
+            fs::read_to_string(dir.path().join("notes/antenna-2.md")).unwrap(),
             note
         );
         assert_eq!(
-            fs::read_to_string(dir.path().join("antenna.md")).unwrap(),
+            fs::read_to_string(dir.path().join("notes/antenna.md")).unwrap(),
             "# A new note meanwhile\n"
         );
         assert!(vault.list_trash().unwrap().is_empty());
@@ -321,17 +286,17 @@ mod tests {
     #[test]
     fn restore_falls_back_to_the_notes_folder() {
         let (dir, vault) = vault();
-        fs::create_dir(dir.path().join("projects")).unwrap();
-        fs::write(dir.path().join("projects/antenna.md"), "mine").unwrap();
+        fs::create_dir(dir.path().join("notes/projects")).unwrap();
+        fs::write(dir.path().join("notes/projects/antenna.md"), "mine").unwrap();
         let trashed = vault.trash_note("projects/antenna.md").unwrap();
-        fs::write(dir.path().join("projects/antenna.md"), "new").unwrap();
+        fs::write(dir.path().join("notes/projects/antenna.md"), "new").unwrap();
         assert_eq!(vault.restore_note(&trashed.key).unwrap(), "antenna.md");
         assert_eq!(
-            fs::read_to_string(dir.path().join("antenna.md")).unwrap(),
+            fs::read_to_string(dir.path().join("notes/antenna.md")).unwrap(),
             "mine"
         );
         assert_eq!(
-            fs::read_to_string(dir.path().join("projects/antenna.md")).unwrap(),
+            fs::read_to_string(dir.path().join("notes/projects/antenna.md")).unwrap(),
             "new"
         );
     }
@@ -339,13 +304,13 @@ mod tests {
     #[test]
     fn restore_into_a_folder_that_is_gone() {
         let (dir, vault) = vault();
-        fs::create_dir(dir.path().join("old")).unwrap();
-        fs::write(dir.path().join("old/n.md"), "x").unwrap();
+        fs::create_dir(dir.path().join("notes/old")).unwrap();
+        fs::write(dir.path().join("notes/old/n.md"), "x").unwrap();
         let trashed = vault.trash_note("old/n.md").unwrap();
-        fs::remove_dir(dir.path().join("old")).unwrap();
+        fs::remove_dir(dir.path().join("notes/old")).unwrap();
         assert_eq!(vault.restore_note(&trashed.key).unwrap(), "old/n.md");
         assert_eq!(
-            fs::read_to_string(dir.path().join("old/n.md")).unwrap(),
+            fs::read_to_string(dir.path().join("notes/old/n.md")).unwrap(),
             "x"
         );
     }
@@ -372,5 +337,33 @@ mod tests {
             record_value("deleted: 2026-10-16T10:00:00Z", "deleted").as_deref(),
             Some("2026-10-16T10:00:00Z")
         );
+    }
+
+    #[test]
+    fn restore_ignores_paths_outside_notes() {
+        let (dir, vault) = vault();
+        let trash = dir.path().join(TRASH_DIR);
+        fs::create_dir_all(&trash).unwrap();
+        let other = "01ARZ3NDEKTSV4RRFFQ69G5FAW";
+        for (key, original) in [
+            // Written by the M1 builds before the notes/ folder existed.
+            (ID, "projekte/antenne.md"),
+            (other, "../outside.md"),
+        ] {
+            fs::write(trash.join(format!("{key}.md")), key).unwrap();
+            fs::write(
+                trash.join(format!("{key}.yaml")),
+                format!("original_path: {}\n", yaml_quote(original)),
+            )
+            .unwrap();
+        }
+        assert_eq!(vault.restore_note(ID).unwrap(), "antenne.md");
+        assert_eq!(vault.restore_note(other).unwrap(), "outside.md");
+        assert_eq!(
+            fs::read_to_string(dir.path().join("notes/outside.md")).unwrap(),
+            other
+        );
+        assert!(!dir.path().join("outside.md").exists());
+        assert!(!dir.path().join("projekte").exists());
     }
 }

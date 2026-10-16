@@ -8,10 +8,13 @@
 mod vault_location;
 mod watching;
 
-use std::sync::Mutex;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 
+use schnipsle_core::layout::VAULT_FILE;
 use schnipsle_core::{
-    NewNote, NoteContent, NoteEntry, SavedNote, SortOrder, Tag, TrashedNote, Vault, VaultError,
+    Coordinator, Folder, NewNote, NoteContent, NoteEntry, SavedNote, SortOrder, Tag, TrashedNote,
+    Vault, VaultError,
 };
 use serde::Serialize;
 use tauri::State;
@@ -21,6 +24,9 @@ use tauri::State;
 struct AppState {
     vault: Mutex<Option<Vault>>,
     watch: Mutex<Option<watching::VaultWatch>>,
+    /// A picked folder that is not a vault yet; [`create_vault`] makes it one
+    /// once the user agreed.
+    pending: Mutex<Option<PathBuf>>,
 }
 
 /// Error sent to the UI: a machine-readable `kind` plus a message.
@@ -54,6 +60,9 @@ impl From<VaultError> for CommandError {
             VaultError::AlreadyExists(_) => ("alreadyExists", None),
             VaultError::InvalidPath(_) => ("invalidPath", None),
             VaultError::NotADirectory(_) => ("notADirectory", None),
+            VaultError::NotAVault(_) => ("notAVault", None),
+            VaultError::InsideVault(_) => ("insideVault", None),
+            VaultError::ReadOnly(_) => ("readOnly", None),
             VaultError::InvalidId(_) => ("invalidId", None),
             VaultError::Io(_) => ("io", None),
         };
@@ -69,36 +78,123 @@ type CmdResult<T> = Result<T, CommandError>;
 
 /// What the UI needs to know about an opened vault.
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct VaultInfo {
     name: String,
     path: String,
+    /// Why the vault is read-only (format.md §2), if it is.
+    read_only: Option<String>,
 }
 
-/// Opens a vault with the platform's file coordination (ADR-0015) and sync
-/// conflict versions (ADR-0006).
-fn open_vault(path: &std::path::Path) -> Result<Vault, VaultError> {
+/// The result of picking or restoring a folder.
+#[derive(Serialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+enum Opened {
+    /// The folder is a vault and is now open.
+    Vault(VaultInfo),
+    /// The folder is not a vault yet. With the user's consent,
+    /// [`create_vault`] moves `items` into `notes/` and opens it.
+    Setup {
+        name: String,
+        path: String,
+        items: Vec<String>,
+        notes: usize,
+        /// Items only in iCloud; their download has been requested.
+        not_downloaded: Vec<String>,
+    },
+}
+
+/// The platform's file coordination (ADR-0015).
+fn coordinator() -> Arc<dyn Coordinator> {
     #[cfg(any(target_os = "macos", target_os = "ios"))]
-    return Ok(
-        Vault::open_with(path, std::sync::Arc::new(schnipsle_apple::FileCoordinator))?
-            .with_sync_conflicts(std::sync::Arc::new(schnipsle_apple::ICloudVersions)),
-    );
+    return Arc::new(schnipsle_apple::FileCoordinator);
     #[cfg(not(any(target_os = "macos", target_os = "ios")))]
-    return Vault::open(path);
+    return Arc::new(schnipsle_core::Uncoordinated);
 }
 
-fn open_and_remember(
-    app: &tauri::AppHandle,
-    state: &AppState,
-    path: &std::path::Path,
-) -> CmdResult<VaultInfo> {
-    let vault = open_vault(path)?;
+/// Adds the platform's sync conflict versions (ADR-0006).
+fn with_sync_conflicts(vault: Vault) -> Vault {
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    return vault.with_sync_conflicts(Arc::new(schnipsle_apple::ICloudVersions));
+    #[cfg(not(any(target_os = "macos", target_os = "ios")))]
+    return vault;
+}
+
+fn folder_name(path: &Path) -> String {
+    path.file_name().map_or_else(
+        || path.display().to_string(),
+        |n| n.to_string_lossy().into_owned(),
+    )
+}
+
+/// Opens the folder at `path` if it is a vault (format.md §1), else tells the
+/// UI what making it one would move. Never changes anything.
+fn open_folder(app: &tauri::AppHandle, state: &AppState, path: &Path) -> CmdResult<Opened> {
+    match Vault::open_with(path, coordinator()) {
+        Ok(vault) => return Ok(Opened::Vault(remember(app, state, vault)?)),
+        Err(VaultError::NotAVault(_)) => {}
+        Err(e @ VaultError::NotDownloaded(_)) => {
+            request_download(app, &path.join(VAULT_FILE));
+            return Err(e.into());
+        }
+        Err(e) => return Err(e.into()),
+    }
+    match schnipsle_core::inspect(path, coordinator())? {
+        Folder::NoVault {
+            items,
+            notes,
+            not_downloaded,
+        } => {
+            for name in &not_downloaded {
+                request_download(app, &path.join(name));
+            }
+            *state.pending.lock().map_err(CommandError::other)? = Some(path.to_owned());
+            Ok(Opened::Setup {
+                name: folder_name(path),
+                path: path.display().to_string(),
+                items,
+                notes,
+                not_downloaded,
+            })
+        }
+        Folder::InsideVault { root } => Err(VaultError::InsideVault(root).into()),
+        // vault.yaml arrived since the attempt above: open it.
+        Folder::Vault | Folder::VaultNotDownloaded => Ok(Opened::Vault(remember(
+            app,
+            state,
+            Vault::open_with(path, coordinator())?,
+        )?)),
+    }
+}
+
+/// Asks iCloud for a file; failures only mean the user has to wait longer.
+fn request_download(app: &tauri::AppHandle, file: &Path) {
+    if let Err(e) = vault_location::download(app, file) {
+        eprintln!(
+            "download of {} not requested: {}",
+            file.display(),
+            e.message
+        );
+    }
+}
+
+/// Makes `vault` the open vault and starts watching it.
+fn remember(app: &tauri::AppHandle, state: &AppState, vault: Vault) -> CmdResult<VaultInfo> {
+    let vault = with_sync_conflicts(vault);
+    let path = vault.root();
     let info = VaultInfo {
-        name: path.file_name().map_or_else(
-            || path.display().to_string(),
-            |n| n.to_string_lossy().into_owned(),
-        ),
+        name: vault
+            .identity()
+            .and_then(|i| i.name.clone())
+            .unwrap_or_else(|| folder_name(path)),
         path: path.display().to_string(),
+        read_only: vault.read_only().map(str::to_owned),
     };
+    *state.pending.lock().map_err(CommandError::other)? = None;
     // Stop watching the previous vault before the new one is reported.
     let mut watch = state.watch.lock().map_err(CommandError::other)?;
     *watch = None;
@@ -132,9 +228,9 @@ fn with_vault<T>(state: &AppState, f: impl FnOnce(&Vault) -> CmdResult<T>) -> Cm
 async fn pick_vault(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
-) -> CmdResult<Option<VaultInfo>> {
+) -> CmdResult<Option<Opened>> {
     match vault_location::pick(&app)? {
-        Some(path) => open_and_remember(&app, &state, &path).map(Some),
+        Some(path) => open_folder(&app, &state, &path).map(Some),
         None => Ok(None),
     }
 }
@@ -144,10 +240,32 @@ async fn pick_vault(
 async fn restore_vault(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
-) -> CmdResult<Option<VaultInfo>> {
+) -> CmdResult<Option<Opened>> {
     match vault_location::restore(&app)? {
-        Some(path) => open_and_remember(&app, &state, &path).map(Some),
+        Some(path) => open_folder(&app, &state, &path).map(Some),
         None => Ok(None),
+    }
+}
+
+/// Makes the folder last reported as [`Opened::Setup`] a vault, moving its
+/// contents into `notes/`, and opens it. Call only after the user agreed.
+#[tauri::command]
+async fn create_vault(app: tauri::AppHandle, state: State<'_, AppState>) -> CmdResult<VaultInfo> {
+    let Some(path) = state.pending.lock().map_err(CommandError::other)?.take() else {
+        return Err(CommandError::other(
+            "No folder is waiting to become a vault",
+        ));
+    };
+    match Vault::create_with(&path, coordinator()) {
+        Ok(vault) => remember(&app, &state, vault),
+        Err(e) => {
+            if let VaultError::NotDownloaded(name) = &e {
+                request_download(&app, &path.join(name));
+            }
+            // The user may fix the cause and try again.
+            *state.pending.lock().map_err(CommandError::other)? = Some(path);
+            Err(e.into())
+        }
     }
 }
 
@@ -253,7 +371,7 @@ async fn download_note(
     state: State<'_, AppState>,
     path: String,
 ) -> CmdResult<()> {
-    let full = with_vault(&state, |v| Ok(v.root().join(&path)))?;
+    let full = with_vault(&state, |v| Ok(v.note_file(&path)?))?;
     vault_location::download(&app, &full)
 }
 
@@ -331,6 +449,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             pick_vault,
             restore_vault,
+            create_vault,
             list_notes,
             new_note,
             rename_after_edit,

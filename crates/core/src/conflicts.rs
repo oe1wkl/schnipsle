@@ -164,9 +164,9 @@ impl Vault {
             format!("{folder}/")
         };
         let dir = if folder.is_empty() {
-            self.root().to_owned()
+            self.notes_dir().to_owned()
         } else {
-            self.root().join(folder)
+            self.notes_dir().join(folder)
         };
         let names = self.coordinated(Access::Read, &dir, |dir| {
             let mut names = Vec::new();
@@ -212,6 +212,7 @@ impl Vault {
     /// # Errors
     /// [`VaultError::Conflict`] if either file changed since it was read, or I/O errors.
     pub fn keep_both(&self, path: &str, copy_path: &str) -> Result<NoteContent> {
+        self.check_writable()?;
         let note = self.read_note(path)?;
         let copy = self.read_note(copy_path)?;
         let id = front_matter::get(&note.text, "id");
@@ -258,6 +259,7 @@ impl Vault {
         text: &str,
         expected_hash: &str,
     ) -> Result<NoteContent> {
+        self.check_writable()?;
         let full = self.resolve(path)?;
         let current = self.coordinated(Access::Read, &full, |file| Ok(fs::read(file)?))?;
         let current_hash = sha256_hex(&current);
@@ -370,7 +372,7 @@ mod tests {
     fn vault(sync: FakeICloud) -> (tempfile::TempDir, Vault, Arc<FakeICloud>) {
         let dir = tempfile::tempdir().unwrap();
         let sync = Arc::new(sync);
-        let vault = Vault::open(dir.path())
+        let vault = Vault::create(dir.path())
             .unwrap()
             .with_sync_conflicts(sync.clone());
         (dir, vault, sync)
@@ -390,7 +392,7 @@ mod tests {
     #[test]
     fn read_note_reports_conflict_versions() {
         let (dir, vault, _) = vault(FakeICloud::with(&["from the phone"]));
-        fs::write(dir.path().join("n.md"), "from the mac").unwrap();
+        fs::write(dir.path().join("notes").join("n.md"), "from the mac").unwrap();
         let note = vault.read_note("n.md").unwrap();
         assert_eq!(note.conflicts.len(), 1);
         assert_eq!(note.conflicts[0].text, "from the phone");
@@ -401,7 +403,11 @@ mod tests {
     #[test]
     fn keeping_mine_stores_theirs_in_history() {
         let (dir, vault, sync) = vault(FakeICloud::with(&["from the phone"]));
-        fs::write(dir.path().join("n.md"), "# Note\nfrom the mac\n").unwrap();
+        fs::write(
+            dir.path().join("notes").join("n.md"),
+            "# Note\nfrom the mac\n",
+        )
+        .unwrap();
         let note = vault.read_note("n.md").unwrap();
 
         let after = vault
@@ -418,7 +424,10 @@ mod tests {
         assert!(front_matter::get(&after.text, "created").is_some());
         assert!(front_matter::get(&after.text, "modified").is_some());
         assert_eq!(history_texts(&vault, &id), ["from the phone"]);
-        assert_eq!(*sync.resolved_in.lock().unwrap(), [dir.path().join("n.md")]);
+        assert_eq!(
+            *sync.resolved_in.lock().unwrap(),
+            [dir.path().join("notes").join("n.md")]
+        );
     }
 
     #[test]
@@ -426,7 +435,7 @@ mod tests {
         let id = "01ARZ3NDEKTSV4RRFFQ69G5FAV";
         let mine = format!("---\nid: {id}\ncreated: 2026-01-01T00:00:00Z\n---\nfrom the mac\n");
         let (dir, vault, _) = vault(FakeICloud::with(&["from the phone\n"]));
-        fs::write(dir.path().join("n.md"), &mine).unwrap();
+        fs::write(dir.path().join("notes").join("n.md"), &mine).unwrap();
         let note = vault.read_note("n.md").unwrap();
 
         let after = vault
@@ -445,7 +454,7 @@ mod tests {
     #[test]
     fn a_merge_keeps_both_originals() {
         let (dir, vault, _) = vault(FakeICloud::with(&["phone"]));
-        fs::write(dir.path().join("n.md"), "mac").unwrap();
+        fs::write(dir.path().join("notes").join("n.md"), "mac").unwrap();
         let note = vault.read_note("n.md").unwrap();
         let after = vault
             .resolve_conflict("n.md", "mac\nphone\n", &note.hash)
@@ -459,7 +468,7 @@ mod tests {
         let sync = FakeICloud::with(&["phone"]);
         *sync.late.lock().unwrap() = Some(version("ipad"));
         let (dir, vault, _) = vault(sync);
-        fs::write(dir.path().join("n.md"), "mac").unwrap();
+        fs::write(dir.path().join("notes").join("n.md"), "mac").unwrap();
         let note = vault.read_note("n.md").unwrap();
         let after = vault.resolve_conflict("n.md", "mac", &note.hash).unwrap();
         assert_eq!(after.conflicts.len(), 1);
@@ -469,9 +478,13 @@ mod tests {
     #[test]
     fn nothing_is_resolved_when_the_note_changed() {
         let (dir, vault, sync) = vault(FakeICloud::with(&["phone"]));
-        fs::write(dir.path().join("n.md"), "mac").unwrap();
+        fs::write(dir.path().join("notes").join("n.md"), "mac").unwrap();
         let note = vault.read_note("n.md").unwrap();
-        fs::write(dir.path().join("n.md"), "mac, edited elsewhere").unwrap();
+        fs::write(
+            dir.path().join("notes").join("n.md"),
+            "mac, edited elsewhere",
+        )
+        .unwrap();
         assert!(matches!(
             vault.resolve_conflict("n.md", "mac", &note.hash),
             Err(VaultError::Conflict { .. })
@@ -484,13 +497,16 @@ mod tests {
     fn an_invalid_id_stops_before_anything_is_written() {
         let (dir, vault, sync) = vault(FakeICloud::with(&["phone"]));
         let mine = "---\nid: ../../etc\n---\nmac";
-        fs::write(dir.path().join("n.md"), mine).unwrap();
+        fs::write(dir.path().join("notes").join("n.md"), mine).unwrap();
         let note = vault.read_note("n.md").unwrap();
         assert!(matches!(
             vault.resolve_conflict("n.md", mine, &note.hash),
             Err(VaultError::InvalidId(_))
         ));
-        assert_eq!(fs::read_to_string(dir.path().join("n.md")).unwrap(), mine);
+        assert_eq!(
+            fs::read_to_string(dir.path().join("notes").join("n.md")).unwrap(),
+            mine
+        );
         assert_eq!(sync.unresolved.lock().unwrap().len(), 1);
     }
 
@@ -513,10 +529,10 @@ mod tests {
     #[test]
     fn a_failing_sync_service_is_reported_not_hidden() {
         let dir = tempfile::tempdir().unwrap();
-        let vault = Vault::open(dir.path())
+        let vault = Vault::create(dir.path())
             .unwrap()
             .with_sync_conflicts(Arc::new(Broken));
-        fs::write(dir.path().join("n.md"), "text").unwrap();
+        fs::write(dir.path().join("notes").join("n.md"), "text").unwrap();
         let note = vault.read_note("n.md").unwrap();
         assert_eq!(note.text, "text");
         assert!(note.conflicts.is_empty());
@@ -540,13 +556,13 @@ mod tests {
     /// A vault with `Einkaufsliste.md` and its iCloud copy `Einkaufsliste 2.md`.
     fn vault_with_copy() -> (tempfile::TempDir, Vault, String, String) {
         let dir = tempfile::tempdir().unwrap();
-        let vault = Vault::open(dir.path()).unwrap();
+        let vault = Vault::create(dir.path()).unwrap();
         let mine = note_with(SAME, "mac\n");
         let copy = note_with(SAME, "phone\n");
-        fs::write(dir.path().join("Einkaufsliste.md"), &mine).unwrap();
-        fs::write(dir.path().join("Einkaufsliste 2.md"), &copy).unwrap();
+        fs::write(dir.path().join("notes").join("Einkaufsliste.md"), &mine).unwrap();
+        fs::write(dir.path().join("notes").join("Einkaufsliste 2.md"), &copy).unwrap();
         fs::write(
-            dir.path().join("Other.md"),
+            dir.path().join("notes").join("Other.md"),
             note_with("01BX5ZZKBKACTAV9WEVGEMMVRZ", "x"),
         )
         .unwrap();
@@ -575,12 +591,20 @@ mod tests {
     #[test]
     fn copies_are_found_in_subfolders_and_notes_without_id_have_none() {
         let dir = tempfile::tempdir().unwrap();
-        let vault = Vault::open(dir.path()).unwrap();
-        fs::create_dir(dir.path().join("sub")).unwrap();
-        fs::write(dir.path().join("sub/a.md"), note_with(SAME, "a")).unwrap();
-        fs::write(dir.path().join("sub/a 2.md"), note_with(SAME, "b")).unwrap();
-        fs::write(dir.path().join("plain.md"), "no id").unwrap();
-        fs::write(dir.path().join("plain 2.md"), "no id").unwrap();
+        let vault = Vault::create(dir.path()).unwrap();
+        fs::create_dir(dir.path().join("notes/sub")).unwrap();
+        fs::write(
+            dir.path().join("notes").join("sub/a.md"),
+            note_with(SAME, "a"),
+        )
+        .unwrap();
+        fs::write(
+            dir.path().join("notes").join("sub/a 2.md"),
+            note_with(SAME, "b"),
+        )
+        .unwrap();
+        fs::write(dir.path().join("notes").join("plain.md"), "no id").unwrap();
+        fs::write(dir.path().join("notes").join("plain 2.md"), "no id").unwrap();
         let note = vault.read_note("sub/a.md").unwrap();
         assert_eq!(note.conflicts[0].copy_path.as_deref(), Some("sub/a 2.md"));
         assert!(vault.read_note("plain.md").unwrap().conflicts.is_empty());
@@ -595,7 +619,7 @@ mod tests {
             .unwrap();
         assert!(after.conflicts.is_empty());
         assert_eq!(front_matter::body(&after.text), "mac\n");
-        assert!(!dir.path().join("Einkaufsliste 2.md").exists());
+        assert!(!dir.path().join("notes").join("Einkaufsliste 2.md").exists());
         assert_eq!(history_texts(&vault, SAME), [copy]);
     }
 
@@ -608,7 +632,7 @@ mod tests {
             .unwrap();
         assert_eq!(front_matter::body(&after.text), "phone\n");
         assert_eq!(front_matter::get(&after.text, "id").as_deref(), Some(SAME));
-        assert!(!dir.path().join("Einkaufsliste 2.md").exists());
+        assert!(!dir.path().join("notes").join("Einkaufsliste 2.md").exists());
         assert_eq!(history_texts(&vault, SAME), [mine]);
     }
 
@@ -632,12 +656,14 @@ mod tests {
     #[test]
     fn a_copy_changed_meanwhile_is_kept_and_reported_again() {
         let (dir, _, _, _) = vault_with_copy();
-        let vault = Vault::open_with(dir.path(), Arc::new(EditsBeforeDelete)).unwrap();
+        let vault = Vault::create(dir.path())
+            .and_then(|_| Vault::open_with(dir.path(), Arc::new(EditsBeforeDelete)))
+            .unwrap();
         let note = vault.read_note("Einkaufsliste.md").unwrap();
         let after = vault
             .resolve_conflict("Einkaufsliste.md", &note.text, &note.hash)
             .unwrap();
-        assert!(dir.path().join("Einkaufsliste 2.md").exists());
+        assert!(dir.path().join("notes").join("Einkaufsliste 2.md").exists());
         assert_eq!(after.conflicts.len(), 1);
         assert!(after.conflicts[0].text.contains("edited on the iPad"));
     }
@@ -650,7 +676,7 @@ mod tests {
             .unwrap();
         assert!(after.conflicts.is_empty());
         assert_eq!(front_matter::get(&after.text, "id").as_deref(), Some(SAME));
-        let copy = fs::read_to_string(dir.path().join("Einkaufsliste 2.md")).unwrap();
+        let copy = fs::read_to_string(dir.path().join("notes").join("Einkaufsliste 2.md")).unwrap();
         let new_id = front_matter::get(&copy, "id").unwrap();
         assert_ne!(new_id, SAME);
         assert!(is_ulid(&new_id));
@@ -667,25 +693,28 @@ mod tests {
     #[test]
     fn keeping_both_renames_the_later_created_note() {
         let dir = tempfile::tempdir().unwrap();
-        let vault = Vault::open(dir.path()).unwrap();
+        let vault = Vault::create(dir.path()).unwrap();
         let older = format!("---\nid: {SAME}\ncreated: 2026-01-01T00:00:00Z\n---\nolder");
         let newer = format!("---\nid: {SAME}\ncreated: 2026-05-01T00:00:00Z\n---\nnewer");
-        fs::write(dir.path().join("b.md"), &older).unwrap();
-        fs::write(dir.path().join("a.md"), &newer).unwrap();
+        fs::write(dir.path().join("notes").join("b.md"), &older).unwrap();
+        fs::write(dir.path().join("notes").join("a.md"), &newer).unwrap();
         // Asked from the older note's side: still the newer one gets the new id.
         vault.keep_both("b.md", "a.md").unwrap();
-        let a = fs::read_to_string(dir.path().join("a.md")).unwrap();
-        let b = fs::read_to_string(dir.path().join("b.md")).unwrap();
+        let a = fs::read_to_string(dir.path().join("notes").join("a.md")).unwrap();
+        let b = fs::read_to_string(dir.path().join("notes").join("b.md")).unwrap();
         assert_eq!(front_matter::get(&b, "id").as_deref(), Some(SAME));
         assert_ne!(front_matter::get(&a, "id").as_deref(), Some(SAME));
         // From the newer note's side as well.
-        fs::write(dir.path().join("a.md"), &newer).unwrap();
+        fs::write(dir.path().join("notes").join("a.md"), &newer).unwrap();
         vault.keep_both("a.md", "b.md").unwrap();
-        let a = fs::read_to_string(dir.path().join("a.md")).unwrap();
+        let a = fs::read_to_string(dir.path().join("notes").join("a.md")).unwrap();
         assert_ne!(front_matter::get(&a, "id").as_deref(), Some(SAME));
         assert_eq!(
-            front_matter::get(&fs::read_to_string(dir.path().join("b.md")).unwrap(), "id")
-                .as_deref(),
+            front_matter::get(
+                &fs::read_to_string(dir.path().join("notes").join("b.md")).unwrap(),
+                "id"
+            )
+            .as_deref(),
             Some(SAME)
         );
     }

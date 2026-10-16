@@ -6,8 +6,10 @@
 
 pub mod conflicts;
 pub mod coordination;
+mod flat_yaml;
 pub mod front_matter;
 pub mod history;
+pub mod layout;
 pub mod names;
 pub mod stamp;
 pub mod tags;
@@ -17,6 +19,7 @@ pub mod watch;
 
 pub use conflicts::{ConflictVersion, NoSyncConflicts, RawVersion, SyncConflicts};
 pub use coordination::{Coordinator, Uncoordinated};
+pub use layout::{Folder, VaultIdentity, inspect};
 pub use names::{NewNote, slug};
 pub use tags::{Tag, extract_tags};
 pub use trash::TrashedNote;
