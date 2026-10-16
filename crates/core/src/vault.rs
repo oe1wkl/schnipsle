@@ -235,7 +235,7 @@ impl Vault {
         // Conflict versions stay with the sync service until resolved, so a
         // failure to list them loses nothing; it must not make the note
         // unreadable, but it is reported rather than hidden.
-        match self.conflicts_at(&full) {
+        match self.conflicts_at(path, &full, &note.text) {
             Ok(conflicts) => note.conflicts = conflicts,
             Err(e) => {
                 eprintln!("conflict versions of {path} unavailable: {e}");
@@ -356,6 +356,7 @@ impl Vault {
             match access {
                 Access::Read => self.coordinator.read(path, &mut accessor)?,
                 Access::Write => self.coordinator.write(path, &mut accessor)?,
+                Access::Delete => self.coordinator.delete(path, &mut accessor)?,
             }
         }
         outcome.unwrap_or_else(|| {
@@ -466,6 +467,11 @@ pub(crate) fn created_ms(file: &Path) -> u64 {
         .ok()
         .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
         .map_or_else(now_ms, |d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX))
+}
+
+/// Last modification of a file, else now; shown for copies.
+pub(crate) fn modified_ms_of(file: &Path) -> u64 {
+    fs::metadata(file).map_or_else(|_| now_ms(), |m| modified_ms(&m))
 }
 
 /// Canonical form of `path`, also for paths that no longer exist (a deleted
@@ -613,6 +619,7 @@ pub fn sha256_hex(bytes: &[u8]) -> String {
 pub(crate) enum Access {
     Read,
     Write,
+    Delete,
 }
 
 /// A coordinator broke its contract and called an accessor a second time.
@@ -1007,6 +1014,7 @@ mod tests {
             [
                 ("write", root.join("n.md")), // create
                 ("read", root.join("n.md")),  // read_note
+                ("read", root.to_owned()),    // read_note: copies with the same id
                 ("read", root.join("n.md")),  // write_note: id and created on disk
                 ("write", root.join("n.md")), // write_note: check and replace
                 ("read", root.to_owned()),    // list_notes

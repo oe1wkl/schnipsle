@@ -32,6 +32,15 @@ pub trait Coordinator: Send + Sync + fmt::Debug {
     /// # Errors
     /// The error from `f`, or an error if access could not be obtained.
     fn write(&self, path: &Path, f: &mut dyn FnMut(&Path) -> io::Result<()>) -> io::Result<()>;
+
+    /// Runs `f` with exclusive access for deleting `path`, so others presenting
+    /// the file can let go of it first. Defaults to [`Coordinator::write`].
+    ///
+    /// # Errors
+    /// The error from `f`, or an error if access could not be obtained.
+    fn delete(&self, path: &Path, f: &mut dyn FnMut(&Path) -> io::Result<()>) -> io::Result<()> {
+        self.write(path, f)
+    }
 }
 
 /// No coordination: runs every operation directly. Used off Apple platforms.

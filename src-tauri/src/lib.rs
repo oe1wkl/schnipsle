@@ -196,6 +196,17 @@ async fn resolve_conflict(
     })
 }
 
+/// Keeps a note and its copy with the same `id` as two notes; the one created
+/// later gets a new `id` (format.md §4). Returns the note as now on disk.
+#[tauri::command]
+async fn keep_both(
+    state: State<'_, AppState>,
+    path: String,
+    copy_path: String,
+) -> CmdResult<NoteContent> {
+    with_vault(&state, |v| Ok(v.keep_both(&path, &copy_path)?))
+}
+
 /// Asks iCloud to download a note that is only a placeholder (iOS); no-op elsewhere.
 #[tauri::command]
 async fn download_note(
@@ -286,6 +297,7 @@ pub fn run() {
             save_note,
             create_note,
             resolve_conflict,
+            keep_both,
             download_note,
             extract_tags
         ])

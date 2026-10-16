@@ -96,6 +96,42 @@ fn value_of<'a>(line: &'a str, key: &str) -> Option<&'a str> {
     )
 }
 
+/// Returns `text` with top-level `key` set to `value`: the line is replaced if
+/// the key exists, else added at the top of the block (which is created if
+/// needed). Nothing else changes.
+#[must_use]
+pub fn set(text: &str, key: &str, value: &str) -> String {
+    let parts = split(text);
+    let nl = parts.newline;
+    let mut lines: Vec<String> = parts
+        .lines
+        .unwrap_or_default()
+        .into_iter()
+        .map(str::to_owned)
+        .collect();
+    if let Some(line) = lines.iter_mut().find(|l| value_of(l, key).is_some()) {
+        *line = format!("{key}: {value}");
+    } else {
+        lines.insert(0, format!("{key}: {value}"));
+    }
+    join(parts.bom, &lines, nl, parts.body)
+}
+
+fn join(bom: &str, lines: &[String], nl: &str, body: &str) -> String {
+    let mut out = String::with_capacity(body.len() + 100);
+    out.push_str(bom);
+    out.push_str("---");
+    out.push_str(nl);
+    for line in lines {
+        out.push_str(line);
+        out.push_str(nl);
+    }
+    out.push_str("---");
+    out.push_str(nl);
+    out.push_str(body);
+    out
+}
+
 /// Returns `text` with `id` and `created` added if missing and `modified` set.
 /// Existing `id` and `created` values are kept; nothing else changes.
 #[must_use]
@@ -123,19 +159,7 @@ pub fn stamp(text: &str, id: &str, created: &str, modified: &str) -> String {
         missing.push(format!("modified: {modified}"));
     }
     lines.splice(0..0, missing);
-
-    let mut out = String::with_capacity(text.len() + 100);
-    out.push_str(parts.bom);
-    out.push_str("---");
-    out.push_str(nl);
-    for line in &lines {
-        out.push_str(line);
-        out.push_str(nl);
-    }
-    out.push_str("---");
-    out.push_str(nl);
-    out.push_str(parts.body);
-    out
+    join(parts.bom, &lines, nl, parts.body)
 }
 
 #[cfg(test)]
@@ -181,6 +205,15 @@ mod tests {
             stamp(note, ID, T1, T2),
             format!("\u{feff}---\r\ncreated: {T1}\r\nmodified: {T2}\r\nid: X\r\n---\r\nBody\r\n")
         );
+    }
+
+    #[test]
+    fn set_replaces_or_adds() {
+        assert_eq!(
+            set("---\na: 1\nid: OLD # c\n---\nB", "id", ID),
+            format!("---\na: 1\nid: {ID}\n---\nB")
+        );
+        assert_eq!(set("B", "id", ID), format!("---\nid: {ID}\n---\nB"));
     }
 
     #[test]

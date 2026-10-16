@@ -20,6 +20,8 @@ interface ConflictVersion {
   hash: string;
   modifiedMs: number;
   device: string | null;
+  /** Set for another file with the same id, e.g. iCloud's copy `Name 2.md`. */
+  copyPath: string | null;
 }
 interface NoteContent {
   path: string;
@@ -76,6 +78,7 @@ const ui = {
   syncOther: el("sync-other") as HTMLTextAreaElement,
   syncKeepMine: el("sync-keep-mine") as HTMLButtonElement,
   syncUseOther: el("sync-use-other") as HTMLButtonElement,
+  syncKeepBoth: el("sync-keep-both") as HTMLButtonElement,
 };
 
 /** The note in the editor. `savedText` is what is on disk (as far as we know). */
@@ -257,10 +260,13 @@ function showSyncConflicts(conflicts: ConflictVersion[]): void {
   syncConflict = conflicts[0];
   ui.syncConflict.hidden = syncConflict === undefined;
   if (!syncConflict) return;
-  const who = syncConflict.device ?? "Another device";
   const when = new Date(syncConflict.modifiedMs).toLocaleString();
   const more = conflicts.length > 1 ? ` (1 of ${String(conflicts.length)})` : "";
-  ui.syncConflictText.textContent = `${who} saved a different version at ${when}${more}.`;
+  ui.syncConflictText.textContent =
+    syncConflict.copyPath === null
+      ? `${syncConflict.device ?? "Another device"} saved a different version at ${when}${more}.`
+      : `“${syncConflict.copyPath}” is a copy of this note with different text (saved ${when})${more}.`;
+  ui.syncKeepBoth.hidden = syncConflict.copyPath === null;
   ui.syncOther.value = syncConflict.text;
 }
 
@@ -277,6 +283,7 @@ function resolveSyncConflict(pick: "mine" | "other"): void {
       });
       load(content);
       setStatus("Conflict resolved – the other version is kept in the note's history.");
+      await refreshList();
     } catch (e) {
       const err = asError(e);
       setStatus(`Not resolved: ${err.message}`);
@@ -290,6 +297,19 @@ ui.syncKeepMine.addEventListener("click", () => {
 });
 ui.syncUseOther.addEventListener("click", () => {
   resolveSyncConflict("other");
+});
+ui.syncKeepBoth.addEventListener("click", () => {
+  saving = saving.then(save).then(async () => {
+    const copyPath = syncConflict?.copyPath;
+    if (!current || !copyPath) return;
+    try {
+      load(await invoke<NoteContent>("keep_both", { path: current.path, copyPath }));
+      setStatus(`Kept both: “${copyPath}” is now a separate note.`);
+      await refreshList();
+    } catch (e) {
+      setStatus(`Not changed: ${asError(e).message}`);
+    }
+  });
 });
 
 ui.useTheirs.addEventListener("click", () => {

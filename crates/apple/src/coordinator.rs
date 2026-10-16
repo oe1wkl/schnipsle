@@ -41,6 +41,14 @@ impl Coordinator for FileCoordinator {
             Intent::Write(NSFileCoordinatorWritingOptions::ForReplacing),
         )
     }
+
+    fn delete(&self, path: &Path, f: &mut dyn FnMut(&Path) -> io::Result<()>) -> io::Result<()> {
+        coordinate(
+            path,
+            f,
+            Intent::Write(NSFileCoordinatorWritingOptions::ForDeleting),
+        )
+    }
 }
 
 #[derive(Clone, Copy)]
