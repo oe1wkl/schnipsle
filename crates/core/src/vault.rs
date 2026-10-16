@@ -79,6 +79,28 @@ impl From<io::Error> for VaultError {
 /// Result type of this module.
 pub type Result<T> = std::result::Result<T, VaultError>;
 
+/// Order of [`Vault::list_notes_by`]. Deserialized from `"modified"` / `"title"`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SortOrder {
+    /// Most recently modified first.
+    #[default]
+    Modified,
+    /// By title, A to Z, ignoring case and accents (`Äpfel` next to `Apfel`).
+    Title,
+}
+
+/// Sort key for titles: case and accents removed, so the order matches what a
+/// reader expects in German and English alike.
+fn title_sort_key(title: &str) -> String {
+    use unicode_normalization::UnicodeNormalization as _;
+    title
+        .nfd()
+        .filter(|c| !unicode_normalization::char::is_combining_mark(*c))
+        .flat_map(char::to_lowercase)
+        .collect()
+}
+
 /// A note as shown in a list. Serialized with camelCase field names for the UI.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -98,6 +120,8 @@ pub struct NoteEntry {
 pub struct NoteContent {
     /// Path relative to the vault root.
     pub path: String,
+    /// Title per format.md §5.2.
+    pub title: String,
     /// The complete file content.
     pub text: String,
     /// SHA-256 of the content as hex; pass it back to [`Vault::write_note`].
@@ -190,17 +214,32 @@ impl Vault {
     /// # Errors
     /// I/O errors while reading the root folder; unreadable subfolders are skipped.
     pub fn list_notes(&self) -> Result<Vec<NoteEntry>> {
+        self.list_notes_by(SortOrder::Modified)
+    }
+
+    /// Lists all notes like [`Vault::list_notes`], in the given order.
+    ///
+    /// # Errors
+    /// I/O errors while reading the root folder; unreadable subfolders are skipped.
+    pub fn list_notes_by(&self, order: SortOrder) -> Result<Vec<NoteEntry>> {
         // One coordinated read of the folder covers the files inside it.
         let mut notes = self.coordinated(Access::Read, &self.root, |root| {
             let mut notes = Vec::new();
             collect(root, "", &mut notes, true)?;
             Ok(notes)
         })?;
-        notes.sort_by(|a, b| {
-            b.modified_ms
-                .cmp(&a.modified_ms)
-                .then_with(|| a.path.cmp(&b.path))
-        });
+        match order {
+            SortOrder::Modified => notes.sort_by(|a, b| {
+                b.modified_ms
+                    .cmp(&a.modified_ms)
+                    .then_with(|| a.path.cmp(&b.path))
+            }),
+            SortOrder::Title => {
+                notes.sort_by_cached_key(|n| {
+                    (title_sort_key(&n.title), n.title.clone(), n.path.clone())
+                });
+            }
+        }
         Ok(notes)
     }
 
@@ -221,6 +260,7 @@ impl Vault {
                 let text = String::from_utf8_lossy(&bytes).into_owned();
                 Ok(NoteContent {
                     path: path.to_owned(),
+                    title: title_of(&text, note_stem(path)),
                     hash: sha256_hex(&bytes),
                     text,
                     conflicts: Vec::new(),
@@ -337,6 +377,21 @@ impl Vault {
             hash: sha256_hex(stamped.as_bytes()),
             text: stamped,
         })
+    }
+
+    /// Moves the file at `from` to `to` (absolute paths inside the vault),
+    /// coordinated for both, never replacing anything at `to`; creates the
+    /// target folder if needed.
+    ///
+    /// # Errors
+    /// An I/O error of kind `AlreadyExists` if `to` is taken; other I/O errors.
+    pub(crate) fn move_new(&self, from: &Path, to: &Path) -> Result<()> {
+        if let Some(parent) = to.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        self.coordinator
+            .relocate(from, to, &mut |from, to| move_no_replace(from, to))?;
+        Ok(())
     }
 
     /// Runs `f` inside the coordinator and passes its result through. `f` gets
@@ -467,6 +522,32 @@ pub(crate) fn created_ms(file: &Path) -> u64 {
         .ok()
         .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
         .map_or_else(now_ms, |d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX))
+}
+
+/// `a/Note.md` → `Note`, the fallback title (format.md §5.2).
+fn note_stem(path: &str) -> &str {
+    let name = path.rsplit_once('/').map_or(path, |(_, name)| name);
+    name.get(..name.len().saturating_sub(3)).unwrap_or(name)
+}
+
+/// Moves `from` to `to` without ever replacing what is at `to` (including an
+/// iCloud placeholder): a hard link fails atomically if the name is taken, and
+/// keeps the file's identity (its birth time, for one). File systems without
+/// hard links fall back to a check followed by a rename.
+fn move_no_replace(from: &Path, to: &Path) -> io::Result<()> {
+    let taken = || io::Error::new(io::ErrorKind::AlreadyExists, to.display().to_string());
+    if placeholder_of(to).exists() {
+        return Err(taken());
+    }
+    match fs::hard_link(from, to) {
+        Ok(()) => fs::remove_file(from).inspect_err(|_| {
+            // Never leave the note under two names (they would be same-id copies).
+            let _ = fs::remove_file(to);
+        }),
+        Err(e) if e.kind() == io::ErrorKind::AlreadyExists => Err(e),
+        Err(_) if fs::symlink_metadata(to).is_ok() => Err(taken()),
+        Err(_) => fs::rename(from, to),
+    }
 }
 
 /// Last modification of a file, else now; shown for copies.
@@ -1118,6 +1199,28 @@ mod tests {
                 "{bad} must be rejected"
             );
         }
+    }
+
+    #[test]
+    fn sorts_by_title_ignoring_case_and_accents() {
+        let (dir, vault) = vault();
+        for (name, title) in [
+            ("1.md", "Zebra"),
+            ("2.md", "äpfel"),
+            ("3.md", "Apfel"),
+            ("4.md", "birne"),
+        ] {
+            fs::write(dir.path().join(name), format!("# {title}\n")).unwrap();
+        }
+        let titles: Vec<_> = vault
+            .list_notes_by(SortOrder::Title)
+            .unwrap()
+            .into_iter()
+            .map(|n| n.title)
+            .collect();
+        assert_eq!(titles, ["Apfel", "äpfel", "birne", "Zebra"]);
+        let order: SortOrder = serde_json::from_str("\"title\"").unwrap();
+        assert_eq!(order, SortOrder::Title);
     }
 
     #[test]

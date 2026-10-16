@@ -10,7 +10,9 @@ mod watching;
 
 use std::sync::Mutex;
 
-use schnipsle_core::{NoteContent, NoteEntry, SavedNote, Tag, Vault, VaultError};
+use schnipsle_core::{
+    NewNote, NoteContent, NoteEntry, SavedNote, SortOrder, Tag, TrashedNote, Vault, VaultError,
+};
 use serde::Serialize;
 use tauri::State;
 
@@ -150,8 +152,45 @@ async fn restore_vault(
 }
 
 #[tauri::command]
-async fn list_notes(state: State<'_, AppState>) -> CmdResult<Vec<NoteEntry>> {
-    with_vault(&state, |v| Ok(v.list_notes()?))
+async fn list_notes(
+    state: State<'_, AppState>,
+    sort: Option<SortOrder>,
+) -> CmdResult<Vec<NoteEntry>> {
+    with_vault(&state, |v| Ok(v.list_notes_by(sort.unwrap_or_default())?))
+}
+
+/// Creates a note named after its title (format.md §3).
+#[tauri::command]
+async fn new_note(state: State<'_, AppState>, text: String) -> CmdResult<NewNote> {
+    with_vault(&state, |v| Ok(v.create_titled("", &text)?))
+}
+
+/// After the user left a note: renames it to match its title if that changed
+/// since `title_at_open`. Returns its path, new or unchanged.
+#[tauri::command]
+async fn rename_after_edit(
+    state: State<'_, AppState>,
+    path: String,
+    title_at_open: String,
+) -> CmdResult<String> {
+    with_vault(&state, |v| Ok(v.rename_after_edit(&path, &title_at_open)?))
+}
+
+/// Moves a note to the trash, unchanged (format.md §8).
+#[tauri::command]
+async fn trash_note(state: State<'_, AppState>, path: String) -> CmdResult<TrashedNote> {
+    with_vault(&state, |v| Ok(v.trash_note(&path)?))
+}
+
+#[tauri::command]
+async fn list_trash(state: State<'_, AppState>) -> CmdResult<Vec<TrashedNote>> {
+    with_vault(&state, |v| Ok(v.list_trash()?))
+}
+
+/// Moves a note out of the trash; returns where it is now.
+#[tauri::command]
+async fn restore_note(state: State<'_, AppState>, key: String) -> CmdResult<String> {
+    with_vault(&state, |v| Ok(v.restore_note(&key)?))
 }
 
 #[tauri::command]
@@ -293,6 +332,11 @@ pub fn run() {
             pick_vault,
             restore_vault,
             list_notes,
+            new_note,
+            rename_after_edit,
+            trash_note,
+            list_trash,
+            restore_note,
             read_note,
             save_note,
             create_note,

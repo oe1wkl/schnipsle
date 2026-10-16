@@ -49,6 +49,68 @@ impl Coordinator for FileCoordinator {
             Intent::Write(NSFileCoordinatorWritingOptions::ForDeleting),
         )
     }
+
+    fn relocate(
+        &self,
+        from: &Path,
+        to: &Path,
+        f: &mut dyn FnMut(&Path, &Path) -> io::Result<()>,
+    ) -> io::Result<()> {
+        coordinate_move(from, to, f)
+    }
+}
+
+/// One coordinated access to both ends of a move, as Apple prescribes: moving
+/// `from`, replacing `to`; presenters learn about the move afterwards.
+fn coordinate_move(
+    from: &Path,
+    to: &Path,
+    f: &mut dyn FnMut(&Path, &Path) -> io::Result<()>,
+) -> io::Result<()> {
+    let from_url = file_url(from)?;
+    let to_url = file_url(to)?;
+    let coordinator = NSFileCoordinator::new();
+    let f = RefCell::new(f);
+    let outcome: Cell<Option<io::Result<()>>> = Cell::new(None);
+
+    // Runs synchronously on this thread, like the accessor in `coordinate`.
+    let accessor = StackBlock::new(|old: NonNull<NSURL>, new: NonNull<NSURL>| {
+        // SAFETY: NSFileCoordinator passes valid NSURLs that stay alive for the
+        // duration of the accessor call; we do not keep them.
+        let old = unsafe { old.as_ref() };
+        // SAFETY: as above.
+        let new = unsafe { new.as_ref() };
+        let result = match (old.to_file_path(), new.to_file_path(), f.try_borrow_mut()) {
+            (Some(old_path), Some(new_path), Ok(mut f)) => f(&old_path, &new_path),
+            (None, _, _) | (_, None, _) => {
+                Err(io::Error::other("coordinated URL is not a file path"))
+            }
+            (_, _, Err(_)) => Err(io::Error::other(
+                "file coordination re-entered the accessor",
+            )),
+        };
+        if result.is_ok() {
+            coordinator.itemAtURL_didMoveToURL(old, new);
+        }
+        outcome.set(Some(result));
+    });
+
+    let mut error: Option<Retained<NSError>> = None;
+    coordinator.coordinateWritingItemAtURL_options_writingItemAtURL_options_error_byAccessor(
+        &from_url,
+        NSFileCoordinatorWritingOptions::ForMoving,
+        &to_url,
+        NSFileCoordinatorWritingOptions::ForReplacing,
+        Some(&mut error),
+        &accessor,
+    );
+    match (outcome.take(), error) {
+        (Some(result), _) => result,
+        (None, Some(error)) => Err(to_io_error(&error)),
+        (None, None) => Err(io::Error::other(
+            "file coordination returned without granting access",
+        )),
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -174,6 +236,25 @@ mod tests {
             .map(|n| n.title)
             .collect();
         assert_eq!(titles, ["Two"]);
+    }
+
+    #[test]
+    fn rename_trash_and_restore_through_nsfilecoordinator() {
+        let (dir, vault) = temp_vault();
+        let note = vault.create_titled("", "# Draft\n").unwrap();
+        let text = note.saved.text.replace("# Draft", "# Antenna");
+        vault
+            .write_note(&note.path, &text, &note.saved.hash)
+            .unwrap();
+        let path = vault.rename_after_edit(&note.path, "Draft").unwrap();
+        assert_eq!(path, "antenna.md");
+        assert!(!dir.path().join("draft.md").exists());
+
+        let trashed = vault.trash_note(&path).unwrap();
+        assert!(!dir.path().join("antenna.md").exists());
+        assert_eq!(vault.restore_note(&trashed.key).unwrap(), "antenna.md");
+        let restored = fs::read_to_string(dir.path().join("antenna.md")).unwrap();
+        assert!(restored.ends_with("# Antenna\n"), "{restored}");
     }
 
     #[test]

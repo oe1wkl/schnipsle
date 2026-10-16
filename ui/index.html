@@ -37,16 +37,26 @@
 
     <main class="layout" data-view="list">
       <nav class="list" aria-label="Notes">
+        <div class="list-tools">
+          <select id="sort" aria-label="Sort notes">
+            <option value="modified">Recently changed</option>
+            <option value="title">Title</option>
+          </select>
+          <button id="show-trash" type="button" class="small" aria-pressed="false">Trash</button>
+        </div>
         <p id="empty" class="muted">
           Open a folder to start. On iPhone, pick a folder in iCloud Drive.
         </p>
         <ul id="notes"></ul>
       </nav>
       <section class="editor" aria-label="Editor">
-        <textarea id="text" spellcheck="true" disabled placeholder="Select a note"></textarea>
+        <div id="editor-host" class="editor-host"></div>
         <footer class="status">
           <span id="status" aria-live="polite"></span>
           <span id="tags" class="tags"></span>
+          <button id="undo-delete" type="button" class="small" hidden>Undo</button>
+          <button id="delete-note" type="button" class="small" disabled>Delete</button>
+          <button id="mode" type="button" class="small" aria-pressed="false">Source</button>
         </footer>
       </section>
     </main>
