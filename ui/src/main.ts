@@ -26,6 +26,7 @@ interface NoteContent {
   text: string;
   hash: string;
   conflicts: ConflictVersion[];
+  conflictsError: string | null;
 }
 interface Tag {
   name: string;
@@ -161,7 +162,11 @@ function load(content: NoteContent): void {
   ui.text.disabled = false;
   hideConflict();
   showSyncConflicts(content.conflicts);
-  setStatus(`Opened ${content.path}`);
+  setStatus(
+    content.conflictsError === null
+      ? `Opened ${content.path}`
+      : `Opened ${content.path}, but could not check for sync conflicts: ${content.conflictsError}`,
+  );
   void showTags();
   void refreshList();
 }
@@ -359,7 +364,7 @@ ui.newNote.addEventListener("click", () => {
   void flushSave()
     .then(() => invoke<string>("create_note", { path, text }))
     .then((hash) => {
-      load({ path, text, hash, conflicts: [] });
+      load({ path, text, hash, conflicts: [], conflictsError: null });
       showView("editor");
       ui.text.focus();
     })

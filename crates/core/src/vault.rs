@@ -103,6 +103,10 @@ pub struct NoteContent {
     /// Versions a sync service kept because they conflict with this one
     /// (ADR-0006); resolve them with [`Vault::resolve_conflict`].
     pub conflicts: Vec<ConflictVersion>,
+    /// Why `conflicts` could not be listed, if it could not; the note itself
+    /// was read normally.
+    #[serde(rename = "conflictsError")]
+    pub conflicts_error: Option<String>,
 }
 
 /// What a changed path means for the vault, see [`Vault::classify`].
@@ -208,6 +212,7 @@ impl Vault {
                     hash: sha256_hex(&bytes),
                     text,
                     conflicts: Vec::new(),
+                    conflicts_error: None,
                 })
             }
             Err(e) if e.kind() == io::ErrorKind::NotFound && placeholder_of(file).exists() => {
@@ -216,8 +221,15 @@ impl Vault {
             Err(e) => Err(e.into()),
         })?;
         // Conflict versions stay with the sync service until resolved, so a
-        // failure to list them loses nothing; it must not make the note unreadable.
-        note.conflicts = self.conflicts_at(&full).unwrap_or_default();
+        // failure to list them loses nothing; it must not make the note
+        // unreadable, but it is reported rather than hidden.
+        match self.conflicts_at(&full) {
+            Ok(conflicts) => note.conflicts = conflicts,
+            Err(e) => {
+                eprintln!("conflict versions of {path} unavailable: {e}");
+                note.conflicts_error = Some(e.to_string());
+            }
+        }
         Ok(note)
     }
 

@@ -371,6 +371,43 @@ mod tests {
         assert_eq!(sync.unresolved.lock().unwrap().len(), 1);
     }
 
+    /// A sync service that cannot be asked.
+    #[derive(Debug)]
+    struct Broken;
+
+    impl SyncConflicts for Broken {
+        fn versions(&self, _file: &Path) -> io::Result<Vec<RawVersion>> {
+            Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                "no access to versions",
+            ))
+        }
+        fn mark_resolved(&self, _: &Path, _: &mut dyn FnMut(&[u8]) -> bool) -> io::Result<usize> {
+            Ok(0)
+        }
+    }
+
+    #[test]
+    fn a_failing_sync_service_is_reported_not_hidden() {
+        let dir = tempfile::tempdir().unwrap();
+        let vault = Vault::open(dir.path())
+            .unwrap()
+            .with_sync_conflicts(Arc::new(Broken));
+        fs::write(dir.path().join("n.md"), "text").unwrap();
+        let note = vault.read_note("n.md").unwrap();
+        assert_eq!(note.text, "text");
+        assert!(note.conflicts.is_empty());
+        assert_eq!(
+            note.conflicts_error.as_deref(),
+            Some("no access to versions")
+        );
+        let json = serde_json::to_string(&note).unwrap();
+        assert!(
+            json.contains("\"conflictsError\":\"no access to versions\""),
+            "{json}"
+        );
+    }
+
     #[test]
     fn conflict_version_serializes_camel_case() {
         let json = serde_json::to_string(&ConflictVersion::from(&version("x"))).unwrap();
