@@ -16,5 +16,5 @@ pub mod watch;
 pub use conflicts::{ConflictVersion, NoSyncConflicts, RawVersion, SyncConflicts};
 pub use coordination::{Coordinator, Uncoordinated};
 pub use tags::{Tag, extract_tags};
-pub use vault::{NoteContent, NoteEntry, PathKind, Vault, VaultError};
+pub use vault::{NoteContent, NoteEntry, PathKind, SavedNote, Vault, VaultError};
 pub use watch::{Hint, VaultChanges};

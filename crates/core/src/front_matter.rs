@@ -60,6 +60,21 @@ fn split(text: &str) -> Split<'_> {
     none // unterminated: not front matter
 }
 
+/// The raw front matter block of `text`, from the opening to the closing
+/// `---` line inclusive (with a leading byte order mark), if it has one.
+#[must_use]
+pub fn block(text: &str) -> Option<&str> {
+    let parts = split(text);
+    parts.lines?;
+    Some(&text[..text.len() - parts.body.len()])
+}
+
+/// `text` without its front matter block.
+#[must_use]
+pub fn body(text: &str) -> &str {
+    split(text).body
+}
+
 /// The value of top-level `key` in the front matter, without surrounding quotes.
 #[must_use]
 pub fn get(text: &str, key: &str) -> Option<String> {
@@ -166,6 +181,16 @@ mod tests {
             stamp(note, ID, T1, T2),
             format!("\u{feff}---\r\ncreated: {T1}\r\nmodified: {T2}\r\nid: X\r\n---\r\nBody\r\n")
         );
+    }
+
+    #[test]
+    fn block_and_body() {
+        let note = "---\nid: X\n---\n# Body\n";
+        assert_eq!(block(note), Some("---\nid: X\n---\n"));
+        assert_eq!(body(note), "# Body\n");
+        assert_eq!(block("# No block\n"), None);
+        assert_eq!(body("# No block\n"), "# No block\n");
+        assert_eq!(body("\u{feff}---\r\na: 1\r\n---\r\nB"), "B");
     }
 
     #[test]

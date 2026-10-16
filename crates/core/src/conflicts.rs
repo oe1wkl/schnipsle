@@ -20,7 +20,7 @@ use serde::Serialize;
 
 use crate::front_matter;
 use crate::stamp::{is_ulid, new_ulid, now_ms, rfc3339_utc};
-use crate::vault::{Access, NoteContent, Result, Vault, VaultError, sha256_hex};
+use crate::vault::{Access, NoteContent, Result, Vault, VaultError, created_ms, sha256_hex};
 
 /// A conflict version as the sync service stores it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -180,16 +180,6 @@ impl Vault {
         })?;
         self.read_note(path)
     }
-}
-
-/// Creation time of a file for `created`: its birth time where the file system
-/// records one, else its modification time, else now.
-fn created_ms(file: &Path) -> u64 {
-    fs::metadata(file)
-        .and_then(|m| m.created().or_else(|_| m.modified()))
-        .ok()
-        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-        .map_or_else(now_ms, |d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX))
 }
 
 #[cfg(test)]

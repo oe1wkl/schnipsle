@@ -25,6 +25,8 @@ use sha2::{Digest, Sha256};
 
 use crate::conflicts::{ConflictVersion, NoSyncConflicts, SyncConflicts};
 use crate::coordination::{Coordinator, Uncoordinated};
+use crate::front_matter;
+use crate::stamp::{new_ulid, now_ms, rfc3339_utc};
 
 /// Errors from vault operations.
 #[derive(Debug)]
@@ -107,6 +109,16 @@ pub struct NoteContent {
     /// was read normally.
     #[serde(rename = "conflictsError")]
     pub conflicts_error: Option<String>,
+}
+
+/// A note as it was written: the text actually on disk, which carries the
+/// front matter the app maintains (format.md §4), and its hash.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct SavedNote {
+    /// The complete file content as written.
+    pub text: String,
+    /// SHA-256 of `text`; pass it to the next [`Vault::write_note`].
+    pub hash: String,
 }
 
 /// What a changed path means for the vault, see [`Vault::classify`].
@@ -236,17 +248,45 @@ impl Vault {
     /// Writes a note atomically, but only if it still has the content that was read.
     ///
     /// `expected_hash` is the hash from [`Vault::read_note`] (or a previous write).
-    /// Returns the hash of the new content.
+    /// The note gets `id` and `created` if missing and an updated `modified`
+    /// (format.md §4); `id` and `created` already on disk are kept even if `text`
+    /// lacks them, and so is the whole block if `text` has none. Text equal to
+    /// what is on disk is not written again. Returns what is now on disk.
     ///
     /// # Errors
     /// [`VaultError::Conflict`] if the note changed or disappeared since it was read;
     /// nothing is written in that case.
-    pub fn write_note(&self, path: &str, text: &str, expected_hash: &str) -> Result<String> {
+    pub fn write_note(&self, path: &str, text: &str, expected_hash: &str) -> Result<SavedNote> {
         let full = self.resolve(path)?;
+        let current = self.coordinated(Access::Read, &full, |file| match fs::read(file) {
+            Ok(bytes) => Ok(Some(bytes)),
+            Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(e.into()),
+        })?;
+        let current_hash = current.as_deref().map(sha256_hex);
+        let Some(current) = current.filter(|_| current_hash.as_deref() == Some(expected_hash))
+        else {
+            return Err(VaultError::Conflict {
+                path: path.to_owned(),
+                current_hash,
+            });
+        };
+        if current == text.as_bytes() {
+            return Ok(SavedNote {
+                text: text.to_owned(),
+                hash: expected_hash.to_owned(),
+            });
+        }
+        let stamped = stamp_for_save(
+            text,
+            Some(&String::from_utf8_lossy(&current)),
+            created_ms(&full),
+        )?;
+
         // Write and flush first, then check and replace while holding exclusive
         // access: with a real coordinator nothing can change the note in between;
         // without one the window shrinks to one read plus the rename.
-        let mut tmp = Some(TempFile::write(&full, text.as_bytes())?);
+        let mut tmp = Some(TempFile::write(&full, stamped.as_bytes())?);
         self.coordinated(Access::Write, &full, |file| {
             let current_hash = match fs::read(file) {
                 Ok(bytes) => Some(sha256_hex(&bytes)),
@@ -261,20 +301,27 @@ impl Vault {
             }
             let tmp = tmp.take().ok_or_else(accessor_ran_twice)?;
             tmp.replace(file)?;
-            Ok(sha256_hex(text.as_bytes()))
+            Ok(())
+        })?;
+        Ok(SavedNote {
+            hash: sha256_hex(stamped.as_bytes()),
+            text: stamped,
         })
     }
 
-    /// Creates a new note; fails if the file already exists.
+    /// Creates a new note with `id`, `created` and `modified` in its front
+    /// matter (format.md §4); fails if the file already exists. Returns what is
+    /// now on disk.
     ///
     /// # Errors
     /// [`VaultError::AlreadyExists`], [`VaultError::InvalidPath`] or I/O errors.
-    pub fn create_note(&self, path: &str, text: &str) -> Result<String> {
+    pub fn create_note(&self, path: &str, text: &str) -> Result<SavedNote> {
         let full = self.resolve(path)?;
         if let Some(parent) = full.parent() {
             fs::create_dir_all(parent)?;
         }
-        let mut tmp = Some(TempFile::write(&full, text.as_bytes())?);
+        let stamped = stamp_for_save(text, None, now_ms())?;
+        let mut tmp = Some(TempFile::write(&full, stamped.as_bytes())?);
         self.coordinated(Access::Write, &full, |file| {
             let exists = || VaultError::AlreadyExists(path.to_owned());
             if placeholder_of(file).exists() {
@@ -283,11 +330,12 @@ impl Vault {
             let tmp = tmp.take().ok_or_else(accessor_ran_twice)?;
             match tmp.place_new(file) {
                 Err(e) if e.kind() == io::ErrorKind::AlreadyExists => Err(exists()),
-                result => {
-                    result?;
-                    Ok(sha256_hex(text.as_bytes()))
-                }
+                result => Ok(result?),
             }
+        })?;
+        Ok(SavedNote {
+            hash: sha256_hex(stamped.as_bytes()),
+            text: stamped,
         })
     }
 
@@ -386,6 +434,38 @@ impl Vault {
         }
         Ok(full)
     }
+}
+
+/// The text to write for `text` (format.md §4): `id` and `created` from `text`,
+/// else from `previous` (what is on disk), else new; `modified` now. If `text`
+/// has no front matter but `previous` does, that block is kept, so keys other
+/// tools added survive an editor that lost them.
+fn stamp_for_save(text: &str, previous: Option<&str>, created_fallback_ms: u64) -> Result<String> {
+    let from = |key: &str| {
+        front_matter::get(text, key).or_else(|| previous.and_then(|p| front_matter::get(p, key)))
+    };
+    let id = from("id").map_or_else(new_ulid, Ok)?;
+    let created = from("created").unwrap_or_else(|| rfc3339_utc(created_fallback_ms));
+    let kept_block = previous
+        .filter(|_| front_matter::block(text).is_none())
+        .and_then(front_matter::block);
+    let text = kept_block.map_or_else(|| text.to_owned(), |block| format!("{block}{text}"));
+    Ok(front_matter::stamp(
+        &text,
+        &id,
+        &created,
+        &rfc3339_utc(now_ms()),
+    ))
+}
+
+/// Creation time of a file for `created`: its birth time where the file system
+/// records one, else its modification time, else now.
+pub(crate) fn created_ms(file: &Path) -> u64 {
+    fs::metadata(file)
+        .and_then(|m| m.created().or_else(|_| m.modified()))
+        .ok()
+        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+        .map_or_else(now_ms, |d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX))
 }
 
 /// Canonical form of `path`, also for paths that no longer exist (a deleted
@@ -670,8 +750,9 @@ mod tests {
 
         let note = vault.read_note("n.md").unwrap();
         assert_eq!(note.text, "one");
-        let h2 = vault.write_note("n.md", "two", &note.hash).unwrap();
-        assert_eq!(fs::read_to_string(dir.path().join("n.md")).unwrap(), "two");
+        let h2 = vault.write_note("n.md", "two", &note.hash).unwrap().hash;
+        let on_disk = fs::read_to_string(dir.path().join("n.md")).unwrap();
+        assert_eq!(front_matter::body(&on_disk), "two");
 
         // Someone else changes the file: our next save must not overwrite it.
         fs::write(dir.path().join("n.md"), "changed on the Mac").unwrap();
@@ -702,9 +783,111 @@ mod tests {
     }
 
     #[test]
+    fn create_adds_front_matter() {
+        let (dir, vault) = vault();
+        let saved = vault.create_note("n.md", "# Title\n").unwrap();
+        let on_disk = fs::read_to_string(dir.path().join("n.md")).unwrap();
+        assert_eq!(saved.text, on_disk);
+        assert_eq!(saved.hash, sha256_hex(on_disk.as_bytes()));
+        assert_eq!(front_matter::body(&on_disk), "# Title\n");
+        assert!(crate::stamp::is_ulid(
+            &front_matter::get(&on_disk, "id").unwrap()
+        ));
+        assert_eq!(
+            front_matter::get(&on_disk, "created"),
+            front_matter::get(&on_disk, "modified")
+        );
+    }
+
+    #[test]
+    fn first_write_of_a_plain_note_adds_front_matter() {
+        let (dir, vault) = vault();
+        fs::write(dir.path().join("n.md"), "plain").unwrap();
+        let note = vault.read_note("n.md").unwrap();
+        // Reading never adds front matter (format.md §3).
+        assert_eq!(
+            fs::read_to_string(dir.path().join("n.md")).unwrap(),
+            "plain"
+        );
+        let saved = vault
+            .write_note("n.md", "plain, edited", &note.hash)
+            .unwrap();
+        assert_eq!(front_matter::body(&saved.text), "plain, edited");
+        for key in ["id", "created", "modified"] {
+            assert!(front_matter::get(&saved.text, key).is_some(), "{key}");
+        }
+    }
+
+    #[test]
+    fn identity_and_other_keys_survive_an_editor_without_them() {
+        let (dir, vault) = vault();
+        let id = "01ARZ3NDEKTSV4RRFFQ69G5FAV";
+        let disk = format!(
+            "---\nid: {id}\ncreated: 2026-01-01T00:00:00Z\npinned: true\nmodified: 2026-01-01T00:00:00Z\n---\nold\n"
+        );
+        fs::write(dir.path().join("n.md"), &disk).unwrap();
+        let hash = sha256_hex(disk.as_bytes());
+
+        // The editor lost the whole block.
+        let saved = vault.write_note("n.md", "new\n", &hash).unwrap();
+        assert_eq!(front_matter::get(&saved.text, "id").as_deref(), Some(id));
+        assert_eq!(
+            front_matter::get(&saved.text, "created").as_deref(),
+            Some("2026-01-01T00:00:00Z")
+        );
+        assert_eq!(
+            front_matter::get(&saved.text, "pinned").as_deref(),
+            Some("true")
+        );
+        assert_ne!(
+            front_matter::get(&saved.text, "modified").as_deref(),
+            Some("2026-01-01T00:00:00Z")
+        );
+        assert_eq!(front_matter::body(&saved.text), "new\n");
+
+        // The editor has a block, but without `id` (e.g. typed before the first save returned).
+        let saved = vault
+            .write_note("n.md", "---\npinned: true\n---\nnewer\n", &saved.hash)
+            .unwrap();
+        assert_eq!(front_matter::get(&saved.text, "id").as_deref(), Some(id));
+    }
+
+    #[test]
+    fn unchanged_text_is_not_written_again() {
+        let (dir, vault) = vault();
+        let saved = vault.create_note("n.md", "x").unwrap();
+        let before = fs::metadata(dir.path().join("n.md"))
+            .unwrap()
+            .modified()
+            .unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        let again = vault.write_note("n.md", &saved.text, &saved.hash).unwrap();
+        assert_eq!(again, saved);
+        let after = fs::metadata(dir.path().join("n.md"))
+            .unwrap()
+            .modified()
+            .unwrap();
+        assert_eq!(before, after);
+    }
+
+    #[test]
+    fn a_hand_edited_invalid_id_does_not_block_saving() {
+        let (dir, vault) = vault();
+        fs::write(dir.path().join("n.md"), "---\nid: mine\n---\nx").unwrap();
+        let note = vault.read_note("n.md").unwrap();
+        let saved = vault
+            .write_note("n.md", "---\nid: mine\n---\ny", &note.hash)
+            .unwrap();
+        assert_eq!(
+            front_matter::get(&saved.text, "id").as_deref(),
+            Some("mine")
+        );
+    }
+
+    #[test]
     fn no_temp_files_left_behind() {
         let (dir, vault) = vault();
-        let h = vault.create_note("deep/new.md", "x").unwrap();
+        let h = vault.create_note("deep/new.md", "x").unwrap().hash;
         vault.write_note("deep/new.md", "y", &h).unwrap();
         let names: Vec<_> = fs::read_dir(dir.path().join("deep"))
             .unwrap()
@@ -716,7 +899,7 @@ mod tests {
     #[test]
     fn conflict_leaves_no_temp_file() {
         let (dir, vault) = vault();
-        let h = vault.create_note("n.md", "one").unwrap();
+        let h = vault.create_note("n.md", "one").unwrap().hash;
         fs::write(dir.path().join("n.md"), "changed elsewhere").unwrap();
         assert!(vault.write_note("n.md", "mine", &h).is_err());
         let names: Vec<_> = fs::read_dir(dir.path())
@@ -748,7 +931,7 @@ mod tests {
         );
         // The file on disk is the winner's, untouched by the others.
         let on_disk = fs::read(dir.path().join("race.md")).unwrap();
-        assert_eq!(&sha256_hex(&on_disk), ok[0]);
+        assert_eq!(sha256_hex(&on_disk), ok[0].hash);
         assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 1);
     }
 
@@ -814,7 +997,7 @@ mod tests {
     fn every_access_is_coordinated() {
         let (dir, vault, c) = scripted_vault(Scripted::default());
         let root = dir.path();
-        let h = vault.create_note("n.md", "one").unwrap();
+        let h = vault.create_note("n.md", "one").unwrap().hash;
         let note = vault.read_note("n.md").unwrap();
         vault.write_note("n.md", "two", &note.hash).unwrap();
         vault.list_notes().unwrap();
@@ -822,10 +1005,11 @@ mod tests {
         assert_eq!(
             c.calls(),
             [
-                ("write", root.join("n.md")),
-                ("read", root.join("n.md")),
-                ("write", root.join("n.md")),
-                ("read", root.to_owned()),
+                ("write", root.join("n.md")), // create
+                ("read", root.join("n.md")),  // read_note
+                ("read", root.join("n.md")),  // write_note: id and created on disk
+                ("write", root.join("n.md")), // write_note: check and replace
+                ("read", root.to_owned()),    // list_notes
             ]
         );
     }
@@ -885,10 +1069,8 @@ mod tests {
             .write_note("n.md", "two", &sha256_hex(b"one"))
             .unwrap();
         assert_eq!(names_in(dir.path()), ["moved.md"]);
-        assert_eq!(
-            fs::read_to_string(dir.path().join("moved.md")).unwrap(),
-            "two"
-        );
+        let on_disk = fs::read_to_string(dir.path().join("moved.md")).unwrap();
+        assert_eq!(front_matter::body(&on_disk), "two");
     }
 
     #[test]

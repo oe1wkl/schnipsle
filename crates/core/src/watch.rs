@@ -317,7 +317,7 @@ mod tests {
         let _watcher = FsWatcher::start(dir.path(), hints).unwrap();
         // Give the OS a moment to arm the watch before the write.
         thread::sleep(Duration::from_millis(200));
-        let hash = vault.create_note("watched.md", "x").unwrap();
+        let hash = vault.create_note("watched.md", "x").unwrap().hash;
         vault.write_note("watched.md", "y", &hash).unwrap();
 
         let deadline = Instant::now() + Duration::from_secs(10);

@@ -37,6 +37,11 @@ interface VaultChanges {
   paths: string[];
   rescan: boolean;
 }
+/** What a save wrote: the text on disk, with the front matter the core maintains. */
+interface SavedNote {
+  text: string;
+  hash: string;
+}
 interface CommandError {
   kind: string;
   message: string;
@@ -171,17 +176,45 @@ function load(content: NoteContent): void {
   void refreshList();
 }
 
+/** Length of the front matter block at the start of `text`, 0 if there is none. */
+function frontMatterLength(text: string): number {
+  const match = /^\uFEFF?---\r?\n(?:.*\r?\n)*?---[ \t]*(?:\r?\n|$)/.exec(text);
+  return match ? match[0].length : 0;
+}
+
+/**
+ * Takes in what a save wrote. The core adds or updates front matter, so the
+ * text on disk can differ from what was sent. The editor shows it only if
+ * nothing was typed since the save started, so no keystroke is lost; the
+ * cursor moves with the front matter. Otherwise the next save carries the new
+ * typing and the core keeps the note's id and keys.
+ */
+function applySaved(
+  note: { hash: string; savedText: string },
+  sent: string,
+  saved: SavedNote,
+): void {
+  note.hash = saved.hash;
+  note.savedText = saved.text;
+  if (note !== current || ui.text.value !== sent || saved.text === sent) return;
+  const shift = frontMatterLength(saved.text) - frontMatterLength(sent);
+  const moved = (at: number): number => (at >= frontMatterLength(sent) ? at + shift : at);
+  const { selectionStart, selectionEnd } = ui.text;
+  ui.text.value = saved.text;
+  ui.text.setSelectionRange(moved(selectionStart), moved(selectionEnd));
+}
+
 async function save(): Promise<void> {
   if (!current || !isDirty() || conflictHash !== undefined) return;
   const note = current;
   const text = ui.text.value;
   try {
-    note.hash = await invoke<string>("save_note", {
+    const saved = await invoke<SavedNote>("save_note", {
       path: note.path,
       text,
       expectedHash: note.hash,
     });
-    note.savedText = text;
+    applySaved(note, text, saved);
     setStatus(`Saved ${new Date().toLocaleTimeString()}`);
   } catch (e) {
     const err = asError(e);
@@ -275,12 +308,11 @@ ui.keepMine.addEventListener("click", () => {
   const text = ui.text.value;
   const write =
     conflictHash === null || conflictHash === undefined
-      ? invoke<string>("create_note", { path: note.path, text })
-      : invoke<string>("save_note", { path: note.path, text, expectedHash: conflictHash });
+      ? invoke<SavedNote>("create_note", { path: note.path, text })
+      : invoke<SavedNote>("save_note", { path: note.path, text, expectedHash: conflictHash });
   write
-    .then((hash) => {
-      note.hash = hash;
-      note.savedText = text;
+    .then((saved) => {
+      applySaved(note, text, saved);
       hideConflict();
       setStatus("Saved your version.");
     })
@@ -362,11 +394,12 @@ ui.newNote.addEventListener("click", () => {
   const path = `Note ${stamp}.md`;
   const text = "# New note\n\n";
   void flushSave()
-    .then(() => invoke<string>("create_note", { path, text }))
-    .then((hash) => {
-      load({ path, text, hash, conflicts: [], conflictsError: null });
+    .then(() => invoke<SavedNote>("create_note", { path, text }))
+    .then((saved) => {
+      load({ path, ...saved, conflicts: [], conflictsError: null });
       showView("editor");
       ui.text.focus();
+      ui.text.setSelectionRange(saved.text.length, saved.text.length);
     })
     .catch((e: unknown) => {
       setStatus(asError(e).message);

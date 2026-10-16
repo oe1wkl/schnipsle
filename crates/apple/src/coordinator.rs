@@ -147,17 +147,18 @@ mod tests {
     #[test]
     fn vault_roundtrip_through_nsfilecoordinator() {
         let (dir, vault) = temp_vault();
-        let h1 = vault.create_note("a/n.md", "# One\n").unwrap();
+        let h1 = vault.create_note("a/n.md", "# One\n").unwrap().hash;
         let note = vault.read_note("a/n.md").unwrap();
         assert_eq!(
-            (note.text.as_str(), note.hash.as_str()),
+            (
+                schnipsle_core::front_matter::body(&note.text),
+                note.hash.as_str()
+            ),
             ("# One\n", h1.as_str())
         );
         vault.write_note("a/n.md", "# Two\n", &h1).unwrap();
-        assert_eq!(
-            fs::read_to_string(dir.path().join("a/n.md")).unwrap(),
-            "# Two\n"
-        );
+        let on_disk = fs::read_to_string(dir.path().join("a/n.md")).unwrap();
+        assert_eq!(schnipsle_core::front_matter::body(&on_disk), "# Two\n");
         let titles: Vec<_> = vault
             .list_notes()
             .unwrap()
@@ -170,7 +171,7 @@ mod tests {
     #[test]
     fn conflict_is_still_detected() {
         let (dir, vault) = temp_vault();
-        let h = vault.create_note("n.md", "one").unwrap();
+        let h = vault.create_note("n.md", "one").unwrap().hash;
         fs::write(dir.path().join("n.md"), "changed elsewhere").unwrap();
         assert!(matches!(
             vault.write_note("n.md", "mine", &h),

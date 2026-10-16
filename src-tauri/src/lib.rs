@@ -10,7 +10,7 @@ mod watching;
 
 use std::sync::Mutex;
 
-use schnipsle_core::{NoteContent, NoteEntry, Tag, Vault, VaultError};
+use schnipsle_core::{NoteContent, NoteEntry, SavedNote, Tag, Vault, VaultError};
 use serde::Serialize;
 use tauri::State;
 
@@ -159,21 +159,26 @@ async fn read_note(state: State<'_, AppState>, path: String) -> CmdResult<NoteCo
     with_vault(&state, |v| Ok(v.read_note(&path)?))
 }
 
-/// Saves a note if it still has the content with `expected_hash`; returns the new hash.
+/// Saves a note if it still has the content with `expected_hash`; returns the
+/// text now on disk (with the front matter the core maintains) and its hash.
 #[tauri::command]
 async fn save_note(
     state: State<'_, AppState>,
     path: String,
     text: String,
     expected_hash: String,
-) -> CmdResult<String> {
+) -> CmdResult<SavedNote> {
     with_vault(&state, |v| {
         Ok(v.write_note(&path, &text, &expected_hash)?)
     })
 }
 
 #[tauri::command]
-async fn create_note(state: State<'_, AppState>, path: String, text: String) -> CmdResult<String> {
+async fn create_note(
+    state: State<'_, AppState>,
+    path: String,
+    text: String,
+) -> CmdResult<SavedNote> {
     with_vault(&state, |v| Ok(v.create_note(&path, &text)?))
 }
 

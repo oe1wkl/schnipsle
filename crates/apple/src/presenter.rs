@@ -208,7 +208,7 @@ mod tests {
         let (tx, rx) = mpsc::channel();
         let _presenter = VaultPresenter::start(dir.path(), tx).unwrap();
 
-        let hash = other.create_note("from-icloud.md", "one").unwrap();
+        let hash = other.create_note("from-icloud.md", "one").unwrap().hash;
         wait_for(&other, &rx, "from-icloud.md");
         other.write_note("from-icloud.md", "two", &hash).unwrap();
         wait_for(&other, &rx, "from-icloud.md");

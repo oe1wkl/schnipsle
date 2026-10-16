@@ -39,7 +39,7 @@ Editor:
 
 - [ ] CodeMirror 6 with inline live preview and a source-mode toggle (ADR-0007)
 - [ ] Note list with titles per format.md §5.2, sorting, new/rename/delete (delete → trash, format.md §8)
-- [ ] Front matter (`id`, `created`, `modified`) written on first save (format.md §4); so far written when a sync conflict is resolved, ordinary saves do not maintain it yet
+- [x] Front matter (`id`, `created`, `modified`) written on first save (format.md §4), `modified` updated on each change
 - [ ] Images: paste/drag-drop/picker → `attachments/` by SHA-256 (format.md §6), relative links
 - [ ] Autosave with history snapshots (format.md §7, ADR-0011); the snapshot writer exists and is used for sync conflicts, autosave snapshots and retention are still open
 - [ ] Phone layout: list and editor as separate views
