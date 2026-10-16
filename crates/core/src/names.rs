@@ -57,7 +57,7 @@ fn matches_stem(file_stem: &str, stem: &str) -> bool {
 }
 
 /// `folder/stem.md`, or `folder/stem-n.md` for `n` ≥ 2.
-fn candidate(folder: &str, stem: &str, n: u32) -> String {
+pub(crate) fn candidate(folder: &str, stem: &str, n: u32) -> String {
     let name = if n == 1 {
         format!("{stem}.md")
     } else {

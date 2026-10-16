@@ -23,6 +23,17 @@ interface FolderSetup {
   /** Items only in iCloud; their download was requested. */
   notDownloaded: string[];
 }
+/** Notes outside notes/, e.g. from an older build (schnipsle-core `StrayNotes`). */
+interface StrayNotes {
+  items: string[];
+  notes: number;
+  notDownloaded: string[];
+}
+/** What moving them did (schnipsle-core `MovedNotes`). */
+interface MovedNotes {
+  moved: string[];
+  skipped: string[];
+}
 /** Result of picking or restoring a folder (src-tauri `Opened`). */
 type Opened = ({ kind: "vault" } & VaultInfo) | ({ kind: "setup" } & FolderSetup);
 interface NoteEntry {
@@ -120,6 +131,11 @@ const ui = {
   setupCancel: el("setup-cancel") as HTMLButtonElement,
   setupDetails: el("setup-details") as HTMLDetailsElement,
   setupItems: el("setup-items") as HTMLUListElement,
+  strays: el("strays"),
+  straysText: el("strays-text"),
+  straysMove: el("strays-move") as HTMLButtonElement,
+  straysLater: el("strays-later") as HTMLButtonElement,
+  straysItems: el("strays-items") as HTMLUListElement,
   readOnly: el("read-only"),
   readOnlyText: el("read-only-text"),
 };
@@ -139,6 +155,9 @@ let saveTimer: number | undefined;
 let saving: Promise<void> = Promise.resolve();
 /** Why the open vault is read-only; `null` if it is writable or none is open. */
 let readOnly: string | null = null;
+/** The notes outside notes/ last shown, and those the user said "Not now" to. */
+let straysShown = "";
+let straysDismissed = "";
 
 const editor = createEditor(ui.editorHost, {
   onChange: () => {
@@ -170,6 +189,8 @@ function vaultOpened(info: VaultInfo): void {
   ui.vaultName.textContent = info.name;
   ui.vaultHint.textContent = info.path;
   readOnly = info.readOnly;
+  straysDismissed = "";
+  ui.strays.hidden = true;
   ui.readOnly.hidden = readOnly === null;
   ui.readOnlyText.textContent = readOnly ?? "";
   ui.newNote.disabled = readOnly !== null;
@@ -247,6 +268,44 @@ async function refreshList(): Promise<void> {
   );
   ui.empty.hidden = entries.length > 0;
   if (entries.length === 0) ui.empty.textContent = "No notes in this folder yet. Tap New.";
+  await checkStrays();
+}
+
+/**
+ * Offers to move notes that are outside notes/ and therefore not listed, e.g.
+ * written by an older build on another device (format.md §1).
+ */
+async function checkStrays(): Promise<void> {
+  let strays: StrayNotes;
+  try {
+    strays = await invoke<StrayNotes>("stray_notes");
+  } catch {
+    return; // the list itself is shown; this is only a hint
+  }
+  const all = [...strays.items, ...strays.notDownloaded.map((n) => `${n} (in iCloud only)`)];
+  straysShown = all.join("\n");
+  if (all.length === 0 || readOnly !== null || straysShown === straysDismissed) {
+    ui.strays.hidden = true;
+    return;
+  }
+  const count = strays.notes + strays.notDownloaded.length;
+  let text =
+    `${count === 1 ? "1 note is" : `${String(count)} notes are`} outside the “notes” folder ` +
+    `of this vault, so ${count === 1 ? "it is" : "they are"} not listed. An older version of ` +
+    `Schnipsle on another device may have saved them there.`;
+  if (strays.notDownloaded.length > 0) {
+    text += ` Some are still in iCloud only; they are moved once they are downloaded.`;
+  }
+  ui.straysText.textContent = text;
+  ui.straysItems.replaceChildren(
+    ...all.map((name) => {
+      const item = document.createElement("li");
+      item.textContent = name;
+      return item;
+    }),
+  );
+  ui.straysMove.disabled = strays.items.length === 0;
+  ui.strays.hidden = false;
 }
 
 async function showTrashList(): Promise<void> {
@@ -652,6 +711,29 @@ ui.setupCreate.addEventListener("click", () => {
     .finally(() => {
       ui.setupCreate.disabled = false;
     });
+});
+
+ui.straysMove.addEventListener("click", () => {
+  ui.straysMove.disabled = true;
+  invoke<MovedNotes>("move_stray_notes")
+    .then(async (result) => {
+      const n = result.moved.length;
+      let message = `Moved ${n === 1 ? "1 item" : `${String(n)} items`} into “notes”.`;
+      if (result.skipped.length > 0) {
+        message += ` Not moved: ${result.skipped.join(", ")} (name taken or not downloaded yet).`;
+      }
+      setStatus(message);
+      await refreshList();
+    })
+    .catch((e: unknown) => {
+      setStatus(`Not moved: ${asError(e).message}`);
+      ui.straysMove.disabled = false;
+    });
+});
+
+ui.straysLater.addEventListener("click", () => {
+  straysDismissed = straysShown;
+  ui.strays.hidden = true;
 });
 
 ui.setupCancel.addEventListener("click", () => {

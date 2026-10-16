@@ -79,7 +79,7 @@ A vault is an ordinary folder chosen by the user; each note is one `.md` file wi
 # per device, outside the vault: index.sqlite (ADR-0009)
 ```
 
-- A folder without `.notesapp/vault.yaml` is not a vault. When the user picks one, the app asks first, then moves everything visible in it into `notes/` (so relative links keep working) and writes `vault.yaml` last; hidden files stay, nothing is replaced, and an interrupted move is offered again. A vault of a newer format, or with a damaged `vault.yaml`, opens read-only (format.md §2).
+- A folder without `.notesapp/vault.yaml` is not a vault. When the user picks one, the app asks first, then moves everything visible in it into `notes/` (so relative links keep working) and writes `vault.yaml` last; hidden files stay, nothing is replaced, and an interrupted move is offered again. A vault of a newer format, or with a damaged `vault.yaml`, opens read-only (format.md §2). Notes that turn up outside `notes/` later (e.g. from an older build) are not listed; the app offers to move them in.
 - Identity is a ULID in front matter; file names are cosmetic.
 - Tags are inline only (format.md §5.3, ADR-0008); `#a/b` is hierarchical.
 - Writes are atomic and refuse to overwrite a note changed elsewhere (format.md §10).

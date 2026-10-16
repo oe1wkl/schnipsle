@@ -1,6 +1,6 @@
 # Roadmap and status
 
-- Updated: 2026-10-16
+- Updated: 2026-10-17
 - Current milestone: **M1 – Core editor** (M0 complete and merged)
 
 Each milestone ends in a usable build. Scope can move between milestones; the order should not.
@@ -39,7 +39,7 @@ Editor:
 
 - [ ] CodeMirror 6 with inline live preview and a source-mode toggle (ADR-0007): editor, source toggle and preview of headings, emphasis, inline code, links, lists, tasks and quotes done; images and tables still open; the editor makes the bundle ~530 kB, load it on demand later
 - [x] Vault layout (format.md §1–2): `.notesapp/vault.yaml` identifies a vault, notes live in `notes/`; a folder without `vault.yaml` is converted only after asking (its contents move into `notes/`); newer or damaged `vault.yaml` opens read-only
-- [ ] Notes left outside `notes/` (e.g. created by an older build on another device after the conversion) are not listed; detect them and offer to move them in
+- [x] Notes left outside `notes/` (e.g. created by an older build on another device after the conversion) are detected, and the app offers to move them in
 - [x] Note list with titles per format.md §5.2, sorting, new/rename/delete (delete → trash, format.md §8); rename follows the title when you leave a note, Trash view with restore
 - [x] Front matter (`id`, `created`, `modified`) written on first save (format.md §4), `modified` updated on each change
 - [ ] Images: paste/drag-drop/picker → `attachments/` by SHA-256 (format.md §6), relative links

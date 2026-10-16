@@ -12,6 +12,7 @@ pub mod history;
 pub mod layout;
 pub mod names;
 pub mod stamp;
+pub mod strays;
 pub mod tags;
 pub mod trash;
 pub mod vault;
@@ -21,6 +22,7 @@ pub use conflicts::{ConflictVersion, NoSyncConflicts, RawVersion, SyncConflicts}
 pub use coordination::{Coordinator, Uncoordinated};
 pub use layout::{Folder, VaultIdentity, inspect};
 pub use names::{NewNote, slug};
+pub use strays::{MovedNotes, StrayNotes};
 pub use tags::{Tag, extract_tags};
 pub use trash::TrashedNote;
 pub use vault::{NoteContent, NoteEntry, PathKind, SavedNote, SortOrder, Vault, VaultError};
