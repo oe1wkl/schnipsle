@@ -7,8 +7,8 @@ use std::io;
 use std::path::Path;
 
 use objc2_foundation::{
-    NSArray, NSFileVersion, NSNumber, NSURL, NSURLIsUbiquitousItemKey,
-    NSURLUbiquitousItemHasUnresolvedConflictsKey,
+    NSArray, NSFileVersion, NSNumber, NSString, NSURL, NSURLIsUbiquitousItemKey,
+    NSURLUbiquitousItemDownloadingStatusKey, NSURLUbiquitousItemHasUnresolvedConflictsKey,
 };
 use schnipsle_core::{RawVersion, SyncConflicts};
 
@@ -30,8 +30,9 @@ impl SyncConflicts for ICloudVersions {
         let flags = ICloudFlags::of(&url);
         if cfg!(debug_assertions) && flags.ubiquitous == Some(true) {
             eprintln!(
-                "[schnipsle] {}: hasUnresolvedConflicts={:?}, conflict versions listed={listed}",
+                "[schnipsle] read {}: downloadingStatus={}, hasUnresolvedConflicts={:?}, conflict versions listed={listed}",
                 file.display(),
+                flags.downloading_status.as_deref().unwrap_or("?"),
                 flags.unresolved_conflicts,
             );
         }
@@ -84,6 +85,9 @@ impl SyncConflicts for ICloudVersions {
 struct ICloudFlags {
     ubiquitous: Option<bool>,
     unresolved_conflicts: Option<bool>,
+    /// `…Current` when this device has the newest version, `…Downloaded` when a
+    /// newer one exists in iCloud, `…NotDownloaded` for a placeholder.
+    downloading_status: Option<String>,
 }
 
 impl ICloudFlags {
@@ -92,11 +96,14 @@ impl ICloudFlags {
         let ubiquitous_key = unsafe { NSURLIsUbiquitousItemKey };
         // SAFETY: as above.
         let conflicts_key = unsafe { NSURLUbiquitousItemHasUnresolvedConflictsKey };
-        let keys = NSArray::from_slice(&[ubiquitous_key, conflicts_key]);
+        // SAFETY: as above.
+        let status_key = unsafe { NSURLUbiquitousItemDownloadingStatusKey };
+        let keys = NSArray::from_slice(&[ubiquitous_key, conflicts_key, status_key]);
         let Ok(values) = url.resourceValuesForKeys_error(&keys) else {
             return Self {
                 ubiquitous: None,
                 unresolved_conflicts: None,
+                downloading_status: None,
             };
         };
         let flag = |key| {
@@ -108,6 +115,10 @@ impl ICloudFlags {
         Self {
             ubiquitous: flag(ubiquitous_key),
             unresolved_conflicts: flag(conflicts_key),
+            downloading_status: values
+                .objectForKey(status_key)
+                .and_then(|value| value.downcast::<NSString>().ok())
+                .map(|status| status.to_string()),
         }
     }
 }

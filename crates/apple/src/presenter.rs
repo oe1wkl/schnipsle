@@ -23,13 +23,21 @@ struct Ivars {
 }
 
 impl Ivars {
-    fn report(&self, url: &NSURL) {
-        let hint = url.to_file_path().map_or(Hint::Rescan, Hint::Path);
+    /// `callback` names the presenter method, for the debug log.
+    fn report(&self, callback: &str, url: &NSURL) {
+        let path = url.to_file_path();
+        if cfg!(debug_assertions) {
+            eprintln!("[schnipsle] presenter {callback}: {path:?}");
+        }
+        let hint = path.map_or(Hint::Rescan, Hint::Path);
         // A send fails only once the dispatcher has stopped; nothing to do then.
         let _ = self.hints.send(hint);
     }
 
-    fn rescan(&self) {
+    fn rescan(&self, callback: &str) {
+        if cfg!(debug_assertions) {
+            eprintln!("[schnipsle] presenter {callback}");
+        }
         let _ = self.hints.send(Hint::Rescan);
     }
 }
@@ -60,23 +68,23 @@ define_class!(
 
         #[unsafe(method(presentedSubitemDidChangeAtURL:))]
         fn subitem_did_change(&self, url: &NSURL) {
-            self.ivars().report(url);
+            self.ivars().report("didChange", url);
         }
 
         #[unsafe(method(presentedSubitemDidAppearAtURL:))]
         fn subitem_did_appear(&self, url: &NSURL) {
-            self.ivars().report(url);
+            self.ivars().report("didAppear", url);
         }
 
         #[unsafe(method(presentedSubitemAtURL:didMoveToURL:))]
         fn subitem_did_move(&self, old_url: &NSURL, new_url: &NSURL) {
-            self.ivars().report(old_url);
-            self.ivars().report(new_url);
+            self.ivars().report("didMove from", old_url);
+            self.ivars().report("didMove to", new_url);
         }
 
         #[unsafe(method(accommodatePresentedSubitemDeletionAtURL:completionHandler:))]
         fn accommodate_subitem_deletion(&self, url: &NSURL, done: &DynBlock<dyn Fn(*mut NSError)>) {
-            self.ivars().report(url);
+            self.ivars().report("accommodateDeletion", url);
             done.call((ptr::null_mut(),));
         }
 
@@ -84,27 +92,27 @@ define_class!(
         // not change at all on the device whose text was kept.
         #[unsafe(method(presentedSubitemAtURL:didGainVersion:))]
         fn subitem_did_gain_version(&self, url: &NSURL, _version: &NSFileVersion) {
-            self.ivars().report(url);
+            self.ivars().report("didGainVersion", url);
         }
 
         #[unsafe(method(presentedSubitemAtURL:didLoseVersion:))]
         fn subitem_did_lose_version(&self, url: &NSURL, _version: &NSFileVersion) {
-            self.ivars().report(url);
+            self.ivars().report("didLoseVersion", url);
         }
 
         #[unsafe(method(presentedSubitemAtURL:didResolveConflictVersion:))]
         fn subitem_did_resolve_conflict_version(&self, url: &NSURL, _version: &NSFileVersion) {
-            self.ivars().report(url);
+            self.ivars().report("didResolveConflictVersion", url);
         }
 
         #[unsafe(method(presentedItemDidChange))]
         fn item_did_change(&self) {
-            self.ivars().rescan();
+            self.ivars().rescan("presentedItemDidChange");
         }
 
         #[unsafe(method(presentedItemDidMoveToURL:))]
         fn item_did_move(&self, _new_url: &NSURL) {
-            self.ivars().rescan();
+            self.ivars().rescan("presentedItemDidMove");
         }
     }
 );
@@ -149,6 +157,9 @@ impl VaultPresenter {
         // set; NSObject's `init` takes no arguments and returns the same object.
         let presenter: Retained<Presenter> = unsafe { msg_send![super(presenter), init] };
         NSFileCoordinator::addFilePresenter(ProtocolObject::from_ref(&*presenter));
+        if cfg!(debug_assertions) {
+            eprintln!("[schnipsle] presenter registered for {}", root.display());
+        }
         Ok(Self { presenter })
     }
 }
