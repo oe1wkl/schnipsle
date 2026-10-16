@@ -21,6 +21,7 @@ objc2-foundation = { version = "0.3", default-features = false, features = [
   "block2",
   "NSArray",
   "NSDate",
+  "NSDictionary",
   "NSEnumerator",
   "NSError",
   "NSFileCoordinator",
@@ -29,6 +30,7 @@ objc2-foundation = { version = "0.3", default-features = false, features = [
   "NSOperation",
   "NSString",
   "NSURL",
+  "NSValue",
 ] }
 
 [dev-dependencies]

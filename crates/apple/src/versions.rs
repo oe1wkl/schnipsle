@@ -6,7 +6,10 @@ use std::fs;
 use std::io;
 use std::path::Path;
 
-use objc2_foundation::NSFileVersion;
+use objc2_foundation::{
+    NSArray, NSFileVersion, NSNumber, NSURL, NSURLIsUbiquitousItemKey,
+    NSURLUbiquitousItemHasUnresolvedConflictsKey,
+};
 use schnipsle_core::{RawVersion, SyncConflicts};
 
 use crate::coordinator::file_url;
@@ -22,7 +25,23 @@ pub struct ICloudVersions;
 impl SyncConflicts for ICloudVersions {
     fn versions(&self, file: &Path) -> io::Result<Vec<RawVersion>> {
         let url = file_url(file)?;
-        let Some(versions) = NSFileVersion::unresolvedConflictVersionsOfItemAtURL(&url) else {
+        let versions = NSFileVersion::unresolvedConflictVersionsOfItemAtURL(&url);
+        let listed = versions.as_ref().map_or(0, |v| v.count());
+        let flags = ICloudFlags::of(&url);
+        if cfg!(debug_assertions) && flags.ubiquitous == Some(true) {
+            eprintln!(
+                "[schnipsle] {}: hasUnresolvedConflicts={:?}, conflict versions listed={listed}",
+                file.display(),
+                flags.unresolved_conflicts,
+            );
+        }
+        // Never stay silent about a conflict we cannot show (spike test C7).
+        if flags.unresolved_conflicts == Some(true) && listed == 0 {
+            return Err(io::Error::other(
+                "iCloud reports a conflict for this note but does not list its versions",
+            ));
+        }
+        let Some(versions) = versions else {
             return Ok(Vec::new());
         };
         versions
@@ -58,6 +77,38 @@ impl SyncConflicts for ICloudVersions {
             }
         }
         Ok(resolved)
+    }
+}
+
+/// What iCloud says about a file; `None` where it does not say.
+struct ICloudFlags {
+    ubiquitous: Option<bool>,
+    unresolved_conflicts: Option<bool>,
+}
+
+impl ICloudFlags {
+    fn of(url: &NSURL) -> Self {
+        // SAFETY: a constant exported by Foundation, valid for the whole process.
+        let ubiquitous_key = unsafe { NSURLIsUbiquitousItemKey };
+        // SAFETY: as above.
+        let conflicts_key = unsafe { NSURLUbiquitousItemHasUnresolvedConflictsKey };
+        let keys = NSArray::from_slice(&[ubiquitous_key, conflicts_key]);
+        let Ok(values) = url.resourceValuesForKeys_error(&keys) else {
+            return Self {
+                ubiquitous: None,
+                unresolved_conflicts: None,
+            };
+        };
+        let flag = |key| {
+            values
+                .objectForKey(key)
+                .and_then(|value| value.downcast::<NSNumber>().ok())
+                .map(|number| number.boolValue())
+        };
+        Self {
+            ubiquitous: flag(ubiquitous_key),
+            unresolved_conflicts: flag(conflicts_key),
+        }
     }
 }
 
