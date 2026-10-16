@@ -1,0 +1,50 @@
+[package]
+name = "schnipsle-apple"
+description = "Apple platform services: file coordination, presenter and iCloud versions through objc2 (ADR-0015)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[dependencies]
+schnipsle-core.workspace = true
+
+# Empty crate on every other platform, so the workspace builds everywhere.
+[target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
+block2 = "0.6"
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", default-features = false, features = [
+  "std",
+  "block2",
+  "NSArray",
+  "NSDate",
+  "NSDictionary",
+  "NSEnumerator",
+  "NSError",
+  "NSFileCoordinator",
+  "NSFilePresenter",
+  "NSFileVersion",
+  "NSOperation",
+  "NSString",
+  "NSURL",
+  "NSValue",
+] }
+
+[dev-dependencies]
+tempfile.workspace = true
+
+# Not `workspace = true`: the workspace forbids `unsafe`, but calling Objective-C
+# needs it (ADR-0015). Stricter rules than elsewhere make up for it.
+[lints.rust]
+missing_docs = "warn"
+unsafe_op_in_unsafe_fn = "deny"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+module_name_repetitions = "allow"
+undocumented_unsafe_blocks = "deny"
+multiple_unsafe_ops_per_block = "deny"

@@ -24,6 +24,17 @@
       <button id="keep-mine" type="button">Keep mine</button>
     </div>
 
+    <div id="sync-conflict" class="banner" role="alert" hidden>
+      <span id="sync-conflict-text"></span>
+      <button id="sync-keep-mine" type="button">Keep this version</button>
+      <button id="sync-use-other" type="button">Use other version</button>
+      <button id="sync-keep-both" type="button" hidden>Keep both as separate notes</button>
+      <details>
+        <summary>Show the other version</summary>
+        <textarea id="sync-other" readonly rows="8"></textarea>
+      </details>
+    </div>
+
     <main class="layout" data-view="list">
       <nav class="list" aria-label="Notes">
         <p id="empty" class="muted">

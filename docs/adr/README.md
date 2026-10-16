@@ -28,3 +28,4 @@ This folder records every significant architectural decision of the project, one
 | [0012](0012-import-pipeline.md) | Import through adapters and a common pipeline | Accepted | 2026-10-13 |
 | [0013](0013-music-notation-abc.md) | Music notation as ABC in fenced code blocks | Accepted | 2026-10-14 |
 | [0014](0014-lyrics-with-chords-chordpro.md) | Lyrics with chords as ChordPro in fenced code blocks | Accepted | 2026-10-14 |
+| [0015](0015-apple-file-coordination-objc2.md) | Apple file coordination in a Rust crate using objc2 | Accepted | 2026-10-15 |

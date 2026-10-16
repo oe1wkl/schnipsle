@@ -91,13 +91,14 @@ Three layers: a thin UI, a Rust core that owns all file access and logic, and st
 UI (TypeScript, CodeMirror 6, WebView)
    │  Tauri commands and events
 App shell (src-tauri, Tauri 2)  ── platform glue: dialog plugin (desktop),
-   │                                tauri-plugin-vault-access (iOS, Swift)
+   │                                tauri-plugin-vault-access (iOS, Swift),
+   │                                schnipsle-apple (file coordination and presenter, ADR-0015)
 Core (Rust crates: core, import, export)
    │
 Vault on disk (source of truth)      Index cache (SQLite FTS5, per device)
 ```
 
-The UI never touches files. Platform specifics (folder access, file coordination, export engines) sit behind Rust traits or app commands.
+The UI never touches files. Platform specifics (folder access, file coordination, export engines) sit behind Rust traits or app commands; file coordination, for example, is the core's `Coordinator` trait, implemented for Apple platforms in `schnipsle-apple`.
 
 ## 5. Technology
 

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
-// iOS spike UI: open a vault folder, list notes, edit with autosave, detect
-// changes made elsewhere (other device, other editor) and resolve conflicts.
+// iOS spike UI: open a vault folder, list notes, edit with autosave, react to
+// changes made elsewhere (`vault-changed` events, ADR-0015) and resolve conflicts.
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
@@ -14,14 +14,35 @@ interface NoteEntry {
   modifiedMs: number;
   available: boolean;
 }
+/** A version a sync service kept because it conflicts (schnipsle-core `ConflictVersion`). */
+interface ConflictVersion {
+  text: string;
+  hash: string;
+  modifiedMs: number;
+  device: string | null;
+  /** Set for another file with the same id, e.g. iCloud's copy `Name 2.md`. */
+  copyPath: string | null;
+}
 interface NoteContent {
   path: string;
   text: string;
   hash: string;
+  conflicts: ConflictVersion[];
+  conflictsError: string | null;
 }
 interface Tag {
   name: string;
   key: string;
+}
+/** Payload of the `vault-changed` event (schnipsle-core `VaultChanges`). */
+interface VaultChanges {
+  paths: string[];
+  rescan: boolean;
+}
+/** What a save wrote: the text on disk, with the front matter the core maintains. */
+interface SavedNote {
+  text: string;
+  hash: string;
 }
 interface CommandError {
   kind: string;
@@ -30,7 +51,6 @@ interface CommandError {
 }
 
 const AUTOSAVE_MS = 1000;
-const POLL_MS = 3000;
 
 function el(id: string): HTMLElement {
   const found = document.getElementById(id);
@@ -53,11 +73,18 @@ const ui = {
   conflict: el("conflict"),
   useTheirs: el("use-theirs") as HTMLButtonElement,
   keepMine: el("keep-mine") as HTMLButtonElement,
+  syncConflict: el("sync-conflict"),
+  syncConflictText: el("sync-conflict-text"),
+  syncOther: el("sync-other") as HTMLTextAreaElement,
+  syncKeepMine: el("sync-keep-mine") as HTMLButtonElement,
+  syncUseOther: el("sync-use-other") as HTMLButtonElement,
+  syncKeepBoth: el("sync-keep-both") as HTMLButtonElement,
 };
 
 /** The note in the editor. `savedText` is what is on disk (as far as we know). */
 let current: { path: string; hash: string; savedText: string } | null = null;
 let conflictHash: string | null | undefined; // set while the conflict banner shows
+let syncConflict: ConflictVersion | undefined; // shown in the sync conflict banner
 let entries: NoteEntry[] = [];
 let saveTimer: number | undefined;
 let saving: Promise<void> = Promise.resolve();
@@ -142,9 +169,42 @@ function load(content: NoteContent): void {
   ui.text.value = content.text;
   ui.text.disabled = false;
   hideConflict();
-  setStatus(`Opened ${content.path}`);
+  showSyncConflicts(content.conflicts);
+  setStatus(
+    content.conflictsError === null
+      ? `Opened ${content.path}`
+      : `Opened ${content.path}, but could not check for sync conflicts: ${content.conflictsError}`,
+  );
   void showTags();
   void refreshList();
+}
+
+/** Length of the front matter block at the start of `text`, 0 if there is none. */
+function frontMatterLength(text: string): number {
+  const match = /^\uFEFF?---\r?\n(?:.*\r?\n)*?---[ \t]*(?:\r?\n|$)/.exec(text);
+  return match ? match[0].length : 0;
+}
+
+/**
+ * Takes in what a save wrote. The core adds or updates front matter, so the
+ * text on disk can differ from what was sent. The editor shows it only if
+ * nothing was typed since the save started, so no keystroke is lost; the
+ * cursor moves with the front matter. Otherwise the next save carries the new
+ * typing and the core keeps the note's id and keys.
+ */
+function applySaved(
+  note: { hash: string; savedText: string },
+  sent: string,
+  saved: SavedNote,
+): void {
+  note.hash = saved.hash;
+  note.savedText = saved.text;
+  if (note !== current || ui.text.value !== sent || saved.text === sent) return;
+  const shift = frontMatterLength(saved.text) - frontMatterLength(sent);
+  const moved = (at: number): number => (at >= frontMatterLength(sent) ? at + shift : at);
+  const { selectionStart, selectionEnd } = ui.text;
+  ui.text.value = saved.text;
+  ui.text.setSelectionRange(moved(selectionStart), moved(selectionEnd));
 }
 
 async function save(): Promise<void> {
@@ -152,12 +212,12 @@ async function save(): Promise<void> {
   const note = current;
   const text = ui.text.value;
   try {
-    note.hash = await invoke<string>("save_note", {
+    const saved = await invoke<SavedNote>("save_note", {
       path: note.path,
       text,
       expectedHash: note.hash,
     });
-    note.savedText = text;
+    applySaved(note, text, saved);
     setStatus(`Saved ${new Date().toLocaleTimeString()}`);
   } catch (e) {
     const err = asError(e);
@@ -195,6 +255,63 @@ function hideConflict(): void {
   ui.conflict.hidden = true;
 }
 
+/** Shows the first conflict version a sync service kept for the open note, if any. */
+function showSyncConflicts(conflicts: ConflictVersion[]): void {
+  syncConflict = conflicts[0];
+  ui.syncConflict.hidden = syncConflict === undefined;
+  if (!syncConflict) return;
+  const when = new Date(syncConflict.modifiedMs).toLocaleString();
+  const more = conflicts.length > 1 ? ` (1 of ${String(conflicts.length)})` : "";
+  ui.syncConflictText.textContent =
+    syncConflict.copyPath === null
+      ? `${syncConflict.device ?? "Another device"} saved a different version at ${when}${more}.`
+      : `“${syncConflict.copyPath}” is a copy of this note with different text (saved ${when})${more}.`;
+  ui.syncKeepBoth.hidden = syncConflict.copyPath === null;
+  ui.syncOther.value = syncConflict.text;
+}
+
+/** Keeps `text` as the note; every other version goes into the note's history. */
+function resolveSyncConflict(pick: "mine" | "other"): void {
+  saving = saving.then(save).then(async () => {
+    if (!current || !syncConflict) return;
+    const text = pick === "mine" ? ui.text.value : syncConflict.text;
+    try {
+      const content = await invoke<NoteContent>("resolve_conflict", {
+        path: current.path,
+        text,
+        expectedHash: current.hash,
+      });
+      load(content);
+      setStatus("Conflict resolved – the other version is kept in the note's history.");
+      await refreshList();
+    } catch (e) {
+      const err = asError(e);
+      setStatus(`Not resolved: ${err.message}`);
+      if (err.kind === "conflict") queueCheck();
+    }
+  });
+}
+
+ui.syncKeepMine.addEventListener("click", () => {
+  resolveSyncConflict("mine");
+});
+ui.syncUseOther.addEventListener("click", () => {
+  resolveSyncConflict("other");
+});
+ui.syncKeepBoth.addEventListener("click", () => {
+  saving = saving.then(save).then(async () => {
+    const copyPath = syncConflict?.copyPath;
+    if (!current || !copyPath) return;
+    try {
+      load(await invoke<NoteContent>("keep_both", { path: current.path, copyPath }));
+      setStatus(`Kept both: “${copyPath}” is now a separate note.`);
+      await refreshList();
+    } catch (e) {
+      setStatus(`Not changed: ${asError(e).message}`);
+    }
+  });
+});
+
 ui.useTheirs.addEventListener("click", () => {
   if (!current) return;
   const path = current.path;
@@ -211,12 +328,11 @@ ui.keepMine.addEventListener("click", () => {
   const text = ui.text.value;
   const write =
     conflictHash === null || conflictHash === undefined
-      ? invoke<string>("create_note", { path: note.path, text })
-      : invoke<string>("save_note", { path: note.path, text, expectedHash: conflictHash });
+      ? invoke<SavedNote>("create_note", { path: note.path, text })
+      : invoke<SavedNote>("save_note", { path: note.path, text, expectedHash: conflictHash });
   write
-    .then((hash) => {
-      note.hash = hash;
-      note.savedText = text;
+    .then((saved) => {
+      applySaved(note, text, saved);
       hideConflict();
       setStatus("Saved your version.");
     })
@@ -225,13 +341,18 @@ ui.keepMine.addEventListener("click", () => {
     });
 });
 
-/** Picks up changes made on other devices or in other editors. */
-async function poll(): Promise<void> {
+/**
+ * Picks up changes made on other devices or in other editors. `changes` comes
+ * from a `vault-changed` event; without it (the app became visible again, and
+ * events may have been missed) the open note is always re-checked.
+ */
+async function checkForChanges(changes?: VaultChanges): Promise<void> {
   if (ui.newNote.disabled) return; // no vault open
   try {
     await refreshList();
     if (!current || conflictHash !== undefined) return;
     const path = current.path;
+    if (changes && !changes.rescan && !changes.paths.includes(path)) return;
     const onDisk = entries.find((n) => n.path === path);
     if (!onDisk) {
       setStatus("This note was deleted or moved elsewhere.");
@@ -239,7 +360,14 @@ async function poll(): Promise<void> {
     }
     if (!onDisk.available) return;
     const content = await invoke<NoteContent>("read_note", { path });
+    showSyncConflicts(content.conflicts);
     if (content.hash === current.hash) return;
+    if (content.text === ui.text.value) {
+      // Same text as in the editor: the echo of our own save, or an identical edit.
+      current.hash = content.hash;
+      current.savedText = content.text;
+      return;
+    }
     if (isDirty()) {
       showConflict(content.hash);
     } else {
@@ -286,11 +414,12 @@ ui.newNote.addEventListener("click", () => {
   const path = `Note ${stamp}.md`;
   const text = "# New note\n\n";
   void flushSave()
-    .then(() => invoke<string>("create_note", { path, text }))
-    .then((hash) => {
-      load({ path, text, hash });
+    .then(() => invoke<SavedNote>("create_note", { path, text }))
+    .then((saved) => {
+      load({ path, ...saved, conflicts: [], conflictsError: null });
       showView("editor");
       ui.text.focus();
+      ui.text.setSelectionRange(saved.text.length, saved.text.length);
     })
     .catch((e: unknown) => {
       setStatus(asError(e).message);
@@ -303,11 +432,19 @@ void listen<string>("menu", (event) => {
   else if (event.payload === "new-note" && !ui.newNote.disabled) ui.newNote.click();
 });
 
+/** Runs a check after any save in progress, so a save's own echo is not mistaken for a change. */
+function queueCheck(changes?: VaultChanges): void {
+  saving = saving.then(() => checkForChanges(changes));
+}
+
+void listen<VaultChanges>("vault-changed", (event) => {
+  queueCheck(event.payload);
+});
+
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible") void poll();
+  if (document.visibilityState === "visible") queueCheck();
   else void flushSave();
 });
-window.setInterval(() => void poll(), POLL_MS);
 
 invoke<VaultInfo | null>("restore_vault")
   .then(async (info) => {

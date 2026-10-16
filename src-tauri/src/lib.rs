@@ -6,17 +6,19 @@
 //! so they run off the main thread.
 
 mod vault_location;
+mod watching;
 
 use std::sync::Mutex;
 
-use schnipsle_core::{NoteContent, NoteEntry, Tag, Vault, VaultError};
+use schnipsle_core::{NoteContent, NoteEntry, SavedNote, Tag, Vault, VaultError};
 use serde::Serialize;
 use tauri::State;
 
-/// The currently opened vault, if any.
+/// The currently opened vault, if any, and the watch reporting its changes.
 #[derive(Default)]
 struct AppState {
     vault: Mutex<Option<Vault>>,
+    watch: Mutex<Option<watching::VaultWatch>>,
 }
 
 /// Error sent to the UI: a machine-readable `kind` plus a message.
@@ -50,6 +52,7 @@ impl From<VaultError> for CommandError {
             VaultError::AlreadyExists(_) => ("alreadyExists", None),
             VaultError::InvalidPath(_) => ("invalidPath", None),
             VaultError::NotADirectory(_) => ("notADirectory", None),
+            VaultError::InvalidId(_) => ("invalidId", None),
             VaultError::Io(_) => ("io", None),
         };
         Self {
@@ -69,8 +72,24 @@ struct VaultInfo {
     path: String,
 }
 
-fn open_and_remember(state: &AppState, path: &std::path::Path) -> CmdResult<VaultInfo> {
-    let vault = Vault::open(path)?;
+/// Opens a vault with the platform's file coordination (ADR-0015) and sync
+/// conflict versions (ADR-0006).
+fn open_vault(path: &std::path::Path) -> Result<Vault, VaultError> {
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    return Ok(
+        Vault::open_with(path, std::sync::Arc::new(schnipsle_apple::FileCoordinator))?
+            .with_sync_conflicts(std::sync::Arc::new(schnipsle_apple::ICloudVersions)),
+    );
+    #[cfg(not(any(target_os = "macos", target_os = "ios")))]
+    return Vault::open(path);
+}
+
+fn open_and_remember(
+    app: &tauri::AppHandle,
+    state: &AppState,
+    path: &std::path::Path,
+) -> CmdResult<VaultInfo> {
+    let vault = open_vault(path)?;
     let info = VaultInfo {
         name: path.file_name().map_or_else(
             || path.display().to_string(),
@@ -78,18 +97,32 @@ fn open_and_remember(state: &AppState, path: &std::path::Path) -> CmdResult<Vaul
         ),
         path: path.display().to_string(),
     };
+    // Stop watching the previous vault before the new one is reported.
+    let mut watch = state.watch.lock().map_err(CommandError::other)?;
+    *watch = None;
+    // Without events the UI still re-checks when it becomes visible, so a
+    // watch that fails to start must not keep the vault from opening.
+    *watch = watching::start(app, &vault)
+        .inspect_err(|e| eprintln!("vault changes will not be reported: {e}"))
+        .ok();
     *state.vault.lock().map_err(CommandError::other)? = Some(vault);
     Ok(info)
 }
 
 fn with_vault<T>(state: &AppState, f: impl FnOnce(&Vault) -> CmdResult<T>) -> CmdResult<T> {
-    let guard = state.vault.lock().map_err(CommandError::other)?;
-    let vault = guard.as_ref().ok_or_else(|| CommandError {
-        kind: "noVault",
-        message: "No vault folder is open".into(),
-        current_hash: None,
-    })?;
-    f(vault)
+    // Clone out of the lock: file coordination can wait for iCloud, and that
+    // must not hold up every other command.
+    let vault = state
+        .vault
+        .lock()
+        .map_err(CommandError::other)?
+        .clone()
+        .ok_or_else(|| CommandError {
+            kind: "noVault",
+            message: "No vault folder is open".into(),
+            current_hash: None,
+        })?;
+    f(&vault)
 }
 
 /// Lets the user pick a vault folder; `None` if cancelled.
@@ -99,7 +132,7 @@ async fn pick_vault(
     state: State<'_, AppState>,
 ) -> CmdResult<Option<VaultInfo>> {
     match vault_location::pick(&app)? {
-        Some(path) => open_and_remember(&state, &path).map(Some),
+        Some(path) => open_and_remember(&app, &state, &path).map(Some),
         None => Ok(None),
     }
 }
@@ -111,7 +144,7 @@ async fn restore_vault(
     state: State<'_, AppState>,
 ) -> CmdResult<Option<VaultInfo>> {
     match vault_location::restore(&app)? {
-        Some(path) => open_and_remember(&state, &path).map(Some),
+        Some(path) => open_and_remember(&app, &state, &path).map(Some),
         None => Ok(None),
     }
 }
@@ -126,22 +159,52 @@ async fn read_note(state: State<'_, AppState>, path: String) -> CmdResult<NoteCo
     with_vault(&state, |v| Ok(v.read_note(&path)?))
 }
 
-/// Saves a note if it still has the content with `expected_hash`; returns the new hash.
+/// Saves a note if it still has the content with `expected_hash`; returns the
+/// text now on disk (with the front matter the core maintains) and its hash.
 #[tauri::command]
 async fn save_note(
     state: State<'_, AppState>,
     path: String,
     text: String,
     expected_hash: String,
-) -> CmdResult<String> {
+) -> CmdResult<SavedNote> {
     with_vault(&state, |v| {
         Ok(v.write_note(&path, &text, &expected_hash)?)
     })
 }
 
 #[tauri::command]
-async fn create_note(state: State<'_, AppState>, path: String, text: String) -> CmdResult<String> {
+async fn create_note(
+    state: State<'_, AppState>,
+    path: String,
+    text: String,
+) -> CmdResult<SavedNote> {
     with_vault(&state, |v| Ok(v.create_note(&path, &text)?))
+}
+
+/// Settles a sync conflict: `text` becomes the note, every other version goes
+/// into its history (ADR-0006, ADR-0011). Returns the note as now on disk.
+#[tauri::command]
+async fn resolve_conflict(
+    state: State<'_, AppState>,
+    path: String,
+    text: String,
+    expected_hash: String,
+) -> CmdResult<NoteContent> {
+    with_vault(&state, |v| {
+        Ok(v.resolve_conflict(&path, &text, &expected_hash)?)
+    })
+}
+
+/// Keeps a note and its copy with the same `id` as two notes; the one created
+/// later gets a new `id` (format.md §4). Returns the note as now on disk.
+#[tauri::command]
+async fn keep_both(
+    state: State<'_, AppState>,
+    path: String,
+    copy_path: String,
+) -> CmdResult<NoteContent> {
+    with_vault(&state, |v| Ok(v.keep_both(&path, &copy_path)?))
 }
 
 /// Asks iCloud to download a note that is only a placeholder (iOS); no-op elsewhere.
@@ -233,6 +296,8 @@ pub fn run() {
             read_note,
             save_note,
             create_note,
+            resolve_conflict,
+            keep_both,
             download_note,
             extract_tags
         ])

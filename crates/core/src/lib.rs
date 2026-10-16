@@ -4,8 +4,17 @@
 //! The vault format is specified in `docs/format.md`; architecture decisions are in `docs/adr/`.
 //! This crate must build and test on every platform without a `WebView`.
 
+pub mod conflicts;
+pub mod coordination;
+pub mod front_matter;
+pub mod history;
+pub mod stamp;
 pub mod tags;
 pub mod vault;
+pub mod watch;
 
+pub use conflicts::{ConflictVersion, NoSyncConflicts, RawVersion, SyncConflicts};
+pub use coordination::{Coordinator, Uncoordinated};
 pub use tags::{Tag, extract_tags};
-pub use vault::{NoteContent, NoteEntry, Vault, VaultError};
+pub use vault::{NoteContent, NoteEntry, PathKind, SavedNote, Vault, VaultError};
+pub use watch::{Hint, VaultChanges};
