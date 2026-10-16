@@ -224,6 +224,38 @@ mod tests {
         assert_eq!(vault.classify(&reported), PathKind::Note("n.md".into()));
     }
 
+    /// The iPhone case: the vault is opened in canonical form
+    /// (`/private/var/mobile/…`), the presenter reports `/var/mobile/…`.
+    #[cfg(unix)]
+    #[test]
+    fn classifies_symlinked_paths_of_a_canonical_vault() {
+        let (dir, _) = vault();
+        let real = fs::canonicalize(dir.path()).unwrap().join("real");
+        fs::create_dir_all(real.join("sub")).unwrap();
+        fs::write(real.join("n.md"), "x").unwrap();
+        let link = dir.path().join("link");
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+        let vault = Vault::open(&real).unwrap();
+        assert_eq!(
+            vault.classify(&link.join("n.md")),
+            PathKind::Note("n.md".into())
+        );
+        // Gone already when the event arrives, also with its folder.
+        assert_eq!(
+            vault.classify(&link.join("deleted.md")),
+            PathKind::Note("deleted.md".into())
+        );
+        assert_eq!(
+            vault.classify(&link.join("gone/also-gone.md")),
+            PathKind::Note("gone/also-gone.md".into())
+        );
+        assert_eq!(vault.classify(&link.join("sub")), PathKind::Folder);
+        assert_eq!(
+            vault.classify(&link.join(".n.md.tmp-1-0")),
+            PathKind::Ignored
+        );
+    }
+
     #[test]
     fn collect_dedups_and_sorts() {
         let (dir, vault) = vault();

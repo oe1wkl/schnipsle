@@ -317,15 +317,18 @@ impl Vault {
 
     /// Classifies an absolute path reported by a file watcher (ADR-0015).
     ///
-    /// Paths may arrive in canonical form (`/private/var/…` on macOS) even if the
-    /// vault was opened through a symlink, so both forms of the root are tried.
+    /// The root and the reported path may each be in canonical form or go
+    /// through a symlink: iOS opens the vault as `/private/var/mobile/…` but its
+    /// presenter reports `/var/mobile/…`. Every combination is tried.
     #[must_use]
     pub fn classify(&self, file: &Path) -> PathKind {
-        let canonical_root = fs::canonicalize(&self.root).ok();
-        let Some(rel) = file.strip_prefix(&self.root).ok().or_else(|| {
-            canonical_root
-                .as_deref()
-                .and_then(|root| file.strip_prefix(root).ok())
+        let roots = [Some(self.root.clone()), canonical_lenient(&self.root)];
+        let files = [Some(file.to_owned()), canonical_lenient(file)];
+        let Some(rel) = files.iter().flatten().find_map(|f| {
+            roots
+                .iter()
+                .flatten()
+                .find_map(|root| f.strip_prefix(root).ok().map(Path::to_path_buf))
         }) else {
             return PathKind::Ignored;
         };
@@ -382,6 +385,21 @@ impl Vault {
             }
         }
         Ok(full)
+    }
+}
+
+/// Canonical form of `path`, also for paths that no longer exist (a deleted
+/// note): the nearest existing ancestor is canonicalized, the rest re-attached.
+fn canonical_lenient(path: &Path) -> Option<PathBuf> {
+    let mut missing = Vec::new();
+    let mut current = path;
+    loop {
+        if let Ok(mut canonical) = fs::canonicalize(current) {
+            canonical.extend(missing.iter().rev());
+            return Some(canonical);
+        }
+        missing.push(current.file_name()?);
+        current = current.parent()?;
     }
 }
 
