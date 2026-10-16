@@ -54,6 +54,7 @@ Then add the two lines it prints to `~/.zshrc` and open a new terminal.
 | Command | What it does |
 | --- | --- |
 | `pnpm tauri dev` | Run the desktop app with hot reload |
+| `pnpm dev`, then <http://localhost:1420/dev/editor.html> | Editor playground in a browser, with a sample note and no Tauri |
 | `pnpm tauri ios dev` | Run in the iOS simulator (pick one from the list) |
 | `pnpm tauri ios dev --open --host` | Build for your iPhone and open Xcode; see §6 |
 | `cargo test --workspace` | Rust tests |

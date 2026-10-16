@@ -1,0 +1,391 @@
+// SPDX-License-Identifier: Apache-2.0
+// Note editor: CodeMirror 6 with inline live preview and a plain-source mode (ADR-0007).
+//
+// The editor never rewrites Markdown on its own. Live preview only hides markers
+// and draws widgets; the document stays exactly what the user typed. The only
+// programmatic edit, `replaceFrontMatter`, takes in front matter the core wrote
+// on save, and it is kept out of the undo history.
+
+import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
+import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
+import { yamlFrontmatter } from "@codemirror/lang-yaml";
+import { HighlightStyle, syntaxHighlighting, syntaxTree } from "@codemirror/language";
+import {
+  Annotation,
+  Compartment,
+  EditorState,
+  type Extension,
+  type Range,
+  Transaction,
+} from "@codemirror/state";
+import {
+  Decoration,
+  type DecorationSet,
+  drawSelection,
+  EditorView,
+  keymap,
+  placeholder,
+  ViewPlugin,
+  type ViewUpdate,
+  WidgetType,
+} from "@codemirror/view";
+import { tags as t } from "@lezer/highlight";
+
+export type EditorMode = "live" | "source";
+
+export interface NoteEditor {
+  /** The complete note text. */
+  text(): string;
+  /** Shows a note; starts a fresh undo history. */
+  load(text: string): void;
+  setEnabled(enabled: boolean): void;
+  setMode(mode: EditorMode): void;
+  focus(): void;
+  cursorToEnd(): void;
+  /**
+   * Replaces the front matter block `oldBlock` at the start of the note with
+   * `newBlock`, outside the undo history; the selection moves with the text.
+   * Returns false (and changes nothing) if the note no longer starts with
+   * `oldBlock`, i.e. the user edited the block meanwhile.
+   */
+  replaceFrontMatter(oldBlock: string, newBlock: string): boolean;
+}
+
+/** Length of a closed front matter block at the start of `text`, 0 if none (format.md §4). */
+export function frontMatterLength(text: string): number {
+  const match = /^\uFEFF?---\r?\n(?:.*\r?\n)*?---[ \t]*(?:\r?\n|$)/.exec(text);
+  return match ? match[0].length : 0;
+}
+
+/** Marks transactions made by the app rather than the user. */
+const programmatic = Annotation.define<boolean>();
+
+// --- Language: Markdown (GFM), with YAML front matter only when it is closed ---
+
+// No Markdown keymap: its Enter renumbers ordered lists, which rewrites text the
+// user did not touch (ADR-0007).
+const markdownSupport = markdown({ base: markdownLanguage, addKeymap: false });
+const withFrontMatter = yamlFrontmatter({ content: markdownSupport });
+const language = new Compartment();
+
+// yamlFrontmatter would take a lone `---` at the start (a horizontal rule) as an
+// unclosed front matter swallowing the whole note; the core treats that as body.
+const FRONT_MATTER_PROBE = 8192;
+const startsWithFrontMatter = (start: string): boolean =>
+  frontMatterLength(start.slice(0, FRONT_MATTER_PROBE)) > 0;
+
+const switchLanguage = EditorState.transactionExtender.of((tr) => {
+  if (!tr.docChanged) return null;
+  const before = startsWithFrontMatter(tr.startState.doc.sliceString(0, FRONT_MATTER_PROBE));
+  const after = startsWithFrontMatter(tr.newDoc.sliceString(0, FRONT_MATTER_PROBE));
+  return before === after
+    ? null
+    : { effects: language.reconfigure(after ? withFrontMatter : markdownSupport) };
+});
+
+// --- Live preview ---
+
+class CheckboxWidget extends WidgetType {
+  constructor(private readonly checked: boolean) {
+    super();
+  }
+  override eq(other: CheckboxWidget): boolean {
+    return other.checked === this.checked;
+  }
+  override toDOM(): HTMLElement {
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    box.checked = this.checked;
+    box.className = "cm-task";
+    box.setAttribute("aria-label", this.checked ? "Done" : "Not done");
+    return box;
+  }
+  override ignoreEvent(): boolean {
+    return false;
+  }
+}
+
+const hide = Decoration.replace({});
+const muted = Decoration.mark({ class: "cm-md-mark" });
+
+/** Lines the user is editing: those touched by a selection, while focused. */
+function editedLines(view: EditorView): (from: number, to: number) => boolean {
+  if (!view.hasFocus) return () => false;
+  const { doc } = view.state;
+  const spans = view.state.selection.ranges.map((r) => [
+    doc.lineAt(r.from).from,
+    doc.lineAt(r.to).to,
+  ]);
+  return (from, to) => spans.some(([start = 0, end = 0]) => from <= end && to >= start);
+}
+
+function previewDecorations(view: EditorView): DecorationSet {
+  const { state } = view;
+  const edited = editedLines(view);
+  const found: Range<Decoration>[] = [];
+  for (const { from, to } of view.visibleRanges) {
+    syntaxTree(state).iterate({
+      from,
+      to,
+      enter: (node) => {
+        const isEdited = edited(node.from, node.to);
+        switch (node.name) {
+          case "HeaderMark": {
+            if (isEdited) break;
+            const after = state.doc.sliceString(node.to, node.to + 1);
+            found.push(hide.range(node.from, after === " " ? node.to + 1 : node.to));
+            break;
+          }
+          case "EmphasisMark":
+          case "StrikethroughMark":
+            if (!isEdited) found.push(hide.range(node.from, node.to));
+            break;
+          case "CodeMark":
+            if (!isEdited && node.node.parent?.name === "InlineCode") {
+              found.push(hide.range(node.from, node.to));
+            }
+            break;
+          case "Link": {
+            // `[text](url "title")` shows as `text`: hide `[` and everything from `]`.
+            if (isEdited) break;
+            const marks = node.node.getChildren("LinkMark");
+            const [open, close] = marks;
+            if (open && close) {
+              found.push(hide.range(open.from, open.to));
+              found.push(hide.range(close.from, node.to));
+            }
+            break;
+          }
+          case "TaskMarker":
+            if (!isEdited) {
+              const checked = /x/i.test(state.doc.sliceString(node.from + 1, node.to - 1));
+              found.push(
+                Decoration.replace({ widget: new CheckboxWidget(checked) }).range(
+                  node.from,
+                  node.to,
+                ),
+              );
+            }
+            break;
+          case "ListMark":
+          case "QuoteMark":
+            found.push(muted.range(node.from, node.to));
+            break;
+        }
+      },
+    });
+  }
+  return Decoration.set(found, true);
+}
+
+/** Toggles the task at the checkbox the user clicked: `[ ]` ↔ `[x]`. */
+function toggleTask(view: EditorView, target: HTMLElement): boolean {
+  const pos = view.posAtDOM(target);
+  const marker = view.state.doc.sliceString(pos, pos + 3);
+  if (!/^\[[ xX]\]$/.test(marker)) return false;
+  view.dispatch({
+    changes: { from: pos + 1, to: pos + 2, insert: marker[1] === " " ? "x" : " " },
+    userEvent: "input.toggle",
+  });
+  return true;
+}
+
+const livePreview = ViewPlugin.fromClass(
+  class {
+    decorations: DecorationSet;
+    constructor(view: EditorView) {
+      this.decorations = previewDecorations(view);
+    }
+    update(update: ViewUpdate): void {
+      if (
+        update.docChanged ||
+        update.viewportChanged ||
+        update.selectionSet ||
+        update.focusChanged
+      ) {
+        this.decorations = previewDecorations(update.view);
+      } else if (syntaxTree(update.startState) !== syntaxTree(update.state)) {
+        this.decorations = previewDecorations(update.view); // the parser caught up
+      }
+    }
+  },
+  {
+    decorations: (plugin) => plugin.decorations,
+    eventHandlers: {
+      mousedown(event, view) {
+        const target = event.target;
+        if (target instanceof HTMLElement && target.classList.contains("cm-task")) {
+          event.preventDefault();
+          return toggleTask(view, target);
+        }
+        return false;
+      },
+    },
+  },
+);
+
+/** Front matter lines in muted colour, in both modes: it is metadata, not the note. */
+const frontMatterLine = Decoration.line({ class: "cm-frontmatter" });
+function frontMatterDecorations(state: EditorState): DecorationSet {
+  const end = frontMatterLength(state.doc.sliceString(0, FRONT_MATTER_PROBE));
+  if (end === 0) return Decoration.none;
+  const lines: Range<Decoration>[] = [];
+  for (let pos = 0; pos < end;) {
+    const line = state.doc.lineAt(pos);
+    lines.push(frontMatterLine.range(line.from));
+    pos = line.to + 1;
+  }
+  return Decoration.set(lines);
+}
+const mutedFrontMatter = ViewPlugin.fromClass(
+  class {
+    decorations: DecorationSet;
+    constructor(view: EditorView) {
+      this.decorations = frontMatterDecorations(view.state);
+    }
+    update(update: ViewUpdate): void {
+      if (update.docChanged) this.decorations = frontMatterDecorations(update.state);
+    }
+  },
+  { decorations: (plugin) => plugin.decorations },
+);
+
+// --- Styles ---
+
+const MONO = 'ui-monospace, "SF Mono", Menlo, monospace';
+
+const shared = [
+  { tag: t.emphasis, fontStyle: "italic" },
+  { tag: t.strong, fontWeight: "700" },
+  { tag: t.strikethrough, textDecoration: "line-through" },
+  { tag: t.link, color: "var(--accent)" },
+  { tag: t.url, color: "var(--muted)" },
+  { tag: t.quote, color: "var(--muted)" },
+  { tag: [t.processingInstruction, t.contentSeparator, t.meta], color: "var(--muted)" },
+  // YAML front matter
+  {
+    tag: [t.propertyName, t.definition(t.propertyName), t.string, t.number, t.bool],
+    color: "var(--muted)",
+  },
+];
+
+const liveStyle = HighlightStyle.define([
+  ...shared,
+  { tag: t.heading1, fontSize: "1.6em", fontWeight: "700" },
+  { tag: t.heading2, fontSize: "1.35em", fontWeight: "700" },
+  { tag: t.heading3, fontSize: "1.15em", fontWeight: "700" },
+  { tag: [t.heading4, t.heading5, t.heading6], fontWeight: "700" },
+  { tag: t.link, color: "var(--accent)", textDecoration: "underline" },
+  { tag: t.monospace, fontFamily: MONO, fontSize: "0.9em" },
+]);
+
+const sourceStyle = HighlightStyle.define([
+  ...shared,
+  {
+    tag: [t.heading1, t.heading2, t.heading3, t.heading4, t.heading5, t.heading6],
+    fontWeight: "700",
+  },
+]);
+
+const theme = EditorView.theme({
+  "&": { flex: "1", minHeight: "0", color: "inherit", backgroundColor: "transparent" },
+  "&.cm-focused": { outline: "none" },
+  ".cm-scroller": { fontFamily: "inherit", lineHeight: "1.5", padding: "16px 0" },
+  ".cm-content": { padding: "0 16px", caretColor: "var(--fg)", maxWidth: "48rem" },
+  ".cm-cursor": { borderLeftColor: "var(--fg)" },
+  ".cm-placeholder": { color: "var(--muted)" },
+  ".cm-task": { margin: "0 0.35em 0 0", verticalAlign: "-0.1em", cursor: "pointer" },
+  ".cm-md-mark": { color: "var(--muted)" },
+  ".cm-frontmatter, .cm-frontmatter *": { color: "var(--muted)", fontSize: "0.9em" },
+});
+
+const sourceTheme = EditorView.theme({
+  ".cm-scroller": { fontFamily: MONO, fontSize: "15px" },
+});
+
+const modes: Record<EditorMode, Extension> = {
+  live: [livePreview, syntaxHighlighting(liveStyle)],
+  source: [syntaxHighlighting(sourceStyle), sourceTheme],
+};
+
+// --- The editor ---
+
+export function createEditor(
+  parent: HTMLElement,
+  events: { onChange: () => void; onBlur: () => void },
+): NoteEditor {
+  const mode = new Compartment();
+  const enabled = new Compartment();
+  let currentMode: EditorMode = "live";
+  let isEnabled = false;
+  const enabledExtension = (on: boolean): Extension => [
+    EditorView.editable.of(on),
+    EditorState.readOnly.of(!on),
+  ];
+
+  const makeState = (doc: string): EditorState =>
+    EditorState.create({
+      doc,
+      extensions: [
+        history(),
+        drawSelection(),
+        EditorView.lineWrapping,
+        keymap.of([...defaultKeymap, ...historyKeymap]),
+        language.of(startsWithFrontMatter(doc) ? withFrontMatter : markdownSupport),
+        switchLanguage,
+        mutedFrontMatter,
+        mode.of(modes[currentMode]),
+        enabled.of(enabledExtension(isEnabled)),
+        placeholder("Select a note"),
+        theme,
+        EditorView.contentAttributes.of({
+          spellcheck: "true",
+          autocorrect: "on",
+          autocapitalize: "sentences",
+          "aria-label": "Note text",
+        }),
+        EditorView.updateListener.of((update) => {
+          const byUser = update.transactions.some(
+            (tr) => tr.docChanged && tr.annotation(programmatic) !== true,
+          );
+          if (byUser) events.onChange();
+        }),
+        EditorView.domEventHandlers({
+          blur: () => {
+            events.onBlur();
+          },
+        }),
+      ],
+    });
+
+  const view = new EditorView({ state: makeState(""), parent });
+
+  return {
+    text: () => view.state.doc.toString(),
+    load(text) {
+      view.setState(makeState(text));
+    },
+    setEnabled(on) {
+      isEnabled = on;
+      view.dispatch({ effects: enabled.reconfigure(enabledExtension(on)) });
+    },
+    setMode(next) {
+      currentMode = next;
+      view.dispatch({ effects: mode.reconfigure(modes[next]) });
+    },
+    focus() {
+      view.focus();
+    },
+    cursorToEnd() {
+      view.dispatch({ selection: { anchor: view.state.doc.length }, scrollIntoView: true });
+    },
+    replaceFrontMatter(oldBlock, newBlock) {
+      if (view.state.doc.sliceString(0, oldBlock.length) !== oldBlock) return false;
+      view.dispatch({
+        changes: { from: 0, to: oldBlock.length, insert: newBlock },
+        annotations: [Transaction.addToHistory.of(false), programmatic.of(true)],
+      });
+      return true;
+    },
+  };
+}

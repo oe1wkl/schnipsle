@@ -1,0 +1,20 @@
+<!doctype html>
+<!-- Development only: the note editor with a sample note, without Tauri. Served by `pnpm dev` at /dev/editor.html; not part of the build. -->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Editor playground</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+    <script type="module" src="/src/dev/editor-demo.ts"></script>
+  </head>
+  <body>
+    <section class="editor" style="flex: 1">
+      <div id="editor-host" class="editor-host"></div>
+      <footer class="status">
+        <span id="status">Playground</span>
+        <button id="mode" type="button" class="small">Source</button>
+      </footer>
+    </section>
+  </body>
+</html>

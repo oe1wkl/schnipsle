@@ -159,23 +159,31 @@ button.icon {
   min-width: 0;
   min-height: 0;
 }
-textarea {
+.editor-host {
   flex: 1;
-  width: 100%;
-  border: none;
-  resize: none;
-  padding: 16px;
-  background: transparent;
+  display: flex;
+  min-height: 0;
+}
+.banner textarea {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px;
+  background: var(--bg);
   color: inherit;
   font:
-    16px/1.5 ui-monospace,
+    14px/1.45 ui-monospace,
     "SF Mono",
     Menlo,
     monospace;
-  outline: none;
+}
+button.small {
+  min-height: 0;
+  padding: 2px 8px;
+  font-size: 12px;
 }
 .status {
   display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
   padding: 6px 12px;

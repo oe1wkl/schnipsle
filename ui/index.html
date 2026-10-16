@@ -43,10 +43,11 @@
         <ul id="notes"></ul>
       </nav>
       <section class="editor" aria-label="Editor">
-        <textarea id="text" spellcheck="true" disabled placeholder="Select a note"></textarea>
+        <div id="editor-host" class="editor-host"></div>
         <footer class="status">
           <span id="status" aria-live="polite"></span>
           <span id="tags" class="tags"></span>
+          <button id="mode" type="button" class="small" aria-pressed="false">Source</button>
         </footer>
       </section>
     </main>

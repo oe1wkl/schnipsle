@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
-// iOS spike UI: open a vault folder, list notes, edit with autosave, react to
-// changes made elsewhere (`vault-changed` events, ADR-0015) and resolve conflicts.
+// Spike UI: open a vault folder, list notes, edit with autosave in the
+// CodeMirror editor (ADR-0007), react to changes made elsewhere (`vault-changed`
+// events, ADR-0015) and resolve conflicts.
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+
+import { createEditor, type EditorMode, frontMatterLength } from "./editor";
 
 interface VaultInfo {
   name: string;
@@ -67,7 +70,8 @@ const ui = {
   newNote: el("new-note") as HTMLButtonElement,
   empty: el("empty"),
   notes: el("notes") as HTMLUListElement,
-  text: el("text") as HTMLTextAreaElement,
+  editorHost: el("editor-host"),
+  mode: el("mode") as HTMLButtonElement,
   status: el("status"),
   tags: el("tags"),
   conflict: el("conflict"),
@@ -89,7 +93,16 @@ let entries: NoteEntry[] = [];
 let saveTimer: number | undefined;
 let saving: Promise<void> = Promise.resolve();
 
-const isDirty = (): boolean => current !== null && ui.text.value !== current.savedText;
+const editor = createEditor(ui.editorHost, {
+  onChange: () => {
+    setStatus("Editing…");
+    scheduleSave();
+    void showTags();
+  },
+  onBlur: () => void flushSave(),
+});
+
+const isDirty = (): boolean => current !== null && editor.text() !== current.savedText;
 
 function asError(e: unknown): CommandError {
   if (typeof e === "object" && e !== null && "kind" in e) return e as CommandError;
@@ -137,7 +150,7 @@ async function refreshList(): Promise<void> {
 }
 
 async function showTags(): Promise<void> {
-  const tags = await invoke<Tag[]>("extract_tags", { markdown: ui.text.value });
+  const tags = await invoke<Tag[]>("extract_tags", { markdown: editor.text() });
   ui.tags.textContent = tags.map((t) => `#${t.name}`).join(" ");
 }
 
@@ -166,8 +179,8 @@ async function openNote(note: NoteEntry): Promise<void> {
 
 function load(content: NoteContent): void {
   current = { path: content.path, hash: content.hash, savedText: content.text };
-  ui.text.value = content.text;
-  ui.text.disabled = false;
+  editor.load(content.text);
+  editor.setEnabled(true);
   hideConflict();
   showSyncConflicts(content.conflicts);
   setStatus(
@@ -179,18 +192,12 @@ function load(content: NoteContent): void {
   void refreshList();
 }
 
-/** Length of the front matter block at the start of `text`, 0 if there is none. */
-function frontMatterLength(text: string): number {
-  const match = /^\uFEFF?---\r?\n(?:.*\r?\n)*?---[ \t]*(?:\r?\n|$)/.exec(text);
-  return match ? match[0].length : 0;
-}
-
 /**
- * Takes in what a save wrote. The core adds or updates front matter, so the
- * text on disk can differ from what was sent. The editor shows it only if
- * nothing was typed since the save started, so no keystroke is lost; the
- * cursor moves with the front matter. Otherwise the next save carries the new
- * typing and the core keeps the note's id and keys.
+ * Takes in what a save wrote. The core adds or updates front matter only, so
+ * the editor swaps in the new block, outside the undo history, as long as the
+ * user has not edited the block meanwhile. Typing since the save started is
+ * kept; the cursor moves with the text. If anything but the front matter
+ * differs, the editor is left alone and the next save carries its text.
  */
 function applySaved(
   note: { hash: string; savedText: string },
@@ -199,18 +206,17 @@ function applySaved(
 ): void {
   note.hash = saved.hash;
   note.savedText = saved.text;
-  if (note !== current || ui.text.value !== sent || saved.text === sent) return;
-  const shift = frontMatterLength(saved.text) - frontMatterLength(sent);
-  const moved = (at: number): number => (at >= frontMatterLength(sent) ? at + shift : at);
-  const { selectionStart, selectionEnd } = ui.text;
-  ui.text.value = saved.text;
-  ui.text.setSelectionRange(moved(selectionStart), moved(selectionEnd));
+  if (note !== current || saved.text === sent) return;
+  const oldBlock = sent.slice(0, frontMatterLength(sent));
+  const newBlock = saved.text.slice(0, frontMatterLength(saved.text));
+  if (saved.text.slice(newBlock.length) !== sent.slice(oldBlock.length)) return;
+  editor.replaceFrontMatter(oldBlock, newBlock);
 }
 
 async function save(): Promise<void> {
   if (!current || !isDirty() || conflictHash !== undefined) return;
   const note = current;
-  const text = ui.text.value;
+  const text = editor.text();
   try {
     const saved = await invoke<SavedNote>("save_note", {
       path: note.path,
@@ -274,7 +280,7 @@ function showSyncConflicts(conflicts: ConflictVersion[]): void {
 function resolveSyncConflict(pick: "mine" | "other"): void {
   saving = saving.then(save).then(async () => {
     if (!current || !syncConflict) return;
-    const text = pick === "mine" ? ui.text.value : syncConflict.text;
+    const text = pick === "mine" ? editor.text() : syncConflict.text;
     try {
       const content = await invoke<NoteContent>("resolve_conflict", {
         path: current.path,
@@ -325,7 +331,7 @@ ui.useTheirs.addEventListener("click", () => {
 ui.keepMine.addEventListener("click", () => {
   if (!current) return;
   const note = current;
-  const text = ui.text.value;
+  const text = editor.text();
   const write =
     conflictHash === null || conflictHash === undefined
       ? invoke<SavedNote>("create_note", { path: note.path, text })
@@ -362,7 +368,7 @@ async function checkForChanges(changes?: VaultChanges): Promise<void> {
     const content = await invoke<NoteContent>("read_note", { path });
     showSyncConflicts(content.conflicts);
     if (content.hash === current.hash) return;
-    if (content.text === ui.text.value) {
+    if (content.text === editor.text()) {
       // Same text as in the editor: the echo of our own save, or an identical edit.
       current.hash = content.hash;
       current.savedText = content.text;
@@ -379,13 +385,6 @@ async function checkForChanges(changes?: VaultChanges): Promise<void> {
   }
 }
 
-ui.text.addEventListener("input", () => {
-  setStatus("Editing…");
-  scheduleSave();
-  void showTags();
-});
-ui.text.addEventListener("blur", () => void flushSave());
-
 ui.back.addEventListener("click", () => {
   void flushSave().then(() => {
     showView("list");
@@ -398,8 +397,8 @@ ui.pick.addEventListener("click", () => {
     .then(async (info) => {
       if (!info) return;
       current = null;
-      ui.text.value = "";
-      ui.text.disabled = true;
+      editor.load("");
+      editor.setEnabled(false);
       vaultOpened(info);
       showView("list");
       await refreshList();
@@ -418,13 +417,36 @@ ui.newNote.addEventListener("click", () => {
     .then((saved) => {
       load({ path, ...saved, conflicts: [], conflictsError: null });
       showView("editor");
-      ui.text.focus();
-      ui.text.setSelectionRange(saved.text.length, saved.text.length);
+      editor.focus();
+      editor.cursorToEnd();
     })
     .catch((e: unknown) => {
       setStatus(asError(e).message);
     });
 });
+
+// Live preview or plain Markdown source (ADR-0007); remembered on this device.
+const MODE_KEY = "schnipsle.editorMode";
+function setMode(mode: EditorMode): void {
+  editor.setMode(mode);
+  ui.mode.textContent = mode === "live" ? "Source" : "Preview";
+  ui.mode.setAttribute("aria-pressed", String(mode === "source"));
+  try {
+    localStorage.setItem(MODE_KEY, mode);
+  } catch {
+    // storage unavailable: the choice lasts until the app closes
+  }
+}
+ui.mode.addEventListener("click", () => {
+  setMode(ui.mode.getAttribute("aria-pressed") === "true" ? "live" : "source");
+});
+let savedMode: string | null = null;
+try {
+  savedMode = localStorage.getItem(MODE_KEY);
+} catch {
+  // storage unavailable
+}
+setMode(savedMode === "source" ? "source" : "live");
 
 // File menu (desktop): same actions as the buttons.
 void listen<string>("menu", (event) => {
