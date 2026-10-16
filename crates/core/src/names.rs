@@ -80,14 +80,14 @@ fn split_path(path: &str) -> (&str, &str) {
 /// A note just created, with the path chosen for it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct NewNote {
-    /// Vault-relative path.
+    /// Path relative to `notes/`.
     pub path: String,
     /// What was written.
     pub saved: SavedNote,
 }
 
 impl Vault {
-    /// Creates a note in `folder` (vault-relative, `""` for the root), named
+    /// Creates a note in `folder` (relative to `notes/`, `""` for `notes/` itself), named
     /// after the title of `text` (format.md §3).
     ///
     /// # Errors
@@ -146,7 +146,7 @@ mod tests {
 
     fn vault() -> (tempfile::TempDir, Vault) {
         let dir = tempfile::tempdir().unwrap();
-        let vault = Vault::open(dir.path()).unwrap();
+        let vault = Vault::create(dir.path()).unwrap();
         (dir, vault)
     }
 
@@ -187,7 +187,7 @@ mod tests {
         let (dir, vault) = vault();
         let first = vault.create_titled("", "# New note\n\n").unwrap();
         let second = vault.create_titled("", "# New note\n\n").unwrap();
-        fs::create_dir(dir.path().join("sub")).unwrap();
+        fs::create_dir(dir.path().join("notes/sub")).unwrap();
         let third = vault.create_titled("sub", "Shopping list\n").unwrap();
         assert_eq!(
             [
@@ -197,7 +197,7 @@ mod tests {
             ],
             ["new-note.md", "new-note-2.md", "sub/shopping-list.md"]
         );
-        let on_disk = fs::read_to_string(dir.path().join("new-note.md")).unwrap();
+        let on_disk = fs::read_to_string(dir.path().join("notes/new-note.md")).unwrap();
         assert_eq!(on_disk, first.saved.text);
     }
 
@@ -214,9 +214,9 @@ mod tests {
             .unwrap();
         let path = vault.rename_after_edit(&note.path, "New note").unwrap();
         assert_eq!(path, "antenna-test.md");
-        assert!(!dir.path().join("new-note.md").exists());
+        assert!(!dir.path().join("notes/new-note.md").exists());
         assert_eq!(
-            fs::read_to_string(dir.path().join(&path)).unwrap(),
+            fs::read_to_string(dir.path().join("notes").join(&path)).unwrap(),
             saved.text
         );
     }
@@ -224,7 +224,11 @@ mod tests {
     #[test]
     fn keeps_the_name_when_the_title_did_not_change_or_already_fits() {
         let (dir, vault) = vault();
-        fs::write(dir.path().join("Einkaufsliste.md"), "# Einkaufsliste\n").unwrap();
+        fs::write(
+            dir.path().join("notes/Einkaufsliste.md"),
+            "# Einkaufsliste\n",
+        )
+        .unwrap();
         // Opened and left: same title, even though the name is not a slug.
         assert_eq!(
             vault
@@ -233,14 +237,18 @@ mod tests {
             "Einkaufsliste.md"
         );
         // Title changed only in case: the name still fits.
-        fs::write(dir.path().join("Einkaufsliste.md"), "# EINKAUFSLISTE\n").unwrap();
+        fs::write(
+            dir.path().join("notes/Einkaufsliste.md"),
+            "# EINKAUFSLISTE\n",
+        )
+        .unwrap();
         assert_eq!(
             vault
                 .rename_after_edit("Einkaufsliste.md", "Einkaufsliste")
                 .unwrap(),
             "Einkaufsliste.md"
         );
-        fs::write(dir.path().join("notes-2.md"), "# Notes\n").unwrap();
+        fs::write(dir.path().join("notes/notes-2.md"), "# Notes\n").unwrap();
         assert_eq!(
             vault.rename_after_edit("notes-2.md", "Old").unwrap(),
             "notes-2.md"
@@ -250,17 +258,21 @@ mod tests {
     #[test]
     fn a_rename_never_replaces_another_note() {
         let (dir, vault) = vault();
-        fs::write(dir.path().join("antenna.md"), "# Antenna\nthe other note\n").unwrap();
-        fs::write(dir.path().join(".antenna-2.md.icloud"), "placeholder").unwrap();
-        fs::write(dir.path().join("draft.md"), "# Antenna\nmine\n").unwrap();
+        fs::write(
+            dir.path().join("notes/antenna.md"),
+            "# Antenna\nthe other note\n",
+        )
+        .unwrap();
+        fs::write(dir.path().join("notes/.antenna-2.md.icloud"), "placeholder").unwrap();
+        fs::write(dir.path().join("notes/draft.md"), "# Antenna\nmine\n").unwrap();
         let path = vault.rename_after_edit("draft.md", "Draft").unwrap();
         assert_eq!(path, "antenna-3.md");
         assert_eq!(
-            fs::read_to_string(dir.path().join("antenna.md")).unwrap(),
+            fs::read_to_string(dir.path().join("notes/antenna.md")).unwrap(),
             "# Antenna\nthe other note\n"
         );
         assert_eq!(
-            front_matter::body(&fs::read_to_string(dir.path().join("antenna-3.md")).unwrap()),
+            front_matter::body(&fs::read_to_string(dir.path().join("notes/antenna-3.md")).unwrap()),
             "# Antenna\nmine\n"
         );
     }
@@ -268,8 +280,8 @@ mod tests {
     #[test]
     fn renames_stay_in_their_folder() {
         let (dir, vault) = vault();
-        fs::create_dir(dir.path().join("projects")).unwrap();
-        fs::write(dir.path().join("projects/x.md"), "# Tuner\n").unwrap();
+        fs::create_dir(dir.path().join("notes/projects")).unwrap();
+        fs::write(dir.path().join("notes/projects/x.md"), "# Tuner\n").unwrap();
         assert_eq!(
             vault.rename_after_edit("projects/x.md", "x").unwrap(),
             "projects/tuner.md"

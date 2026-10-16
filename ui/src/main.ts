@@ -10,7 +10,21 @@ import { createEditor, type EditorMode, frontMatterLength } from "./editor";
 interface VaultInfo {
   name: string;
   path: string;
+  /** Why the vault is read-only (format.md §2), if it is. */
+  readOnly: string | null;
 }
+/** A picked folder that is not a vault yet (src-tauri `Opened::Setup`). */
+interface FolderSetup {
+  name: string;
+  path: string;
+  /** Visible items at its top level that would move into notes/. */
+  items: string[];
+  notes: number;
+  /** Items only in iCloud; their download was requested. */
+  notDownloaded: string[];
+}
+/** Result of picking or restoring a folder (src-tauri `Opened`). */
+type Opened = ({ kind: "vault" } & VaultInfo) | ({ kind: "setup" } & FolderSetup);
 interface NoteEntry {
   path: string;
   title: string;
@@ -100,6 +114,14 @@ const ui = {
   syncKeepMine: el("sync-keep-mine") as HTMLButtonElement,
   syncUseOther: el("sync-use-other") as HTMLButtonElement,
   syncKeepBoth: el("sync-keep-both") as HTMLButtonElement,
+  setup: el("setup"),
+  setupText: el("setup-text"),
+  setupCreate: el("setup-create") as HTMLButtonElement,
+  setupCancel: el("setup-cancel") as HTMLButtonElement,
+  setupDetails: el("setup-details") as HTMLDetailsElement,
+  setupItems: el("setup-items") as HTMLUListElement,
+  readOnly: el("read-only"),
+  readOnlyText: el("read-only-text"),
 };
 
 /**
@@ -115,6 +137,8 @@ let syncConflict: ConflictVersion | undefined; // shown in the sync conflict ban
 let entries: NoteEntry[] = [];
 let saveTimer: number | undefined;
 let saving: Promise<void> = Promise.resolve();
+/** Why the open vault is read-only; `null` if it is writable or none is open. */
+let readOnly: string | null = null;
 
 const editor = createEditor(ui.editorHost, {
   onChange: () => {
@@ -142,10 +166,59 @@ function showView(view: "list" | "editor"): void {
 }
 
 function vaultOpened(info: VaultInfo): void {
+  ui.setup.hidden = true;
   ui.vaultName.textContent = info.name;
   ui.vaultHint.textContent = info.path;
-  ui.newNote.disabled = false;
+  readOnly = info.readOnly;
+  ui.readOnly.hidden = readOnly === null;
+  ui.readOnlyText.textContent = readOnly ?? "";
+  ui.newNote.disabled = readOnly !== null;
   ui.empty.hidden = true;
+}
+
+/** Shows a vault that was picked or restored, or asks whether to make the folder one. */
+async function folderOpened(opened: Opened): Promise<void> {
+  if (opened.kind === "setup") {
+    showSetup(opened);
+    return;
+  }
+  closeEditor();
+  lastTrashed = null;
+  ui.undoDelete.hidden = true;
+  vaultOpened(opened);
+  showView("list");
+  await refreshList();
+}
+
+/** Asks before a folder without vault.yaml becomes a vault (format.md §1). */
+function showSetup(folder: FolderSetup): void {
+  const moves = folder.items.length > 0;
+  let text = moves
+    ? `“${folder.name}” is not a Schnipsle vault yet. To open it, Schnipsle moves everything ` +
+      `in it (${String(folder.notes)} notes in ${String(folder.items.length)} items) into a ` +
+      `new folder “notes” inside it. Nothing is changed or deleted, but other apps will find ` +
+      `these files in “notes” from now on.`
+    : `“${folder.name}” is not a Schnipsle vault yet. Make it one? Schnipsle adds the ` +
+      `folders “notes” and “.notesapp” to it.`;
+  if (folder.notDownloaded.length > 0) {
+    text +=
+      ` ${String(folder.notDownloaded.length)} items are still in iCloud only and are being ` +
+      `downloaded; try again when they are here.`;
+  }
+  ui.setupText.textContent = text;
+  ui.setupCreate.textContent = moves ? "Move into “notes” and open" : "Make it a vault";
+  ui.setupItems.replaceChildren(
+    ...[...folder.items, ...folder.notDownloaded.map((n) => `${n} (in iCloud only)`)].map(
+      (name) => {
+        const item = document.createElement("li");
+        item.textContent = name;
+        return item;
+      },
+    ),
+  );
+  ui.setupDetails.hidden = !moves && folder.notDownloaded.length === 0;
+  ui.setup.hidden = false;
+  ui.setupCreate.focus();
 }
 
 async function refreshList(): Promise<void> {
@@ -190,6 +263,7 @@ async function showTrashList(): Promise<void> {
       restore.type = "button";
       restore.className = "small restore";
       restore.textContent = "Restore";
+      restore.disabled = readOnly !== null;
       restore.addEventListener("click", () => void restoreNote(note));
       item.append(title, meta, restore);
       return item;
@@ -229,7 +303,7 @@ function setListMode(mode: "notes" | "trash"): void {
 function leaveNote(): Promise<void> {
   saving = saving.then(save).then(async () => {
     const note = current;
-    if (!note || conflictHash !== undefined || isDirty()) return;
+    if (!note || readOnly !== null || conflictHash !== undefined || isDirty()) return;
     try {
       const path = await invoke<string>("rename_after_edit", {
         path: note.path,
@@ -293,8 +367,8 @@ function load(content: NoteContent): void {
     titleAtOpen: content.title,
   };
   editor.load(content.text);
-  editor.setEnabled(true);
-  ui.deleteNote.disabled = false;
+  editor.setEnabled(readOnly === null);
+  ui.deleteNote.disabled = readOnly !== null;
   hideConflict();
   showSyncConflicts(content.conflicts);
   setStatus(
@@ -556,19 +630,33 @@ ui.undoDelete.addEventListener("click", () => {
 
 ui.pick.addEventListener("click", () => {
   void leaveNote()
-    .then(() => invoke<VaultInfo | null>("pick_vault"))
-    .then(async (info) => {
-      if (!info) return;
-      closeEditor();
-      lastTrashed = null;
-      ui.undoDelete.hidden = true;
-      vaultOpened(info);
-      showView("list");
-      await refreshList();
+    .then(() => invoke<Opened | null>("pick_vault"))
+    .then(async (opened) => {
+      if (opened) await folderOpened(opened);
     })
     .catch((e: unknown) => {
       setStatus(asError(e).message);
     });
+});
+
+ui.setupCreate.addEventListener("click", () => {
+  ui.setupCreate.disabled = true;
+  void leaveNote()
+    .then(() => invoke<VaultInfo>("create_vault"))
+    .then(async (info) => {
+      await folderOpened({ kind: "vault", ...info });
+    })
+    .catch((e: unknown) => {
+      setStatus(`Not opened: ${asError(e).message}`);
+    })
+    .finally(() => {
+      ui.setupCreate.disabled = false;
+    });
+});
+
+ui.setupCancel.addEventListener("click", () => {
+  ui.setup.hidden = true;
+  setStatus("Folder not opened; nothing was changed.");
 });
 
 ui.newNote.addEventListener("click", () => {
@@ -636,11 +724,9 @@ document.addEventListener("visibilitychange", () => {
   else void leaveNote();
 });
 
-invoke<VaultInfo | null>("restore_vault")
-  .then(async (info) => {
-    if (!info) return;
-    vaultOpened(info);
-    await refreshList();
+invoke<Opened | null>("restore_vault")
+  .then(async (opened) => {
+    if (opened) await folderOpened(opened);
   })
   .catch((e: unknown) => {
     setStatus(asError(e).message);

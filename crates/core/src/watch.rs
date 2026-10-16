@@ -180,14 +180,14 @@ mod tests {
 
     fn vault() -> (tempfile::TempDir, Vault) {
         let dir = tempfile::tempdir().unwrap();
-        let vault = Vault::open(dir.path()).unwrap();
+        let vault = Vault::create(dir.path()).unwrap();
         (dir, vault)
     }
 
     #[test]
     fn classifies_paths() {
         let (dir, vault) = vault();
-        let root = dir.path();
+        let root = &dir.path().join("notes");
         fs::create_dir(root.join("sub")).unwrap();
         let cases = [
             ("a.md", PathKind::Note("a.md".into())),
@@ -209,18 +209,22 @@ mod tests {
             vault.classify(Path::new("/elsewhere/x.md")),
             PathKind::Ignored
         );
+        // Only notes/ holds notes; the vault root itself may hide anything.
+        assert_eq!(vault.classify(&dir.path().join("x.md")), PathKind::Ignored);
+        assert_eq!(vault.classify(dir.path()), PathKind::Folder);
     }
 
     #[cfg(unix)]
     #[test]
     fn classifies_canonical_paths_of_a_symlinked_vault() {
-        let (dir, _) = vault();
+        let dir = tempfile::tempdir().unwrap();
         let real = dir.path().join("real");
         fs::create_dir(&real).unwrap();
+        Vault::create(&real).unwrap();
         let link = dir.path().join("link");
         std::os::unix::fs::symlink(&real, &link).unwrap();
         let vault = Vault::open(&link).unwrap();
-        let reported = fs::canonicalize(&real).unwrap().join("n.md");
+        let reported = fs::canonicalize(&real).unwrap().join("notes/n.md");
         assert_eq!(vault.classify(&reported), PathKind::Note("n.md".into()));
     }
 
@@ -229,12 +233,14 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn classifies_symlinked_paths_of_a_canonical_vault() {
-        let (dir, _) = vault();
+        let dir = tempfile::tempdir().unwrap();
         let real = fs::canonicalize(dir.path()).unwrap().join("real");
-        fs::create_dir_all(real.join("sub")).unwrap();
-        fs::write(real.join("n.md"), "x").unwrap();
-        let link = dir.path().join("link");
-        std::os::unix::fs::symlink(&real, &link).unwrap();
+        fs::create_dir_all(&real).unwrap();
+        Vault::create(&real).unwrap();
+        fs::create_dir_all(real.join("notes/sub")).unwrap();
+        fs::write(real.join("notes/n.md"), "x").unwrap();
+        let link = dir.path().join("link").join("notes");
+        std::os::unix::fs::symlink(&real, dir.path().join("link")).unwrap();
         let vault = Vault::open(&real).unwrap();
         assert_eq!(
             vault.classify(&link.join("n.md")),
@@ -259,7 +265,7 @@ mod tests {
     #[test]
     fn collect_dedups_and_sorts() {
         let (dir, vault) = vault();
-        let at = |rel: &str| Hint::Path(dir.path().join(rel));
+        let at = |rel: &str| Hint::Path(dir.path().join("notes").join(rel));
         let changes = collect(
             &vault,
             [at("b.md"), at(".b.md.tmp-1-0"), at("a.md"), at("b.md")],
@@ -281,7 +287,8 @@ mod tests {
         let (dir, vault) = vault();
         let (tx, rx) = mpsc::channel();
         for name in ["a.md", "b.md", "a.md"] {
-            tx.send(Hint::Path(dir.path().join(name))).unwrap();
+            tx.send(Hint::Path(dir.path().join("notes").join(name)))
+                .unwrap();
         }
         drop(tx);
         let mut emitted = Vec::new();
