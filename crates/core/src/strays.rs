@@ -18,7 +18,8 @@ use serde::Serialize;
 use crate::layout::{ATTACHMENTS_DIR, NOTES_DIR};
 use crate::names::candidate;
 use crate::vault::{
-    Access, Result, Vault, VaultError, count_notes, has_md_extension, placeholder_note_name,
+    Access, Result, Vault, VaultError, count_notes, has_md_extension, note_paths,
+    placeholder_note_name,
 };
 
 const MAX_SUFFIX: u32 = 1000;
@@ -54,6 +55,9 @@ pub struct MovedNotes {
     /// Items left at the root: folders whose name is taken in `notes/`, and
     /// notes only in iCloud.
     pub skipped: Vec<String>,
+    /// Notes whose relative links were rewritten to keep working (ADR-0016),
+    /// relative to `notes/`.
+    pub relinked: Vec<String>,
 }
 
 impl Vault {
@@ -108,7 +112,26 @@ impl Vault {
             let from = self.root().join(&item);
             if from.is_dir() {
                 match self.move_new(&from, &self.notes_dir().join(&item)) {
-                    Ok(()) => result.moved.push(item),
+                    Ok(()) => {
+                        // Files in the folder moved along; links leaving it need fixing.
+                        let map = |p: &[String]| -> Vec<String> {
+                            if p.first() == Some(&item) {
+                                std::iter::once(NOTES_DIR.to_owned())
+                                    .chain(p.iter().cloned())
+                                    .collect()
+                            } else {
+                                p.to_vec()
+                            }
+                        };
+                        for inner in note_paths(&self.notes_dir().join(&item)) {
+                            let path = format!("{item}/{inner}");
+                            let mut old_dir: Vec<String> =
+                                path.split('/').map(str::to_owned).collect();
+                            old_dir.pop();
+                            self.relink(&path, &old_dir, &map, &mut result.relinked);
+                        }
+                        result.moved.push(item);
+                    }
                     Err(VaultError::Io(e)) if e.kind() == io::ErrorKind::AlreadyExists => {
                         result.skipped.push(item);
                     }
@@ -122,6 +145,7 @@ impl Vault {
                 let target = candidate("", stem, n);
                 match self.move_new(&from, &self.resolve(&target)?) {
                     Ok(()) => {
+                        self.relink(&target, &[], &|p| p.to_vec(), &mut result.relinked);
                         result.moved.push(target);
                         placed = true;
                         break;
@@ -135,6 +159,22 @@ impl Vault {
             }
         }
         Ok(result)
+    }
+
+    /// Rewrites the links of a note that moved in (ADR-0016); a failure only
+    /// leaves its links as they were.
+    fn relink(
+        &self,
+        path: &str,
+        old_dir: &[String],
+        map: &dyn Fn(&[String]) -> Vec<String>,
+        relinked: &mut Vec<String>,
+    ) {
+        match self.relink_after_move(path, old_dir, map) {
+            Ok(true) => relinked.push(path.to_owned()),
+            Ok(false) => {}
+            Err(e) => eprintln!("links in {path} not updated: {e}"),
+        }
     }
 }
 
@@ -269,6 +309,39 @@ mod tests {
                 PathKind::Ignored,
                 "{ignored}"
             );
+        }
+    }
+
+    #[test]
+    fn links_keep_working_after_the_move() {
+        let (dir, vault) = vault();
+        let root = dir.path();
+        write(&root.join("attachments/ab/x.png"), "png");
+        write(&root.join("Neu.md"), "# Neu\n![x](attachments/ab/x.png)\n");
+        write(
+            &root.join("Mappe/Notiz.md"),
+            "# Notiz\n![in](bild.png) ![out](../attachments/ab/x.png)\n",
+        );
+        write(&root.join("Mappe/bild.png"), "png");
+
+        let moved = vault.move_stray_notes().unwrap();
+        assert_eq!(moved.relinked, ["Mappe/Notiz.md", "Neu.md"]);
+        let read = |p: &str| fs::read_to_string(root.join(p)).unwrap();
+        assert!(read("notes/Neu.md").contains("![x](../attachments/ab/x.png)"));
+        let notiz = read("notes/Mappe/Notiz.md");
+        assert!(notiz.contains("![in](bild.png)"), "{notiz}");
+        assert!(
+            notiz.contains("![out](../../attachments/ab/x.png)"),
+            "{notiz}"
+        );
+        // The notes had no id: they got one, and their old text is in the history.
+        let id = crate::front_matter::get(&notiz, "id").unwrap();
+        assert_eq!(vault.snapshots(&id).unwrap().len(), 1);
+        for (note, link) in [
+            ("Neu.md", "../attachments/ab/x.png"),
+            ("Mappe/Notiz.md", "bild.png"),
+        ] {
+            assert!(vault.read_linked_file(note, link).is_ok(), "{note}: {link}");
         }
     }
 }

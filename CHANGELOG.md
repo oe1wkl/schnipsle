@@ -7,8 +7,8 @@ All notable changes to this project are documented here. The format follows [Kee
 ### Added
 
 - Repository foundation: Cargo workspace (`schnipsle-core`, `-import`, `-export`, Tauri 2 shell), TypeScript UI, CI, dependency licence checks, macOS bootstrap script.
-- Architecture decision records ADR-0001 to ADR-0015.
-- Vault format specification, draft revision 0.6 (notes, front matter, tags, links, attachments, music in ABC, song sheets in ChordPro, history, trash, smart folders).
+- Architecture decision records ADR-0001 to ADR-0016.
+- Vault format specification, draft revision 0.7 (notes, front matter, tags, links, attachments, music in ABC, song sheets in ChordPro, history, trash, smart folders).
 - Hashtag extraction in `schnipsle-core` following format.md §5.3, with the specification examples as tests.
 - Vault access in `schnipsle-core`: list notes (with iCloud placeholders), read, atomic write with conflict detection, create (spike, see docs/spikes/ios-vault.md).
 - `tauri-plugin-vault-access`: iOS folder picker with security-scoped bookmarks and iCloud download requests (spike).
@@ -23,6 +23,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - Vaults follow the layout of format.md §1: a vault is a folder with `.notesapp/vault.yaml`, and its notes live in `notes/`. Picking a folder without `vault.yaml` asks first and then moves everything visible in it into `notes/` (relative links keep working; hidden files such as `.notesapp/` stay), so existing note folders, including the M1 test vault, are converted only with consent. A vault written by a newer format version, or with a damaged `vault.yaml`, opens read-only with an explanation. Picking a folder inside a vault is refused.
 - Notes that turn up outside `notes/` (`.md` files and folders with notes at the vault root, e.g. saved by an older build on another device) are detected when the vault opens and when its root changes. A banner offers to move them into `notes/`: notes with a taken name get `-2`, `-3`, …, folders with a taken name stay where they are, and nothing is replaced.
 - Images and other attachments (format.md §5.5, §6): paste or drop files into a note, or pick images with the Image button. Each file is stored once per content at `attachments/<h0h1>/<sha256>.<ext>`, with a sidecar recording its original name, and the note gets a link relative to it (`![name](../attachments/…)`; other files get a plain link). Live preview shows images, also ones next to the note; on the line being edited the Markdown appears in front of the image, which stays visible.
+- Image and file links keep working when a note moves to another folder (format.md 0.7 §5.5, ADR-0016): when a restore from the trash falls back to `notes/`, or notes are moved in from the vault root, relative links that worked before are rewritten, and the previous text goes into the note's history. URLs, note links and links that were already broken stay as written.
 - Test UI: open a vault folder, edit notes with autosave, reload external changes, resolve conflicts (spike).
 
 ### Changed

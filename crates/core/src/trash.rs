@@ -136,8 +136,9 @@ impl Vault {
 
     /// Moves a note out of the trash, back to its original path or, if that
     /// is taken, unknown or not inside `notes/`, into `notes/` under its file
-    /// name, with a `-n` suffix on collision. Returns its path relative to
-    /// `notes/`.
+    /// name, with a `-n` suffix on collision. If it lands in another folder,
+    /// its relative links are rewritten to keep working (ADR-0016). Returns
+    /// its path relative to `notes/`.
     ///
     /// # Errors
     /// [`VaultError::InvalidPath`] for a bad key, or I/O errors.
@@ -166,10 +167,26 @@ impl Vault {
                 format!("{stem}-{n}.md")
             }
         });
+        // The folder its links were written for (ADR-0016); unknown for
+        // records of earlier builds.
+        let old_dir: Option<Vec<String>> = recorded
+            .strip_prefix(NOTES_DIR)
+            .filter(|p| p.starts_with('/'))
+            .map(|_| {
+                let mut parts: Vec<String> = recorded.split('/').map(str::to_owned).collect();
+                parts.pop();
+                parts
+            });
         for target in original.into_iter().chain(fallback) {
             match self.move_new(&trashed, &self.resolve(&target)?) {
                 Ok(()) => {
                     let _ = fs::remove_file(&yaml);
+                    if let Some(old_dir) = old_dir.filter(|d| *d != notes_dir_of(&target)) {
+                        // The note is back either way; broken links are reported, not fatal.
+                        if let Err(e) = self.relink_after_move(&target, &old_dir, &|p| p.to_vec()) {
+                            eprintln!("links in {target} not updated: {e}");
+                        }
+                    }
                     return Ok(target);
                 }
                 Err(VaultError::Io(e)) if e.kind() == io::ErrorKind::AlreadyExists => {}
@@ -184,6 +201,16 @@ impl Vault {
 fn is_key(key: &str) -> bool {
     let (id, n) = key.split_once('-').unwrap_or((key, "2"));
     is_ulid(id) && n.parse::<u32>().is_ok_and(|n| n >= 2)
+}
+
+/// The folder of a note path, below the vault root: `a/b.md` → `notes/a`.
+fn notes_dir_of(path: &str) -> Vec<String> {
+    let mut parts: Vec<String> = std::iter::once(NOTES_DIR)
+        .chain(path.split('/'))
+        .map(str::to_owned)
+        .collect();
+    parts.pop();
+    parts
 }
 
 fn file_stem(path: &str) -> &str {
@@ -365,5 +392,81 @@ mod tests {
         );
         assert!(!dir.path().join("outside.md").exists());
         assert!(!dir.path().join("projekte").exists());
+    }
+
+    #[test]
+    fn a_restore_into_another_folder_keeps_links_working() {
+        let (dir, vault) = vault();
+        let root = dir.path();
+        let png = vault
+            .add_attachment("projects/antenna.md", "plan.png", b"png")
+            .unwrap();
+        fs::create_dir_all(root.join("notes/projects")).unwrap();
+        fs::write(root.join("notes/projects/photo.png"), "next to it").unwrap();
+        let note = format!(
+            "---\nid: {ID}\n---\n# Antenna\n{}\n![p](photo.png) ![gone](missing.png) \
+             [web](https://example.org)\n",
+            png.markdown
+        );
+        fs::write(root.join("notes/projects/antenna.md"), &note).unwrap();
+        let trashed = vault.trash_note("projects/antenna.md").unwrap();
+        fs::write(root.join("notes/projects/antenna.md"), "taken").unwrap();
+
+        assert_eq!(vault.restore_note(&trashed.key).unwrap(), "antenna.md");
+        let restored = fs::read_to_string(root.join("notes/antenna.md")).unwrap();
+        assert!(
+            restored.contains(&format!("](../{})", png.path)),
+            "{restored}"
+        );
+        assert!(restored.contains("![p](projects/photo.png)"), "{restored}");
+        assert!(restored.contains("![gone](missing.png)"), "{restored}");
+        assert!(
+            restored.contains("[web](https://example.org)"),
+            "{restored}"
+        );
+        assert!(restored.contains(&format!("id: {ID}")), "{restored}");
+        // The text as deleted is in the history.
+        let snapshots = vault.snapshots(ID).unwrap();
+        let last = snapshots.last().unwrap();
+        assert_eq!(vault.read_snapshot(ID, last).unwrap(), note);
+        // Both images resolve from the restored note.
+        for link in [
+            png.path.replacen("attachments", "../attachments", 1),
+            "projects/photo.png".into(),
+        ] {
+            assert!(
+                vault.read_linked_file("antenna.md", &link).is_ok(),
+                "{link}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_restore_to_the_same_folder_changes_nothing() {
+        let (dir, vault) = vault();
+        let note = format!("---\nid: {ID}\n---\n![p](photo.png)\n");
+        fs::create_dir_all(dir.path().join("notes/p")).unwrap();
+        fs::write(dir.path().join("notes/p/photo.png"), "x").unwrap();
+        fs::write(dir.path().join("notes/p/n.md"), &note).unwrap();
+        let trashed = vault.trash_note("p/n.md").unwrap();
+        fs::write(dir.path().join("notes/p/n.md"), "taken").unwrap();
+        fs::write(dir.path().join("notes/n.md"), "taken too").unwrap();
+        assert_eq!(vault.restore_note(&trashed.key).unwrap(), "n-2.md");
+        // Restored one level up: the link is rewritten …
+        assert!(
+            fs::read_to_string(dir.path().join("notes/n-2.md"))
+                .unwrap()
+                .contains("![p](p/photo.png)")
+        );
+        // … but a restore to its own path leaves the text alone.
+        let back = vault.trash_note("n-2.md").unwrap();
+        let before =
+            fs::read_to_string(dir.path().join(TRASH_DIR).join(format!("{}.md", back.key)))
+                .unwrap();
+        assert_eq!(vault.restore_note(&back.key).unwrap(), "n-2.md");
+        assert_eq!(
+            fs::read_to_string(dir.path().join("notes/n-2.md")).unwrap(),
+            before
+        );
     }
 }

@@ -688,6 +688,17 @@ fn canonical_lenient(path: &Path) -> Option<PathBuf> {
     }
 }
 
+/// Paths of the downloaded notes below `dir`, relative to it.
+pub(crate) fn note_paths(dir: &Path) -> Vec<String> {
+    let mut notes = Vec::new();
+    let _ = collect(dir, "", &mut notes, true);
+    notes
+        .into_iter()
+        .filter(|n| n.available)
+        .map(|n| n.path)
+        .collect()
+}
+
 /// Number of notes below `dir`, iCloud placeholders included.
 pub(crate) fn count_notes(dir: &Path) -> Result<usize> {
     let mut notes = Vec::new();

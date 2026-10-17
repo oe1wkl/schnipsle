@@ -11,6 +11,7 @@ mod flat_yaml;
 pub mod front_matter;
 pub mod history;
 pub mod layout;
+pub mod links;
 pub mod names;
 pub mod stamp;
 pub mod strays;
