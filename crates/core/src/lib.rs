@@ -4,6 +4,7 @@
 //! The vault format is specified in `docs/format.md`; architecture decisions are in `docs/adr/`.
 //! This crate must build and test on every platform without a `WebView`.
 
+pub mod attachments;
 pub mod conflicts;
 pub mod coordination;
 mod flat_yaml;
@@ -18,6 +19,7 @@ pub mod trash;
 pub mod vault;
 pub mod watch;
 
+pub use attachments::AddedAttachment;
 pub use conflicts::{ConflictVersion, NoSyncConflicts, RawVersion, SyncConflicts};
 pub use coordination::{Coordinator, Uncoordinated};
 pub use layout::{Folder, VaultIdentity, inspect};

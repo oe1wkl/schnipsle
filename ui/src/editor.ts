@@ -15,6 +15,7 @@ import {
   Compartment,
   EditorState,
   type Extension,
+  Facet,
   type Range,
   Transaction,
 } from "@codemirror/state";
@@ -42,6 +43,8 @@ export interface NoteEditor {
   setMode(mode: EditorMode): void;
   focus(): void;
   cursorToEnd(): void;
+  /** Inserts `text` as a user edit at `pos`, or in place of the selection if `null`. */
+  insert(text: string, pos: number | null): void;
   /**
    * Replaces the front matter block `oldBlock` at the start of the note with
    * `newBlock`, outside the undo history; the selection moves with the text.
@@ -105,6 +108,49 @@ class CheckboxWidget extends WidgetType {
   }
 }
 
+/** Turns an image link as written in the note into a URL the page can show. */
+export type ImageLoader = (url: string) => Promise<string>;
+const imageLoader = Facet.define<ImageLoader, ImageLoader | null>({
+  combine: (loaders) => loaders[0] ?? null,
+});
+
+/** An image in live preview; shows its description if it cannot be loaded. */
+class ImageWidget extends WidgetType {
+  constructor(
+    private readonly url: string,
+    private readonly alt: string,
+    private readonly load: ImageLoader,
+  ) {
+    super();
+  }
+  override eq(other: ImageWidget): boolean {
+    return other.url === this.url && other.alt === this.alt;
+  }
+  override toDOM(view: EditorView): HTMLElement {
+    const wrap = document.createElement("span");
+    wrap.className = "cm-image";
+    const img = document.createElement("img");
+    img.alt = this.alt;
+    img.addEventListener("load", () => {
+      view.requestMeasure();
+    });
+    wrap.append(img);
+    this.load(this.url).then(
+      (src) => {
+        img.src = src;
+      },
+      () => {
+        wrap.className = "cm-image-missing";
+        wrap.textContent = `Image not available: ${this.alt || this.url}`;
+      },
+    );
+    return wrap;
+  }
+  override ignoreEvent(): boolean {
+    return false; // a click puts the cursor there, which shows the Markdown
+  }
+}
+
 const hide = Decoration.replace({});
 const muted = Decoration.mark({ class: "cm-md-mark" });
 
@@ -122,6 +168,7 @@ function editedLines(view: EditorView): (from: number, to: number) => boolean {
 function previewDecorations(view: EditorView): DecorationSet {
   const { state } = view;
   const edited = editedLines(view);
+  const load = state.facet(imageLoader);
   const found: Range<Decoration>[] = [];
   for (const { from, to } of view.visibleRanges) {
     syntaxTree(state).iterate({
@@ -129,6 +176,27 @@ function previewDecorations(view: EditorView): DecorationSet {
       to,
       enter: (node) => {
         const isEdited = edited(node.from, node.to);
+        if (node.name === "Image") {
+          // `![alt](url)` shows the image in place of the Markdown. On the line
+          // being edited the Markdown shows too, with the image right after it,
+          // so the image does not vanish under the cursor. A plugin may not
+          // replace line breaks, so an image spread over lines only gets that.
+          const url = node.node.getChild("URL");
+          const altEnd = node.node.getChildren("LinkMark")[1]?.from;
+          if (load === null || !url || altEnd === undefined) return;
+          const widget = new ImageWidget(
+            state.doc.sliceString(url.from, url.to),
+            state.doc.sliceString(node.from + 2, altEnd),
+            load,
+          );
+          const oneLine = state.doc.lineAt(node.from).to >= node.to;
+          found.push(
+            isEdited || !oneLine
+              ? Decoration.widget({ widget, side: 1 }).range(node.to)
+              : Decoration.replace({ widget }).range(node.from, node.to),
+          );
+          return false;
+        }
         switch (node.name) {
           case "HeaderMark": {
             if (isEdited) break;
@@ -297,6 +365,8 @@ const theme = EditorView.theme({
   ".cm-task": { margin: "0 0.35em 0 0", verticalAlign: "-0.1em", cursor: "pointer" },
   ".cm-md-mark": { color: "var(--muted)" },
   ".cm-frontmatter, .cm-frontmatter *": { color: "var(--muted)", fontSize: "0.9em" },
+  ".cm-image img": { maxWidth: "100%", maxHeight: "24rem", verticalAlign: "bottom" },
+  ".cm-image-missing": { color: "var(--muted)", fontStyle: "italic" },
 });
 
 const sourceTheme = EditorView.theme({
@@ -312,7 +382,13 @@ const modes: Record<EditorMode, Extension> = {
 
 export function createEditor(
   parent: HTMLElement,
-  events: { onChange: () => void; onBlur: () => void },
+  events: {
+    onChange: () => void;
+    onBlur: () => void;
+    /** Files pasted or dropped into the note; `pos` is where they were dropped. */
+    onFiles: (files: File[], pos: number | null) => void;
+    loadImage: ImageLoader;
+  },
 ): NoteEditor {
   const mode = new Compartment();
   const enabled = new Compartment();
@@ -334,6 +410,7 @@ export function createEditor(
         language.of(startsWithFrontMatter(doc) ? withFrontMatter : markdownSupport),
         switchLanguage,
         mutedFrontMatter,
+        imageLoader.of(events.loadImage),
         mode.of(modes[currentMode]),
         enabled.of(enabledExtension(isEnabled)),
         placeholder("Select a note"),
@@ -353,6 +430,20 @@ export function createEditor(
         EditorView.domEventHandlers({
           blur: () => {
             events.onBlur();
+          },
+          paste: (event) => {
+            const files = Array.from(event.clipboardData?.files ?? []);
+            if (files.length === 0) return false;
+            event.preventDefault();
+            events.onFiles(files, null);
+            return true;
+          },
+          drop: (event, view) => {
+            const files = Array.from(event.dataTransfer?.files ?? []);
+            if (files.length === 0) return false;
+            event.preventDefault();
+            events.onFiles(files, view.posAtCoords({ x: event.clientX, y: event.clientY }));
+            return true;
           },
         }),
       ],
@@ -378,6 +469,14 @@ export function createEditor(
     },
     cursorToEnd() {
       view.dispatch({ selection: { anchor: view.state.doc.length }, scrollIntoView: true });
+    },
+    insert(text, pos) {
+      const spec =
+        pos === null
+          ? view.state.replaceSelection(text)
+          : { changes: { from: pos, insert: text }, selection: { anchor: pos + text.length } };
+      view.dispatch(spec, { userEvent: "input.paste", scrollIntoView: true });
+      view.focus();
     },
     replaceFrontMatter(oldBlock, newBlock) {
       if (view.state.doc.sliceString(0, oldBlock.length) !== oldBlock) return false;

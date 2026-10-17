@@ -19,6 +19,8 @@ Some *emphasis*, **strong** and ~~struck~~ text, \`inline code\` and a [link](ht
 
 > A quote with **bold** inside.
 
+![Schaltplan](../attachments/3f/3f9a.svg) and an image that is missing: ![Datenblatt](gone.png)
+
 1. first
 2. second
 
@@ -26,6 +28,9 @@ Some *emphasis*, **strong** and ~~struck~~ text, \`inline code\` and a [link](ht
 cargo test --workspace
 \`\`\`
 `;
+
+const DRAWING = `<svg xmlns="http://www.w3.org/2000/svg" width="240" height="80">
+<rect width="240" height="80" rx="8" fill="#d0e4ff"/><text x="20" y="48" font-size="20">Schaltplan</text></svg>`;
 
 function el(id: string): HTMLElement {
   const found = document.getElementById(id);
@@ -41,6 +46,17 @@ const editor = createEditor(el("editor-host"), {
   onBlur: () => {
     status.textContent = "Blurred";
   },
+  onFiles: (files, pos) => {
+    const links = files
+      .map((f) => `![${f.name}](../attachments/${encodeURIComponent(f.name)})`)
+      .join("\n");
+    editor.insert(links, pos);
+  },
+  // Every `.svg` link shows the same drawing; anything else is missing.
+  loadImage: (url) =>
+    url.endsWith(".svg")
+      ? Promise.resolve(`data:image/svg+xml,${encodeURIComponent(DRAWING)}`)
+      : Promise.reject(new Error("not found")),
 });
 editor.load(SAMPLE);
 editor.setEnabled(true);
