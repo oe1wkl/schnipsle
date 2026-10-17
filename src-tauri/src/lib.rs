@@ -451,7 +451,7 @@ fn extract_tags(markdown: &str) -> Vec<Tag> {
     schnipsle_core::extract_tags(markdown)
 }
 
-/// Puts "New Note" (⌘N) and "Open Folder…" (⌘O) at the top of the File menu.
+/// Puts "New Note" (⌘N) and "Open Vault…" (⌘O) at the top of the File menu.
 /// Tauri's default menu has a File menu (with Close Window) on macOS but none on
 /// Linux, where one is created. A click is sent to the UI as a `menu` event
 /// carrying the item id.
@@ -462,7 +462,7 @@ fn install_menu(app: &tauri::App) -> tauri::Result<()> {
 
     let menu = Menu::default(app.handle())?;
     let new_note = MenuItem::with_id(app, "new-note", "New Note", true, Some("CmdOrCtrl+N"))?;
-    let open = MenuItem::with_id(app, "open-vault", "Open Folder…", true, Some("CmdOrCtrl+O"))?;
+    let open = MenuItem::with_id(app, "open-vault", "Open Vault…", true, Some("CmdOrCtrl+O"))?;
     let separator = PredefinedMenuItem::separator(app)?;
 
     let mut file_menu = None;
