@@ -43,7 +43,7 @@ Editor:
 - [x] Note list with titles per format.md §5.2, sorting, new/rename/delete (delete → trash, format.md §8); rename follows the title when you leave a note, Trash view with restore
 - [x] Front matter (`id`, `created`, `modified`) written on first save (format.md §4), `modified` updated on each change
 - [x] Images: paste/drag-drop/picker → `attachments/` by SHA-256 (format.md §6), relative links, shown in live preview
-- [ ] Keep relative links working when a note lands at another folder depth (restore into `notes/` as fallback, moving notes in from the vault root): rewrite them, or warn
+- [x] Keep relative links working when a note lands at another folder depth (restore into `notes/` as fallback, moving notes in from the vault root): rewritten, old text in the history (ADR-0016)
 - [ ] Autosave with history snapshots (format.md §7, ADR-0011); the snapshot writer exists and is used for sync conflicts, autosave snapshots and retention are still open
 - [ ] Phone layout: list and editor as separate views
 

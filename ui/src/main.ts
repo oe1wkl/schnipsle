@@ -33,6 +33,8 @@ interface StrayNotes {
 interface MovedNotes {
   moved: string[];
   skipped: string[];
+  /** Notes whose links were rewritten to keep working (ADR-0016). */
+  relinked: string[];
 }
 /** Result of picking or restoring a folder (src-tauri `Opened`). */
 type Opened = ({ kind: "vault" } & VaultInfo) | ({ kind: "setup" } & FolderSetup);
@@ -819,6 +821,9 @@ ui.straysMove.addEventListener("click", () => {
     .then(async (result) => {
       const n = result.moved.length;
       let message = `Moved ${n === 1 ? "1 item" : `${String(n)} items`} into “notes”.`;
+      if (result.relinked.length > 0) {
+        message += ` Updated the links in ${String(result.relinked.length)} of them.`;
+      }
       if (result.skipped.length > 0) {
         message += ` Not moved: ${result.skipped.join(", ")} (name taken or not downloaded yet).`;
       }

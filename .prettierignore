@@ -5,3 +5,4 @@ pnpm-lock.yaml
 docs/adr/
 docs/*.md
 CHANGELOG.md
+tests/fixtures/

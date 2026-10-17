@@ -1,9 +1,9 @@
 # Vault File Format Specification
 
 - Format version: **1** (draft)
-- Spec revision: 0.6, 2026-10-16 (§8 `original_path` is relative to the vault root; 0.5: §8 trash names for notes without `id` and for collisions; 0.4: §5.3 refined by the first implementation, §5.6 music notation, §5.7 lyrics with chords)
+- Spec revision: 0.7, 2026-10-17 (§5.5 relative links are kept working when a note moves; 0.6: §8 `original_path` is relative to the vault root; 0.5: §8 trash names for notes without `id` and for collisions; 0.4: §5.3 refined by the first implementation, §5.6 music notation, §5.7 lyrics with chords)
 - Status: Draft — becomes normative when M1 ships
-- Related: ADR-0004, ADR-0008, ADR-0009, ADR-0011, ADR-0013, ADR-0014
+- Related: ADR-0004, ADR-0008, ADR-0009, ADR-0011, ADR-0013, ADR-0014, ADR-0016
 
 The key words MUST, MUST NOT, SHOULD, SHOULD NOT and MAY are used as described in RFC 2119.
 
@@ -138,6 +138,8 @@ Attachments are referenced with ordinary Markdown links or images using a path *
 ```
 
 Readers MUST resolve these relative to the note's directory. The link text SHOULD hold the original file name or a description.
+
+A writer that moves a note to another folder SHOULD rewrite the relative link destinations in it that resolved before the move, so they resolve to the same files afterwards, and MUST store the previous version as a snapshot (§7) first. URLs, absolute paths, note links (§5.4) and links that did not resolve MUST stay as written (ADR-0016).
 
 ### 5.6 Music notation
 
