@@ -80,6 +80,12 @@ interface TrashedNote {
   originalPath: string;
   deleted: string;
 }
+/** A stored attachment (schnipsle-core `AddedAttachment`). */
+interface AddedAttachment {
+  path: string;
+  link: string;
+  markdown: string;
+}
 interface NewNote {
   path: string;
   saved: SavedNote;
@@ -113,6 +119,8 @@ const ui = {
   sort: el("sort") as HTMLSelectElement,
   showTrash: el("show-trash") as HTMLButtonElement,
   deleteNote: el("delete-note") as HTMLButtonElement,
+  addImage: el("add-image") as HTMLButtonElement,
+  imageFile: el("image-file") as HTMLInputElement,
   undoDelete: el("undo-delete") as HTMLButtonElement,
   status: el("status"),
   tags: el("tags"),
@@ -166,7 +174,86 @@ const editor = createEditor(ui.editorHost, {
     void showTags();
   },
   onBlur: () => void flushSave(),
+  onFiles: (files, pos) => void attachFiles(files, pos),
+  loadImage,
 });
+
+/** Object URLs of the images shown for the open note, by link. */
+let images = new Map<string, Promise<string>>();
+
+const IMAGE_TYPES: Record<string, string> = {
+  avif: "image/avif",
+  gif: "image/gif",
+  heic: "image/heic",
+  jpeg: "image/jpeg",
+  jpg: "image/jpeg",
+  png: "image/png",
+  svg: "image/svg+xml",
+  webp: "image/webp",
+};
+
+/** Loads an image the open note links to (format.md §5.5) for the live preview. */
+function loadImage(url: string): Promise<string> {
+  const note = current;
+  if (!note) return Promise.reject(new Error("no note open"));
+  let image = images.get(url);
+  if (!image) {
+    const ext = /\.([a-z0-9]+)(?:[?#]|$)/i.exec(url)?.[1]?.toLowerCase() ?? "";
+    image = invoke<ArrayBuffer>("read_linked_file", { notePath: note.path, link: url }).then(
+      (bytes) => URL.createObjectURL(new Blob([bytes], { type: IMAGE_TYPES[ext] ?? "" })),
+    );
+    images.set(url, image);
+  }
+  return image;
+}
+
+/** Releases the images of the note that was open. */
+function forgetImages(): void {
+  for (const image of images.values()) {
+    image.then(
+      (url) => {
+        URL.revokeObjectURL(url);
+      },
+      () => undefined,
+    );
+  }
+  images = new Map();
+}
+
+const EXTENSION_OF_TYPE: Record<string, string> = {
+  "image/gif": "gif",
+  "image/heic": "heic",
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/svg+xml": "svg",
+  "image/webp": "webp",
+};
+
+/**
+ * Stores files as attachments (format.md §6) and inserts links to them at
+ * `pos`, or in place of the selection.
+ */
+async function attachFiles(files: File[], pos: number | null): Promise<void> {
+  const note = current;
+  if (!note || readOnly !== null) {
+    setStatus(note ? "This vault is read-only." : "Open a note first.");
+    return;
+  }
+  const links: string[] = [];
+  for (const file of files) {
+    const name = file.name || `image.${EXTENSION_OF_TYPE[file.type] ?? "bin"}`;
+    try {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const added = await invoke<AddedAttachment>("add_attachment", bytes, {
+        headers: { "x-note": encodeURIComponent(note.path), "x-name": encodeURIComponent(name) },
+      });
+      links.push(added.markdown);
+    } catch (e) {
+      setStatus(`Not attached: ${name}: ${asError(e).message}`);
+    }
+  }
+  if (links.length > 0 && current === note) editor.insert(links.join("\n"), pos);
+}
 
 const isDirty = (): boolean => current !== null && editor.text() !== current.savedText;
 
@@ -382,9 +469,11 @@ function leaveNote(): Promise<void> {
 /** Empties the editor: no note open. */
 function closeEditor(): void {
   current = null;
+  forgetImages();
   editor.load("");
   editor.setEnabled(false);
   ui.deleteNote.disabled = true;
+  ui.addImage.disabled = true;
   hideConflict();
   showSyncConflicts([]);
   ui.tags.textContent = "";
@@ -419,6 +508,7 @@ async function openNote(note: NoteEntry): Promise<void> {
 }
 
 function load(content: NoteContent): void {
+  forgetImages();
   current = {
     path: content.path,
     hash: content.hash,
@@ -428,6 +518,7 @@ function load(content: NoteContent): void {
   editor.load(content.text);
   editor.setEnabled(readOnly === null);
   ui.deleteNote.disabled = readOnly !== null;
+  ui.addImage.disabled = readOnly !== null;
   hideConflict();
   showSyncConflicts(content.conflicts);
   setStatus(
@@ -679,6 +770,15 @@ ui.deleteNote.addEventListener("click", () => {
       setStatus(`Not deleted: ${asError(e).message}`);
     }
   });
+});
+
+ui.addImage.addEventListener("click", () => {
+  ui.imageFile.click();
+});
+ui.imageFile.addEventListener("change", () => {
+  const files = Array.from(ui.imageFile.files ?? []);
+  ui.imageFile.value = "";
+  if (files.length > 0) void attachFiles(files, null);
 });
 
 ui.undoDelete.addEventListener("click", () => {

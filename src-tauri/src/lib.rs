@@ -13,8 +13,8 @@ use std::sync::{Arc, Mutex};
 
 use schnipsle_core::layout::VAULT_FILE;
 use schnipsle_core::{
-    Coordinator, Folder, MovedNotes, NewNote, NoteContent, NoteEntry, SavedNote, SortOrder,
-    StrayNotes, Tag, TrashedNote, Vault, VaultError,
+    AddedAttachment, Coordinator, Folder, MovedNotes, NewNote, NoteContent, NoteEntry, SavedNote,
+    SortOrder, StrayNotes, Tag, TrashedNote, Vault, VaultError,
 };
 use serde::Serialize;
 use tauri::State;
@@ -299,6 +299,54 @@ async fn move_stray_notes(
     })
 }
 
+/// A header of an IPC request, percent-encoded by the UI (headers are ASCII).
+fn header(request: &tauri::ipc::Request<'_>, name: &str) -> CmdResult<String> {
+    request
+        .headers()
+        .get(name)
+        .and_then(|v| v.to_str().ok())
+        .and_then(schnipsle_core::attachments::percent_decode)
+        .ok_or_else(|| CommandError::other(format!("missing header {name}")))
+}
+
+/// Stores a file as an attachment (format.md §6) for a note and returns the
+/// Markdown linking to it. The body is the file's bytes; the headers
+/// `x-note` (note path) and `x-name` (original file name) are percent-encoded.
+#[tauri::command]
+async fn add_attachment(
+    state: State<'_, AppState>,
+    request: tauri::ipc::Request<'_>,
+) -> CmdResult<AddedAttachment> {
+    let note = header(&request, "x-note")?;
+    let name = header(&request, "x-name")?;
+    let json_bytes;
+    let bytes = match request.body() {
+        tauri::ipc::InvokeBody::Raw(bytes) => bytes.as_slice(),
+        // Android sends JSON only: an array of numbers.
+        tauri::ipc::InvokeBody::Json(value) => {
+            json_bytes =
+                serde_json::from_value::<Vec<u8>>(value.clone()).map_err(CommandError::other)?;
+            json_bytes.as_slice()
+        }
+    };
+    with_vault(&state, |v| Ok(v.add_attachment(&note, &name, bytes)?))
+}
+
+/// The bytes of the file a link in a note points to (format.md §5.5), e.g. an
+/// image to show in the editor.
+#[tauri::command]
+async fn read_linked_file(
+    state: State<'_, AppState>,
+    note_path: String,
+    link: String,
+) -> CmdResult<tauri::ipc::Response> {
+    with_vault(&state, |v| {
+        Ok(tauri::ipc::Response::new(
+            v.read_linked_file(&note_path, &link)?,
+        ))
+    })
+}
+
 /// Creates a note named after its title (format.md §3).
 #[tauri::command]
 async fn new_note(state: State<'_, AppState>, text: String) -> CmdResult<NewNote> {
@@ -473,6 +521,8 @@ pub fn run() {
             restore_vault,
             create_vault,
             list_notes,
+            add_attachment,
+            read_linked_file,
             stray_notes,
             move_stray_notes,
             new_note,
