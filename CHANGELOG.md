@@ -21,6 +21,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - Note list: sort by recently changed or by title (ignoring case and accents). New notes are named after their title, and when you leave a note whose title changed, its file is renamed to match (format.md §3); renames never replace another file.
 - Trash (format.md §8): Delete moves a note unchanged to `.notesapp/trash/`, with Undo; a Trash view lists deleted notes and restores them. Notes without `id` and repeated ids get their own trash names (format.md 0.5).
 - Vaults follow the layout of format.md §1: a vault is a folder with `.notesapp/vault.yaml`, and its notes live in `notes/`. Picking a folder without `vault.yaml` asks first and then moves everything visible in it into `notes/` (relative links keep working; hidden files such as `.notesapp/` stay), so existing note folders, including the M1 test vault, are converted only with consent. A vault written by a newer format version, or with a damaged `vault.yaml`, opens read-only with an explanation. Picking a folder inside a vault is refused.
+- Notes that turn up outside `notes/` (`.md` files and folders with notes at the vault root, e.g. saved by an older build on another device) are detected when the vault opens and when its root changes. A banner offers to move them into `notes/`: notes with a taken name get `-2`, `-3`, …, folders with a taken name stay where they are, and nothing is replaced.
 - Test UI: open a vault folder, edit notes with autosave, reload external changes, resolve conflicts (spike).
 
 ### Changed

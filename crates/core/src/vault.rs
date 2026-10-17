@@ -30,7 +30,7 @@ use sha2::{Digest, Sha256};
 use crate::conflicts::{ConflictVersion, NoSyncConflicts, SyncConflicts};
 use crate::coordination::{Coordinator, Uncoordinated};
 use crate::front_matter;
-use crate::layout::{FORMAT, NOTES_DIR, VAULT_FILE, VaultIdentity};
+use crate::layout::{ATTACHMENTS_DIR, FORMAT, NOTES_DIR, VAULT_FILE, VaultIdentity};
 use crate::stamp::{new_ulid, now_ms, rfc3339_utc};
 
 /// Errors from vault operations.
@@ -168,7 +168,8 @@ pub struct SavedNote {
 pub enum PathKind {
     /// A note (or its iCloud placeholder); path relative to `notes/`.
     Note(String),
-    /// The root, `notes/` or a folder in it: any notes below it may have changed.
+    /// The root, `notes/` or a folder in it: any notes below it may have
+    /// changed. Also a change that may add or remove a note outside `notes/`.
     Folder,
     /// Outside `notes/`, hidden, or not a note.
     Ignored,
@@ -528,7 +529,9 @@ impl Vault {
     }
 
     /// Classifies an absolute path reported by a file watcher (ADR-0015). Only
-    /// notes in `notes/` count.
+    /// notes in `notes/` count; a change elsewhere that may add or remove a
+    /// note outside `notes/` ([`crate::strays`]) is reported as a `Folder`, so
+    /// the app checks again.
     ///
     /// The root and the reported path may each be in canonical form or go
     /// through a symlink: iOS opens the vault as `/private/var/mobile/…` but its
@@ -555,7 +558,7 @@ impl Vault {
         match parts.first() {
             None => return PathKind::Folder, // the vault root itself
             Some(first) if first == NOTES_DIR => {}
-            Some(_) => return PathKind::Ignored, // .notesapp/, attachments/, …
+            Some(_) => return outside_notes(&parts, file),
         }
         parts.remove(0);
         let Some(last) = parts.pop() else {
@@ -774,12 +777,33 @@ fn skip_front_matter(text: &str) -> &str {
     text // unterminated front matter: treat as body
 }
 
-fn has_md_extension(name: &str) -> bool {
+/// [`Vault::classify`] for a path outside `notes/`, given as its components
+/// below the vault root (at least one).
+fn outside_notes(parts: &[String], file: &Path) -> PathKind {
+    let Some((last, dirs)) = parts.split_last() else {
+        return PathKind::Folder;
+    };
+    if parts[0] == ATTACHMENTS_DIR || dirs.iter().any(|p| p.starts_with('.')) {
+        return PathKind::Ignored; // the app's own folders and hidden ones
+    }
+    let note =
+        placeholder_note_name(last).is_some() || (!last.starts_with('.') && has_md_extension(last));
+    let folder_at_root = dirs.is_empty()
+        && !last.starts_with('.')
+        && (file.is_dir() || Path::new(last).extension().is_none());
+    if note || folder_at_root {
+        PathKind::Folder
+    } else {
+        PathKind::Ignored
+    }
+}
+
+pub(crate) fn has_md_extension(name: &str) -> bool {
     name.len() > 3 && name.to_ascii_lowercase().ends_with(".md")
 }
 
 /// `.Name.md.icloud` → `Name.md`
-fn placeholder_note_name(name: &str) -> Option<&str> {
+pub(crate) fn placeholder_note_name(name: &str) -> Option<&str> {
     let inner = name.strip_prefix('.')?.strip_suffix(".icloud")?;
     has_md_extension(inner).then_some(inner)
 }

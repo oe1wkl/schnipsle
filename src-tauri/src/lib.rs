@@ -13,8 +13,8 @@ use std::sync::{Arc, Mutex};
 
 use schnipsle_core::layout::VAULT_FILE;
 use schnipsle_core::{
-    Coordinator, Folder, NewNote, NoteContent, NoteEntry, SavedNote, SortOrder, Tag, TrashedNote,
-    Vault, VaultError,
+    Coordinator, Folder, MovedNotes, NewNote, NoteContent, NoteEntry, SavedNote, SortOrder,
+    StrayNotes, Tag, TrashedNote, Vault, VaultError,
 };
 use serde::Serialize;
 use tauri::State;
@@ -277,6 +277,28 @@ async fn list_notes(
     with_vault(&state, |v| Ok(v.list_notes_by(sort.unwrap_or_default())?))
 }
 
+/// Notes outside `notes/`, e.g. written by an older build on another device.
+#[tauri::command]
+async fn stray_notes(state: State<'_, AppState>) -> CmdResult<StrayNotes> {
+    with_vault(&state, |v| Ok(v.stray_notes()?))
+}
+
+/// Moves the notes outside `notes/` into it; call only after the user agreed.
+/// Asks iCloud for the ones it skipped because they are not downloaded.
+#[tauri::command]
+async fn move_stray_notes(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> CmdResult<MovedNotes> {
+    with_vault(&state, |v| {
+        let not_downloaded = v.stray_notes()?.not_downloaded;
+        for name in &not_downloaded {
+            request_download(&app, &v.root().join(name));
+        }
+        Ok(v.move_stray_notes()?)
+    })
+}
+
 /// Creates a note named after its title (format.md §3).
 #[tauri::command]
 async fn new_note(state: State<'_, AppState>, text: String) -> CmdResult<NewNote> {
@@ -451,6 +473,8 @@ pub fn run() {
             restore_vault,
             create_vault,
             list_notes,
+            stray_notes,
+            move_stray_notes,
             new_note,
             rename_after_edit,
             trash_note,

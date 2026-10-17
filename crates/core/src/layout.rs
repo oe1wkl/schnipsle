@@ -31,6 +31,9 @@ pub const VAULT_FILE: &str = ".notesapp/vault.yaml";
 /// The folder holding the notes, relative to the vault root (format.md §1).
 pub const NOTES_DIR: &str = "notes";
 
+/// The folder of attachments, relative to the vault root (format.md §1, §6).
+pub const ATTACHMENTS_DIR: &str = "attachments";
+
 /// The highest `format` in `vault.yaml` this version reads and writes.
 pub const FORMAT: u32 = 1;
 
@@ -577,12 +580,7 @@ mod tests {
         );
         assert_eq!(vault.classify(&root.join("notes")), PathKind::Folder);
         assert_eq!(vault.classify(root), PathKind::Folder);
-        for ignored in [
-            "a.md",
-            "attachments/x.md",
-            ".notesapp/trash/x.md",
-            "notesx/a.md",
-        ] {
+        for ignored in ["attachments/x.md", ".notesapp/trash/x.md", "notesx/a.png"] {
             assert_eq!(
                 vault.classify(&root.join(ignored)),
                 PathKind::Ignored,

@@ -209,8 +209,8 @@ mod tests {
             vault.classify(Path::new("/elsewhere/x.md")),
             PathKind::Ignored
         );
-        // Only notes/ holds notes; the vault root itself may hide anything.
-        assert_eq!(vault.classify(&dir.path().join("x.md")), PathKind::Ignored);
+        // Only notes/ holds notes; one outside it makes the app check again.
+        assert_eq!(vault.classify(&dir.path().join("x.md")), PathKind::Folder);
         assert_eq!(vault.classify(dir.path()), PathKind::Folder);
     }
 
