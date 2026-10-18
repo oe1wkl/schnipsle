@@ -203,8 +203,27 @@ fn remember(app: &tauri::AppHandle, state: &AppState, vault: Vault) -> CmdResult
     *watch = watching::start(app, &vault)
         .inspect_err(|e| eprintln!("vault changes will not be reported: {e}"))
         .ok();
+    thin_history_in_background(&vault);
     *state.vault.lock().map_err(CommandError::other)? = Some(vault);
     Ok(info)
+}
+
+/// Applies the history retention (ADR-0011) without holding up the UI.
+fn thin_history_in_background(vault: &Vault) {
+    let vault = vault.clone();
+    let spawned = std::thread::Builder::new()
+        .name("history-retention".into())
+        .spawn(move || {
+            let now = schnipsle_core::stamp::now_ms();
+            match vault.thin_history(schnipsle_core::Retention::default(), now) {
+                Ok(0) | Err(VaultError::ReadOnly(_)) => {}
+                Ok(n) => eprintln!("history: {n} old snapshots removed"),
+                Err(e) => eprintln!("history not thinned: {e}"),
+            }
+        });
+    if let Err(e) = spawned {
+        eprintln!("history not thinned: {e}");
+    }
 }
 
 fn with_vault<T>(state: &AppState, f: impl FnOnce(&Vault) -> CmdResult<T>) -> CmdResult<T> {
@@ -345,6 +364,17 @@ async fn read_linked_file(
             v.read_linked_file(&note_path, &link)?,
         ))
     })
+}
+
+/// Stores a version of a note in its history (ADR-0011): `text` if given,
+/// else the file on disk; skipped if the history already ends with it.
+#[tauri::command]
+async fn snapshot_note(
+    state: State<'_, AppState>,
+    path: String,
+    text: Option<String>,
+) -> CmdResult<Option<String>> {
+    with_vault(&state, |v| Ok(v.snapshot_note(&path, text.as_deref())?))
 }
 
 /// Creates a note named after its title (format.md §3).
@@ -521,6 +551,7 @@ pub fn run() {
             restore_vault,
             create_vault,
             list_notes,
+            snapshot_note,
             add_attachment,
             read_linked_file,
             stray_notes,

@@ -286,7 +286,7 @@ impl Vault {
                 let with_id = front_matter::set(&rewritten, "id", &id);
                 (id, with_id)
             };
-        self.snapshot(&id, &bytes)?;
+        self.snapshot_if_new(&id, &bytes)?;
         self.write_note(path, &rewritten, &sha256_hex(&bytes))?;
         Ok(true)
     }

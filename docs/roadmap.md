@@ -44,7 +44,9 @@ Editor:
 - [x] Front matter (`id`, `created`, `modified`) written on first save (format.md §4), `modified` updated on each change
 - [x] Images: paste/drag-drop/picker → `attachments/` by SHA-256 (format.md §6), relative links, shown in live preview
 - [x] Keep relative links working when a note lands at another folder depth (restore into `notes/` as fallback, moving notes in from the vault root): rewritten, old text in the history (ADR-0016)
-- [ ] Autosave with history snapshots (format.md §7, ADR-0011); the snapshot writer exists and is used for sync conflicts, autosave snapshots and retention are still open
+- [x] Autosave with history snapshots (format.md §7, ADR-0011): after a 30 s typing pause, when leaving a note, before delete, and when another version replaces the open note or wins a conflict; duplicates skipped; retention (7 days all, 90 days daily, then weekly) runs when a vault opens
+- [ ] History view: list a note's snapshots, show one, restore it (ADR-0011)
+- [ ] Retention settings from `.notesapp/settings.yaml` (format.md §7); the defaults are built in for now
 - [ ] Phone layout: list and editor as separate views
 
 Housekeeping:

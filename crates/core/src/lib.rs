@@ -23,6 +23,7 @@ pub mod watch;
 pub use attachments::AddedAttachment;
 pub use conflicts::{ConflictVersion, NoSyncConflicts, RawVersion, SyncConflicts};
 pub use coordination::{Coordinator, Uncoordinated};
+pub use history::Retention;
 pub use layout::{Folder, VaultIdentity, inspect};
 pub use names::{NewNote, slug};
 pub use strays::{MovedNotes, StrayNotes};

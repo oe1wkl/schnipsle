@@ -4,16 +4,43 @@
 //! A snapshot is the complete note file, zstd-compressed, stored as
 //! `.notesapp/history/<note-id>/<YYYYMMDDTHHMMSSZ>[-n].md.zst`. Snapshots are
 //! written like notes (atomic, coordinated) and never replace one another.
-//! Retention and a history UI come later.
+//! [`Vault::snapshot_note`] skips a version the history already ends with.
+//!
+//! Retention (ADR-0011): [`Vault::thin_history`] keeps every snapshot for 7
+//! days, then the last of each day until 90 days, then the last of each ISO
+//! week. Ages come from the UTC stamps in the names; a name it cannot read
+//! is kept. A history UI comes later.
 
+use std::collections::HashMap;
 use std::fs;
 use std::io::{self, Read as _};
 
 use ruzstd::decoding::StreamingDecoder;
 use ruzstd::encoding::{CompressionLevel, compress_to_vec};
 
-use crate::stamp::{compact_utc, is_ulid, now_ms};
+use crate::front_matter;
+use crate::stamp::{compact_utc, is_ulid, now_ms, parse_compact_utc};
 use crate::vault::{Access, Result, TempFile, Vault, VaultError, accessor_ran_twice};
+
+/// How long snapshots are kept (ADR-0011, format.md §7): every one for
+/// `all_days`, then the last of each UTC day until `daily_days`, then the
+/// last of each ISO week.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Retention {
+    /// Days during which every snapshot is kept.
+    pub all_days: u64,
+    /// Days until which the last snapshot of each day is kept.
+    pub daily_days: u64,
+}
+
+impl Default for Retention {
+    fn default() -> Self {
+        Self {
+            all_days: 7,
+            daily_days: 90,
+        }
+    }
+}
 
 /// Folder of all snapshots, relative to the vault root.
 pub const HISTORY_DIR: &str = ".notesapp/history";
@@ -51,6 +78,89 @@ impl Vault {
             }
         }
         Err(io::Error::other("too many snapshots in the same second").into())
+    }
+
+    /// Stores the note at `path` (relative to `notes/`) as a snapshot under
+    /// its `id`: `text` if given (e.g. unsaved text about to be replaced),
+    /// else the file on disk. Nothing is stored if the history already ends
+    /// with this version, or if neither `text` nor the file has a valid `id`.
+    /// Returns the new snapshot's path relative to the vault root.
+    ///
+    /// # Errors
+    /// [`VaultError::ReadOnly`], [`VaultError::InvalidPath`], or I/O errors.
+    pub fn snapshot_note(&self, path: &str, text: Option<&str>) -> Result<Option<String>> {
+        self.check_writable()?;
+        let full = self.resolve(path)?;
+        let on_disk = || self.coordinated(Access::Read, &full, |file| Ok(fs::read(file)?));
+        let id_in = |bytes: &[u8]| {
+            front_matter::get(&String::from_utf8_lossy(bytes), "id").filter(|id| is_ulid(id))
+        };
+        let (content, id) = if let Some(text) = text {
+            let id = id_in(text.as_bytes()).or_else(|| on_disk().ok().and_then(|b| id_in(&b)));
+            (text.as_bytes().to_vec(), id)
+        } else {
+            let bytes = on_disk()?;
+            let id = id_in(&bytes);
+            (bytes, id)
+        };
+        match id {
+            Some(id) => self.snapshot_if_new(&id, &content),
+            None => Ok(None),
+        }
+    }
+
+    /// Stores `content` as a snapshot of the note with `id` unless the
+    /// history already ends with it; returns the new snapshot's path.
+    ///
+    /// # Errors
+    /// As for [`Vault::snapshot`].
+    pub fn snapshot_if_new(&self, id: &str, content: &[u8]) -> Result<Option<String>> {
+        if let Some(last) = self.snapshots(id)?.last()
+            && let Ok(text) = self.read_snapshot(id, last)
+            && text.as_bytes() == content
+        {
+            return Ok(None);
+        }
+        self.snapshot(id, content).map(Some)
+    }
+
+    /// Removes the snapshots `retention` no longer keeps, in every note's
+    /// history, as of `now_ms`. Returns how many were removed.
+    ///
+    /// # Errors
+    /// [`VaultError::ReadOnly`], or I/O errors reading the history folder;
+    /// a snapshot that cannot be removed is skipped.
+    pub fn thin_history(&self, retention: Retention, now_ms: u64) -> Result<usize> {
+        self.check_writable()?;
+        let root = self.root().join(HISTORY_DIR);
+        let entries = match fs::read_dir(&root) {
+            Ok(entries) => entries,
+            Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(0),
+            Err(e) => return Err(e.into()),
+        };
+        let mut removed = 0;
+        for entry in entries.flatten() {
+            let id = entry.file_name().to_string_lossy().into_owned();
+            if !is_ulid(&id) || !entry.file_type().is_ok_and(|t| t.is_dir()) {
+                continue;
+            }
+            let names = self.snapshots(&id)?;
+            for name in to_thin(&names, retention, now_ms / 1000) {
+                let file = entry.path().join(name);
+                let gone =
+                    self.coordinated(Access::Delete, &file, |file| match fs::remove_file(file) {
+                        Ok(()) => Ok(true),
+                        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(false), // thinned elsewhere
+                        Err(e) => Err(e.into()),
+                    });
+                match gone {
+                    Ok(true) => removed += 1,
+                    Ok(false) => {}
+                    Err(e) => eprintln!("snapshot {} not removed: {e}", file.display()),
+                }
+            }
+        }
+        Ok(removed)
     }
 
     /// The names of a note's snapshots, oldest first.
@@ -104,6 +214,38 @@ fn checked_id(id: &str) -> Result<String> {
     } else {
         Err(VaultError::InvalidId(id.to_owned()))
     }
+}
+
+/// The snapshots in `names` (oldest first) that `retention` no longer keeps
+/// at `now` (Unix seconds).
+fn to_thin(names: &[String], retention: Retention, now: u64) -> Vec<&str> {
+    const DAY: u64 = 86_400;
+    // Per bucket (tier and day or ISO week), the last snapshot is kept.
+    let mut last: HashMap<(bool, u64), &str> = HashMap::new();
+    let mut candidates = Vec::new();
+    for name in names {
+        let Some(secs) = parse_compact_utc(sort_key(name).0) else {
+            continue; // not a name we wrote: keep it
+        };
+        let age_days = now.saturating_sub(secs) / DAY;
+        if age_days < retention.all_days {
+            continue;
+        }
+        let day = secs / DAY;
+        // ISO weeks start on Monday; 1970-01-01 was a Thursday.
+        let bucket = if age_days < retention.daily_days {
+            (false, day)
+        } else {
+            (true, (day + 3) / 7)
+        };
+        last.insert(bucket, name);
+        candidates.push((bucket, name.as_str()));
+    }
+    candidates
+        .into_iter()
+        .filter(|(bucket, name)| last.get(bucket) != Some(name))
+        .map(|(_, name)| name)
+        .collect()
 }
 
 /// `20261015T212937Z-2.md.zst` → (`20261015T212937Z`, 2)
@@ -184,6 +326,115 @@ mod tests {
                 "20261015T212937Z-10.md.zst",
                 "20261015T212938Z.md.zst",
             ]
+        );
+    }
+
+    #[test]
+    fn snapshot_note_skips_what_the_history_ends_with() {
+        let (_dir, vault) = vault();
+        let one = format!("---\nid: {ID}\n---\none\n");
+        vault.create_note("n.md", "plain").unwrap();
+        let on_disk = vault.read_note("n.md").unwrap();
+        let id = front_matter::get(&on_disk.text, "id").unwrap();
+
+        assert!(vault.snapshot_note("n.md", None).unwrap().is_some());
+        assert_eq!(vault.snapshot_note("n.md", None).unwrap(), None); // unchanged
+        assert_eq!(vault.snapshots(&id).unwrap().len(), 1);
+
+        // Unsaved text without front matter is filed under the id on disk.
+        assert!(
+            vault
+                .snapshot_note("n.md", Some("unsaved"))
+                .unwrap()
+                .is_some()
+        );
+        let names = vault.snapshots(&id).unwrap();
+        assert_eq!(
+            vault.read_snapshot(&id, names.last().unwrap()).unwrap(),
+            "unsaved"
+        );
+
+        // Text with its own id goes there.
+        assert!(vault.snapshot_note("n.md", Some(&one)).unwrap().is_some());
+        assert_eq!(vault.snapshots(ID).unwrap().len(), 1);
+
+        // No id anywhere: nothing to file it under.
+        std::fs::write(vault.notes_dir().join("bare.md"), "no id").unwrap();
+        assert_eq!(vault.snapshot_note("bare.md", None).unwrap(), None);
+    }
+
+    fn day(secs: u64) -> String {
+        format!("{}.md.zst", compact_utc(secs * 1000))
+    }
+
+    #[test]
+    fn retention_keeps_all_then_daily_then_weekly() {
+        const D: u64 = 86_400;
+        let now = 1_792_099_777; // Thursday 2026-10-15 21:29:37 UTC
+        let names: Vec<String> = [
+            // older than 90 days, same ISO week (Mon 2026-06-01 … Sun 06-07)
+            now - 136 * D, // Mon
+            now - 133 * D, // Thu
+            now - 130 * D, // Sun: the last of that week
+            // 10 days old, three on the same day: the last one stays
+            now - 10 * D - 3600,
+            now - 10 * D - 60,
+            now - 10 * D,
+            // younger than 7 days: all stay
+            now - 2 * D,
+            now - 2 * D + 1,
+            now,
+        ]
+        .into_iter()
+        .map(day)
+        .chain([
+            "20261015T212937Z-2.md.zst".to_owned(),
+            "unknown.md.zst".to_owned(),
+        ])
+        .collect();
+        let mut sorted = names.clone();
+        sorted.sort_by(|a, b| sort_key(a).cmp(&sort_key(b)));
+
+        let gone = to_thin(&sorted, Retention::default(), now);
+        let expected: Vec<String> = [
+            now - 136 * D,
+            now - 133 * D,
+            now - 10 * D - 3600,
+            now - 10 * D - 60,
+        ]
+        .into_iter()
+        .map(day)
+        .collect();
+        assert_eq!(gone, expected);
+    }
+
+    #[test]
+    fn thinning_removes_files_and_spares_others() {
+        let (dir, vault) = vault();
+        let now = 1_792_099_777;
+        let history = dir.path().join(HISTORY_DIR).join(ID);
+        std::fs::create_dir_all(&history).unwrap();
+        let old = [now - 202 * 86_400, now - 201 * 86_400]; // Friday, Saturday
+        for secs in old {
+            std::fs::write(history.join(day(secs)), "x").unwrap();
+        }
+        std::fs::write(history.join("notes.txt"), "not a snapshot").unwrap();
+        std::fs::create_dir_all(dir.path().join(HISTORY_DIR).join("not-an-id")).unwrap();
+
+        assert_eq!(
+            vault
+                .thin_history(Retention::default(), now * 1000)
+                .unwrap(),
+            1
+        );
+        assert!(!history.join(day(old[0])).exists());
+        assert!(history.join(day(old[1])).exists());
+        assert!(history.join("notes.txt").exists());
+        assert_eq!(
+            vault
+                .thin_history(Retention::default(), now * 1000)
+                .unwrap(),
+            0
         );
     }
 }

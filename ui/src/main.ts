@@ -100,6 +100,8 @@ interface CommandError {
 }
 
 const AUTOSAVE_MS = 1000;
+/** A typing pause this long stores a version in the history (ADR-0011). */
+const HISTORY_PAUSE_MS = 30_000;
 
 function el(id: string): HTMLElement {
   const found = document.getElementById(id);
@@ -173,6 +175,7 @@ const editor = createEditor(ui.editorHost, {
   onChange: () => {
     setStatus("Editing…");
     scheduleSave();
+    scheduleSnapshot();
     void showTags();
   },
   onBlur: () => void flushSave(),
@@ -464,12 +467,15 @@ function leaveNote(): Promise<void> {
     } catch (e) {
       setStatus(`Not renamed: ${asError(e).message}`);
     }
+    await snapshotIfChanged();
   });
   return saving;
 }
 
 /** Empties the editor: no note open. */
 function closeEditor(): void {
+  window.clearTimeout(snapshotTimer);
+  changedSinceSnapshot = false;
   current = null;
   forgetImages();
   editor.load("");
@@ -510,6 +516,8 @@ async function openNote(note: NoteEntry): Promise<void> {
 }
 
 function load(content: NoteContent): void {
+  window.clearTimeout(snapshotTimer);
+  changedSinceSnapshot = false;
   forgetImages();
   current = {
     path: content.path,
@@ -580,6 +588,42 @@ function scheduleSave(): void {
   saveTimer = window.setTimeout(() => {
     saving = saving.then(save);
   }, AUTOSAVE_MS);
+}
+
+/** Set by edits since the open note's last snapshot. */
+let changedSinceSnapshot = false;
+let snapshotTimer: number | undefined;
+
+/**
+ * Stores a version of the open note in its history (ADR-0011): `text` if
+ * given (a version about to be replaced), else the note as saved. The core
+ * skips a version the history already ends with.
+ */
+async function snapshot(text: string | null = null): Promise<void> {
+  const note = current;
+  if (!note || readOnly !== null) return;
+  try {
+    await invoke("snapshot_note", { path: note.path, text });
+  } catch (e) {
+    setStatus(`Version not stored in the history: ${asError(e).message}`);
+  }
+}
+
+/** After a typing pause: saves, then stores the note in its history. */
+function scheduleSnapshot(): void {
+  changedSinceSnapshot = true;
+  window.clearTimeout(snapshotTimer);
+  snapshotTimer = window.setTimeout(() => {
+    saving = saving.then(save).then(snapshotIfChanged);
+  }, HISTORY_PAUSE_MS);
+}
+
+/** Stores the saved note in its history if it was edited since the last time. */
+async function snapshotIfChanged(): Promise<void> {
+  window.clearTimeout(snapshotTimer);
+  if (!changedSinceSnapshot || isDirty() || conflictHash !== undefined) return;
+  changedSinceSnapshot = false;
+  await snapshot();
 }
 
 async function flushSave(): Promise<void> {
@@ -661,7 +705,9 @@ ui.syncKeepBoth.addEventListener("click", () => {
 ui.useTheirs.addEventListener("click", () => {
   if (!current) return;
   const path = current.path;
-  invoke<NoteContent>("read_note", { path })
+  // The text in the editor goes into the history, never just away (ADR-0011).
+  snapshot(editor.text())
+    .then(() => invoke<NoteContent>("read_note", { path }))
     .then(load)
     .catch((e: unknown) => {
       setStatus(asError(e).message);
@@ -672,10 +718,14 @@ ui.keepMine.addEventListener("click", () => {
   if (!current) return;
   const note = current;
   const text = editor.text();
+  const expectedHash = conflictHash;
+  // The other version on disk goes into the history before it is replaced.
   const write =
-    conflictHash === null || conflictHash === undefined
+    expectedHash === null || expectedHash === undefined
       ? invoke<SavedNote>("create_note", { path: note.path, text })
-      : invoke<SavedNote>("save_note", { path: note.path, text, expectedHash: conflictHash });
+      : snapshot().then(() =>
+          invoke<SavedNote>("save_note", { path: note.path, text, expectedHash }),
+        );
   write
     .then((saved) => {
       applySaved(note, text, saved);
@@ -717,6 +767,7 @@ async function checkForChanges(changes?: VaultChanges): Promise<void> {
     if (isDirty()) {
       showConflict(content.hash);
     } else {
+      await snapshot(current.savedText); // the version being replaced (ADR-0011)
       load(content);
       setStatus("Updated with changes from elsewhere.");
     }

@@ -50,12 +50,16 @@ impl Vault {
     pub fn trash_note(&self, path: &str) -> Result<TrashedNote> {
         self.check_writable()?;
         let full = self.resolve(path)?;
-        let text = self.coordinated(Access::Read, &full, |file| {
-            Ok(String::from_utf8_lossy(&fs::read(file)?).into_owned())
-        })?;
-        let id = front_matter::get(&text, "id")
-            .filter(|id| is_ulid(id))
-            .map_or_else(new_ulid, |id| Ok(id.to_ascii_uppercase()))?;
+        let bytes = self.coordinated(Access::Read, &full, |file| Ok(fs::read(file)?))?;
+        let text = String::from_utf8_lossy(&bytes).into_owned();
+        let valid_id = front_matter::get(&text, "id").filter(|id| is_ulid(id));
+        if let Some(id) = &valid_id
+            && let Err(e) = self.snapshot_if_new(id, &bytes)
+        {
+            // The trash keeps the file itself, so this snapshot is a second copy.
+            eprintln!("no snapshot of {path} before deleting it: {e}");
+        }
+        let id = valid_id.map_or_else(new_ulid, |id| Ok(id.to_ascii_uppercase()))?;
         let dir = self.root().join(TRASH_DIR);
         fs::create_dir_all(&dir)?;
         let deleted = rfc3339_utc(now_ms());
@@ -254,8 +258,11 @@ mod tests {
             "{record}"
         );
         assert!(record.starts_with("deleted: 20"), "{record}");
-        // History stays; the note is no longer listed.
-        assert_eq!(vault.snapshots(ID).unwrap().len(), 1);
+        // History stays, with the deleted text added last (ADR-0011); the
+        // note is no longer listed.
+        let snapshots = vault.snapshots(ID).unwrap();
+        assert_eq!(snapshots.len(), 2);
+        assert_eq!(vault.read_snapshot(ID, &snapshots[1]).unwrap(), note);
         assert!(dir.path().join(HISTORY_DIR).join(ID).exists());
         assert!(vault.list_notes().unwrap().is_empty());
         assert_eq!(vault.list_trash().unwrap(), [trashed]);

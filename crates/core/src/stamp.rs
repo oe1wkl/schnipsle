@@ -44,6 +44,36 @@ fn civil(secs: u64) -> (u64, u64, u64, u64, u64, u64) {
     (year, month, day, rem / 3600, rem % 3600 / 60, rem % 60)
 }
 
+/// Unix seconds of a compact UTC stamp (`20261015T212937Z`); `None` if it
+/// is not one.
+#[must_use]
+pub fn parse_compact_utc(stamp: &str) -> Option<u64> {
+    let digits = |range: std::ops::Range<usize>| -> Option<u64> {
+        let part = stamp.get(range)?;
+        part.bytes()
+            .all(|b| b.is_ascii_digit())
+            .then(|| part.parse().ok())?
+    };
+    if stamp.len() != 16 || stamp.as_bytes()[8] != b'T' || !stamp.ends_with('Z') {
+        return None;
+    }
+    let (y, mo, d) = (digits(0..4)?, digits(4..6)?, digits(6..8)?);
+    let (h, mi, s) = (digits(9..11)?, digits(11..13)?, digits(13..15)?);
+    if !(1..=12).contains(&mo) || !(1..=31).contains(&d) || h > 23 || mi > 59 || s > 60 || y < 1970
+    {
+        return None;
+    }
+    // Howard Hinnant's days-from-civil.
+    let y = if mo <= 2 { y - 1 } else { y };
+    let era = y / 400;
+    let yoe = y % 400;
+    let mp = (mo + 9) % 12;
+    let doy = (153 * mp + 2) / 5 + d - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    let days = (era * 146_097 + doe).checked_sub(719_468)?;
+    Some(days * 86_400 + h * 3600 + mi * 60 + s)
+}
+
 const CROCKFORD: &[u8; 32] = b"0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 
 /// A new ULID for the current time.
@@ -96,6 +126,22 @@ mod tests {
         ] {
             assert_eq!(rfc3339_utc(secs * 1000 + 999), rfc);
             assert_eq!(compact_utc(secs * 1000), compact);
+        }
+    }
+
+    #[test]
+    fn parses_compact_stamps() {
+        for secs in [0, 951_868_799, 1_792_099_777, 4_107_542_400] {
+            assert_eq!(parse_compact_utc(&compact_utc(secs * 1000)), Some(secs));
+        }
+        for bad in [
+            "",
+            "20261015T212937",
+            "20261315T212937Z",
+            "2026101XT212937Z",
+            "19691231T235959Z",
+        ] {
+            assert_eq!(parse_compact_utc(bad), None, "{bad}");
         }
     }
 
