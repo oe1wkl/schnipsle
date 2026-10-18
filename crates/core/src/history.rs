@@ -9,7 +9,12 @@
 //! Retention (ADR-0011): [`Vault::thin_history`] keeps every snapshot for 7
 //! days, then the last of each day until 90 days, then the last of each ISO
 //! week. Ages come from the UTC stamps in the names; a name it cannot read
-//! is kept. A history UI comes later.
+//! is kept.
+//!
+//! The history view works with note paths: [`Vault::versions`] lists the
+//! snapshots of a note, [`Vault::restore_version`] makes one the note's text
+//! again (storing the current text first), [`Vault::copy_version`] turns one
+//! into a new note with its own `id`.
 
 use std::collections::HashMap;
 use std::fs;
@@ -18,9 +23,25 @@ use std::io::{self, Read as _};
 use ruzstd::decoding::StreamingDecoder;
 use ruzstd::encoding::{CompressionLevel, compress_to_vec};
 
+use serde::Serialize;
+
 use crate::front_matter;
-use crate::stamp::{compact_utc, is_ulid, now_ms, parse_compact_utc};
-use crate::vault::{Access, Result, TempFile, Vault, VaultError, accessor_ran_twice};
+use crate::names::NewNote;
+use crate::stamp::{compact_utc, is_ulid, new_ulid, now_ms, parse_compact_utc, rfc3339_utc};
+use crate::vault::{
+    Access, Result, SavedNote, TempFile, Vault, VaultError, accessor_ran_twice, sha256_hex,
+};
+
+/// A snapshot of a note, as listed by [`Vault::versions`]. Serialized with
+/// camelCase names.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Version {
+    /// The snapshot's file name; pass it to the other version methods.
+    pub name: String,
+    /// When it was taken, from its name; `None` for a name the app did not write.
+    pub taken_ms: Option<u64>,
+}
 
 /// How long snapshots are kept (ADR-0011, format.md §7): every one for
 /// `all_days`, then the last of each UTC day until `daily_days`, then the
@@ -161,6 +182,93 @@ impl Vault {
             }
         }
         Ok(removed)
+    }
+
+    /// The `id` of the note at `path` as on disk, if it has a valid one.
+    fn id_on_disk(&self, path: &str) -> Result<Option<String>> {
+        let full = self.resolve(path)?;
+        let bytes = self.coordinated(Access::Read, &full, |file| Ok(fs::read(file)?))?;
+        Ok(front_matter::get(&String::from_utf8_lossy(&bytes), "id").filter(|id| is_ulid(id)))
+    }
+
+    /// The `id` of the note at `path`, for its history.
+    fn history_id(&self, path: &str) -> Result<String> {
+        self.id_on_disk(path)?
+            .ok_or_else(|| VaultError::InvalidId(format!("{path} has no id")))
+    }
+
+    /// The snapshots of the note at `path` (relative to `notes/`), newest
+    /// first; none for a note without `id`.
+    ///
+    /// # Errors
+    /// [`VaultError::InvalidPath`], or I/O errors.
+    pub fn versions(&self, path: &str) -> Result<Vec<Version>> {
+        let Some(id) = self.id_on_disk(path)? else {
+            return Ok(Vec::new());
+        };
+        let mut names = self.snapshots(&id)?;
+        names.reverse();
+        Ok(names
+            .into_iter()
+            .map(|name| Version {
+                taken_ms: parse_compact_utc(sort_key(&name).0).map(|s| s * 1000),
+                name,
+            })
+            .collect())
+    }
+
+    /// The text of the snapshot `name` of the note at `path`.
+    ///
+    /// # Errors
+    /// [`VaultError::InvalidId`] for a note without `id`,
+    /// [`VaultError::InvalidPath`], or I/O errors.
+    pub fn read_version(&self, path: &str, name: &str) -> Result<String> {
+        self.read_snapshot(&self.history_id(path)?, name)
+    }
+
+    /// Makes the snapshot `name` the text of the note at `path` again. The
+    /// current text is stored as a snapshot first, so restoring loses nothing;
+    /// `expected_hash` guards against a change made elsewhere meanwhile, as
+    /// for [`Vault::write_note`]. Returns what is now on disk.
+    ///
+    /// # Errors
+    /// [`VaultError::Conflict`] if the note changed since it was read (nothing
+    /// is written then), [`VaultError::ReadOnly`], or as for [`Vault::read_version`].
+    pub fn restore_version(
+        &self,
+        path: &str,
+        name: &str,
+        expected_hash: &str,
+    ) -> Result<SavedNote> {
+        self.check_writable()?;
+        let id = self.history_id(path)?;
+        let text = self.read_snapshot(&id, name)?;
+        let full = self.resolve(path)?;
+        let current = self.coordinated(Access::Read, &full, |file| Ok(fs::read(file)?))?;
+        let current_hash = sha256_hex(&current);
+        if current_hash != expected_hash {
+            return Err(VaultError::Conflict {
+                path: path.to_owned(),
+                current_hash: Some(current_hash),
+            });
+        }
+        self.snapshot_if_new(&id, &current)?;
+        self.write_note(path, &text, expected_hash)
+    }
+
+    /// Creates a new note from the snapshot `name` of the note at `path`, in
+    /// the same folder and named after its title, with a new `id` and
+    /// `created` (format.md §4). The note itself is not changed.
+    ///
+    /// # Errors
+    /// [`VaultError::ReadOnly`], or as for [`Vault::read_version`].
+    pub fn copy_version(&self, path: &str, name: &str) -> Result<NewNote> {
+        self.check_writable()?;
+        let text = self.read_version(path, name)?;
+        let text = front_matter::set(&text, "id", &new_ulid()?);
+        let text = front_matter::set(&text, "created", &rfc3339_utc(now_ms()));
+        let folder = path.rsplit_once('/').map_or("", |(folder, _)| folder);
+        self.create_titled(folder, &text)
     }
 
     /// The names of a note's snapshots, oldest first.
@@ -436,5 +544,64 @@ mod tests {
                 .unwrap(),
             0
         );
+    }
+
+    #[test]
+    fn versions_list_read_restore_and_copy() {
+        let (dir, vault) = vault();
+        let first = vault.create_titled("P", "# Antenne\none\n").unwrap();
+        let path = first.path.clone();
+        assert_eq!(vault.versions(&path).unwrap(), []);
+        vault.snapshot_note(&path, None).unwrap();
+        let two = vault
+            .write_note(&path, "# Antenne\ntwo\n", &first.saved.hash)
+            .unwrap();
+
+        let versions = vault.versions(&path).unwrap();
+        assert_eq!(versions.len(), 1);
+        assert!(versions[0].taken_ms.is_some_and(|ms| ms <= now_ms()));
+        let old = vault.read_version(&path, &versions[0].name).unwrap();
+        assert_eq!(old, first.saved.text);
+
+        // A stale hash restores nothing.
+        assert!(matches!(
+            vault.restore_version(&path, &versions[0].name, &first.saved.hash),
+            Err(VaultError::Conflict { .. })
+        ));
+        let restored = vault
+            .restore_version(&path, &versions[0].name, &two.hash)
+            .unwrap();
+        assert_eq!(front_matter::body(&restored.text), "# Antenne\none\n");
+        let id = front_matter::get(&first.saved.text, "id").unwrap();
+        assert_eq!(front_matter::get(&restored.text, "id").unwrap(), id);
+        // The replaced text is the newest version now.
+        let versions = vault.versions(&path).unwrap();
+        assert_eq!(versions.len(), 2);
+        assert_eq!(
+            vault.read_version(&path, &versions[0].name).unwrap(),
+            two.text
+        );
+
+        let copy = vault.copy_version(&path, &versions[1].name).unwrap();
+        assert_eq!(copy.path, "P/antenne-2.md");
+        let copy_id = front_matter::get(&copy.saved.text, "id").unwrap();
+        assert_ne!(copy_id, id);
+        assert!(is_ulid(&copy_id));
+        assert_eq!(front_matter::body(&copy.saved.text), "# Antenne\none\n");
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("notes").join(&path)).unwrap(),
+            restored.text
+        );
+    }
+
+    #[test]
+    fn a_note_without_id_has_no_versions() {
+        let (_dir, vault) = vault();
+        std::fs::write(vault.notes_dir().join("bare.md"), "no id").unwrap();
+        assert_eq!(vault.versions("bare.md").unwrap(), []);
+        assert!(matches!(
+            vault.read_version("bare.md", "20261015T212937Z.md.zst"),
+            Err(VaultError::InvalidId(_))
+        ));
     }
 }

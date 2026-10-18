@@ -78,10 +78,26 @@
       </nav>
       <section class="editor" aria-label="Editor">
         <div id="editor-host" class="editor-host"></div>
+        <div id="history" class="history" hidden>
+          <div class="history-bar">
+            <strong>History</strong>
+            <span id="history-hint" class="muted"></span>
+            <button id="history-restore" type="button" class="small" disabled>
+              Restore this version
+            </button>
+            <button id="history-copy" type="button" class="small" disabled>As new note</button>
+            <button id="history-close" type="button" class="small">Close</button>
+          </div>
+          <div class="history-body">
+            <ul id="history-list" aria-label="Versions"></ul>
+            <div id="history-preview" class="editor-host history-preview"></div>
+          </div>
+        </div>
         <footer class="status">
           <span id="status" aria-live="polite"></span>
           <span id="tags" class="tags"></span>
           <button id="undo-delete" type="button" class="small" hidden>Undo</button>
+          <button id="show-history" type="button" class="small" disabled>History</button>
           <button id="add-image" type="button" class="small" disabled>Image</button>
           <input id="image-file" type="file" accept="image/*" multiple hidden />
           <button id="delete-note" type="button" class="small" disabled>Delete</button>
