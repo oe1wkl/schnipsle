@@ -248,6 +248,7 @@ function previewDecorations(view: EditorView): DecorationSet {
 
 /** Toggles the task at the checkbox the user clicked: `[ ]` ↔ `[x]`. */
 function toggleTask(view: EditorView, target: HTMLElement): boolean {
+  if (view.state.readOnly) return true; // a version in the history, or a read-only vault
   const pos = view.posAtDOM(target);
   const marker = view.state.doc.sliceString(pos, pos + 3);
   if (!/^\[[ xX]\]$/.test(marker)) return false;
@@ -388,6 +389,8 @@ export function createEditor(
     /** Files pasted or dropped into the note; `pos` is where they were dropped. */
     onFiles: (files: File[], pos: number | null) => void;
     loadImage: ImageLoader;
+    /** Shown while the editor is empty; "Select a note" by default. */
+    placeholderText?: string;
   },
 ): NoteEditor {
   const mode = new Compartment();
@@ -413,7 +416,7 @@ export function createEditor(
         imageLoader.of(events.loadImage),
         mode.of(modes[currentMode]),
         enabled.of(enabledExtension(isEnabled)),
-        placeholder("Select a note"),
+        placeholder(events.placeholderText ?? "Select a note"),
         theme,
         EditorView.contentAttributes.of({
           spellcheck: "true",

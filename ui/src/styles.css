@@ -198,16 +198,72 @@ button.small {
 }
 .status {
   display: flex;
+  flex-wrap: wrap; /* on a phone the buttons move to a second line */
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  justify-content: flex-end;
+  gap: 6px 12px;
   padding: 6px 12px;
   border-top: 1px solid var(--line);
   color: var(--muted);
   font-size: 13px;
 }
+#status {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
 .tags {
   color: var(--accent);
+}
+
+/* History of the open note, in place of the editor. */
+.history {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.history[hidden],
+.editor-host[hidden] {
+  display: none;
+}
+.history-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.history-bar .muted {
+  flex: 1;
+}
+.history-body {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(160px, 220px) 1fr;
+  min-height: 0;
+}
+#history-list {
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+  overflow-y: auto;
+  border-right: 1px solid var(--line);
+  background: var(--panel);
+}
+#history-list button {
+  width: 100%;
+  border: none;
+  text-align: left;
+  color: var(--fg);
+  font-size: 14px;
+}
+#history-list button[aria-current="true"] {
+  color: var(--accent);
+  font-weight: 600;
+}
+.history-preview {
+  min-width: 0; /* long lines wrap instead of widening the page */
 }
 
 /* Phone: one view at a time. */
@@ -221,6 +277,14 @@ button.small {
   }
   .list {
     border-right: none;
+  }
+  .history-body {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(96px, 30%) 1fr;
+  }
+  #history-list {
+    border-right: none;
+    border-bottom: 1px solid var(--line);
   }
 }
 @media (min-width: 701px) {

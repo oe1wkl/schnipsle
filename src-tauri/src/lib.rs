@@ -14,7 +14,7 @@ use std::sync::{Arc, Mutex};
 use schnipsle_core::layout::VAULT_FILE;
 use schnipsle_core::{
     AddedAttachment, Coordinator, Folder, MovedNotes, NewNote, NoteContent, NoteEntry, SavedNote,
-    SortOrder, StrayNotes, Tag, TrashedNote, Vault, VaultError,
+    SortOrder, StrayNotes, Tag, TrashedNote, Vault, VaultError, Version,
 };
 use serde::Serialize;
 use tauri::State;
@@ -377,6 +377,41 @@ async fn snapshot_note(
     with_vault(&state, |v| Ok(v.snapshot_note(&path, text.as_deref())?))
 }
 
+/// The versions in a note's history, newest first (ADR-0011).
+#[tauri::command]
+async fn list_versions(state: State<'_, AppState>, path: String) -> CmdResult<Vec<Version>> {
+    with_vault(&state, |v| Ok(v.versions(&path)?))
+}
+
+#[tauri::command]
+async fn read_version(state: State<'_, AppState>, path: String, name: String) -> CmdResult<String> {
+    with_vault(&state, |v| Ok(v.read_version(&path, &name)?))
+}
+
+/// Makes a version the note's text again; the current text goes into the
+/// history first. Returns what is now on disk.
+#[tauri::command]
+async fn restore_version(
+    state: State<'_, AppState>,
+    path: String,
+    name: String,
+    expected_hash: String,
+) -> CmdResult<SavedNote> {
+    with_vault(&state, |v| {
+        Ok(v.restore_version(&path, &name, &expected_hash)?)
+    })
+}
+
+/// Creates a new note from a version, next to the note.
+#[tauri::command]
+async fn copy_version(
+    state: State<'_, AppState>,
+    path: String,
+    name: String,
+) -> CmdResult<NewNote> {
+    with_vault(&state, |v| Ok(v.copy_version(&path, &name)?))
+}
+
 /// Creates a note named after its title (format.md §3).
 #[tauri::command]
 async fn new_note(state: State<'_, AppState>, text: String) -> CmdResult<NewNote> {
@@ -552,6 +587,10 @@ pub fn run() {
             create_vault,
             list_notes,
             snapshot_note,
+            list_versions,
+            read_version,
+            restore_version,
+            copy_version,
             add_attachment,
             read_linked_file,
             stray_notes,

@@ -88,6 +88,11 @@ interface AddedAttachment {
   link: string;
   markdown: string;
 }
+/** A version in a note's history (schnipsle-core `Version`). */
+interface Version {
+  name: string;
+  takenMs: number | null;
+}
 interface NewNote {
   path: string;
   saved: SavedNote;
@@ -124,6 +129,14 @@ const ui = {
   showTrash: el("show-trash") as HTMLButtonElement,
   deleteNote: el("delete-note") as HTMLButtonElement,
   addImage: el("add-image") as HTMLButtonElement,
+  showHistory: el("show-history") as HTMLButtonElement,
+  history: el("history"),
+  historyHint: el("history-hint"),
+  historyRestore: el("history-restore") as HTMLButtonElement,
+  historyCopy: el("history-copy") as HTMLButtonElement,
+  historyClose: el("history-close") as HTMLButtonElement,
+  historyList: el("history-list") as HTMLUListElement,
+  historyPreview: el("history-preview"),
   imageFile: el("image-file") as HTMLInputElement,
   undoDelete: el("undo-delete") as HTMLButtonElement,
   status: el("status"),
@@ -181,6 +194,18 @@ const editor = createEditor(ui.editorHost, {
   onBlur: () => void flushSave(),
   onFiles: (files, pos) => void attachFiles(files, pos),
   loadImage,
+});
+
+/**
+ * The version selected in the history, read-only and in the same mode as the
+ * editor, so Preview renders it like the note (images resolve from the note).
+ */
+const historyView = createEditor(ui.historyPreview, {
+  onChange: () => undefined,
+  onBlur: () => undefined,
+  onFiles: () => undefined,
+  loadImage,
+  placeholderText: "Select a version",
 });
 
 /** Object URLs of the images shown for the open note, by link. */
@@ -474,6 +499,8 @@ function leaveNote(): Promise<void> {
 
 /** Empties the editor: no note open. */
 function closeEditor(): void {
+  closeHistory();
+  ui.showHistory.disabled = true;
   window.clearTimeout(snapshotTimer);
   changedSinceSnapshot = false;
   current = null;
@@ -516,6 +543,8 @@ async function openNote(note: NoteEntry): Promise<void> {
 }
 
 function load(content: NoteContent): void {
+  closeHistory();
+  ui.showHistory.disabled = false;
   window.clearTimeout(snapshotTimer);
   changedSinceSnapshot = false;
   forgetImages();
@@ -825,6 +854,134 @@ ui.deleteNote.addEventListener("click", () => {
   });
 });
 
+// --- History of the open note (ADR-0011) ---
+
+let selectedVersion: Version | null = null;
+
+const versionLabel = (v: Version): string =>
+  v.takenMs === null ? v.name : new Date(v.takenMs).toLocaleString();
+
+function closeHistory(): void {
+  selectedVersion = null;
+  ui.history.hidden = true;
+  ui.editorHost.hidden = false;
+  ui.showHistory.setAttribute("aria-pressed", "false");
+}
+
+/** Shows the open note's versions in place of the editor, newest first. */
+async function openHistory(): Promise<void> {
+  await flushSave();
+  const note = current;
+  if (!note) return;
+  let versions: Version[];
+  try {
+    versions = await invoke<Version[]>("list_versions", { path: note.path });
+  } catch (e) {
+    setStatus(`History not available: ${asError(e).message}`);
+    return;
+  }
+  if (current !== note) return;
+  ui.editorHost.hidden = true;
+  ui.history.hidden = false;
+  ui.showHistory.setAttribute("aria-pressed", "true");
+  ui.historyHint.textContent =
+    versions.length === 0
+      ? "No earlier versions yet. One is stored after a pause in typing and when you leave the note."
+      : `${String(versions.length)} earlier ${versions.length === 1 ? "version" : "versions"}`;
+  historyView.load("");
+  ui.historyRestore.disabled = true;
+  ui.historyCopy.disabled = true;
+  const buttons = versions.map((version) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = versionLabel(version);
+    button.addEventListener("click", () => void selectVersion(version, button));
+    return button;
+  });
+  ui.historyList.replaceChildren(
+    ...buttons.map((button) => {
+      const item = document.createElement("li");
+      item.append(button);
+      return item;
+    }),
+  );
+  const [newest] = versions;
+  const [first] = buttons;
+  if (newest && first) await selectVersion(newest, first);
+}
+
+async function selectVersion(version: Version, button: HTMLButtonElement): Promise<void> {
+  const note = current;
+  if (!note) return;
+  for (const other of ui.historyList.querySelectorAll("button")) {
+    other.removeAttribute("aria-current");
+  }
+  button.setAttribute("aria-current", "true");
+  try {
+    const text = await invoke<string>("read_version", { path: note.path, name: version.name });
+    if (current !== note) return;
+    selectedVersion = version;
+    historyView.load(text);
+    ui.historyRestore.disabled = readOnly !== null;
+    ui.historyCopy.disabled = readOnly !== null;
+  } catch (e) {
+    historyView.load(`This version cannot be read: ${asError(e).message}`);
+    selectedVersion = null;
+    ui.historyRestore.disabled = true;
+    ui.historyCopy.disabled = true;
+  }
+}
+
+ui.showHistory.addEventListener("click", () => {
+  if (ui.history.hidden) void openHistory();
+  else closeHistory();
+});
+ui.historyClose.addEventListener("click", closeHistory);
+
+ui.historyRestore.addEventListener("click", () => {
+  const note = current;
+  const version = selectedVersion;
+  if (!note || !version) return;
+  saving = saving.then(save).then(async () => {
+    if (isDirty() || conflictHash !== undefined) {
+      setStatus("Not restored: the note has unsaved changes or a conflict.");
+      return;
+    }
+    try {
+      await invoke<SavedNote>("restore_version", {
+        path: note.path,
+        name: version.name,
+        expectedHash: note.hash,
+      });
+      const content = await invoke<NoteContent>("read_note", { path: note.path });
+      load(content);
+      setStatus(
+        `Restored the version of ${versionLabel(version)}; the text before is in the history.`,
+      );
+    } catch (e) {
+      setStatus(`Not restored: ${asError(e).message}`);
+    }
+  });
+});
+
+ui.historyCopy.addEventListener("click", () => {
+  const note = current;
+  const version = selectedVersion;
+  if (!note || !version) return;
+  void leaveNote()
+    .then(() => invoke<NewNote>("copy_version", { path: note.path, name: version.name }))
+    .then(async (created) => {
+      const content = await invoke<NoteContent>("read_note", { path: created.path });
+      if (listMode === "trash") setListMode("notes");
+      load(content);
+      setStatus(`Copied the version of ${versionLabel(version)} as a new note.`);
+      await refreshList();
+    })
+    .catch((e: unknown) => {
+      setStatus(`Not copied: ${asError(e).message}`);
+    });
+});
+
 ui.addImage.addEventListener("click", () => {
   ui.imageFile.click();
 });
@@ -923,6 +1080,7 @@ ui.newNote.addEventListener("click", () => {
 const MODE_KEY = "schnipsle.editorMode";
 function setMode(mode: EditorMode): void {
   editor.setMode(mode);
+  historyView.setMode(mode);
   ui.mode.textContent = mode === "live" ? "Source" : "Preview";
   ui.mode.setAttribute("aria-pressed", String(mode === "source"));
   try {
