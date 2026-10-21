@@ -516,47 +516,97 @@ fn extract_tags(markdown: &str) -> Vec<Tag> {
     schnipsle_core::extract_tags(markdown)
 }
 
-/// Puts "New Note" (⌘N) and "Open Vault…" (⌘O) at the top of the File menu.
-/// Tauri's default menu has a File menu (with Close Window) on macOS but none on
-/// Linux, where one is created. A click is sent to the UI as a `menu` event
-/// carrying the item id.
+/// The app's own menu bar (desktop). Unlike Tauri's default it has "Close
+/// Window" only once, in the File menu, next to "New Note" (⌘N) and "Open
+/// Vault…" (⌘O). A click on those two is sent to the UI as a `menu` event
+/// carrying the item id; everything else is a standard system item.
 #[cfg(desktop)]
 fn install_menu(app: &tauri::App) -> tauri::Result<()> {
     use tauri::Emitter as _;
-    use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
+    use tauri::menu::{AboutMetadata, Menu, MenuItem, PredefinedMenuItem, Submenu};
 
-    let menu = Menu::default(app.handle())?;
-    let new_note = MenuItem::with_id(app, "new-note", "New Note", true, Some("CmdOrCtrl+N"))?;
-    let open = MenuItem::with_id(app, "open-vault", "Open Vault…", true, Some("CmdOrCtrl+O"))?;
-    let separator = PredefinedMenuItem::separator(app)?;
+    let handle = app.handle();
+    let info = handle.package_info();
+    let about = AboutMetadata {
+        name: Some(info.name.clone()),
+        version: Some(info.version.to_string()),
+        copyright: handle.config().bundle.copyright.clone(),
+        ..AboutMetadata::default()
+    };
+    let separator = || PredefinedMenuItem::separator(app);
 
-    let mut file_menu = None;
-    for item in menu.items()? {
-        if let Some(submenu) = item.as_submenu()
-            && submenu.text()? == "File"
-        {
-            file_menu = Some(submenu.clone());
-        }
-    }
-    if let Some(file) = file_menu {
-        file.insert_items(&[&new_note, &open, &separator], 0)?;
-    } else {
-        let file = Submenu::with_items(
+    let file = Submenu::with_items(
+        app,
+        "File",
+        true,
+        &[
+            &MenuItem::with_id(app, "new-note", "New Note", true, Some("CmdOrCtrl+N"))?,
+            &MenuItem::with_id(app, "open-vault", "Open Vault…", true, Some("CmdOrCtrl+O"))?,
+            &separator()?,
+            &PredefinedMenuItem::close_window(app, None)?,
+            #[cfg(not(target_os = "macos"))]
+            &PredefinedMenuItem::quit(app, None)?,
+        ],
+    )?;
+    let edit = Submenu::with_items(
+        app,
+        "Edit",
+        true,
+        &[
+            &PredefinedMenuItem::undo(app, None)?,
+            &PredefinedMenuItem::redo(app, None)?,
+            &separator()?,
+            &PredefinedMenuItem::cut(app, None)?,
+            &PredefinedMenuItem::copy(app, None)?,
+            &PredefinedMenuItem::paste(app, None)?,
+            &PredefinedMenuItem::select_all(app, None)?,
+        ],
+    )?;
+    let window = Submenu::with_items(
+        app,
+        "Window",
+        true,
+        &[
+            &PredefinedMenuItem::minimize(app, None)?,
+            &PredefinedMenuItem::maximize(app, None)?,
+            #[cfg(target_os = "macos")]
+            &PredefinedMenuItem::fullscreen(app, None)?,
+        ],
+    )?;
+
+    #[cfg(target_os = "macos")]
+    let menu = {
+        let app_menu = Submenu::with_items(
             app,
-            "File",
+            info.name.clone(),
             true,
             &[
-                &new_note,
-                &open,
-                &separator,
-                &PredefinedMenuItem::close_window(app, None)?,
+                &PredefinedMenuItem::about(app, None, Some(about))?,
+                &separator()?,
+                &PredefinedMenuItem::services(app, None)?,
+                &separator()?,
+                &PredefinedMenuItem::hide(app, None)?,
+                &PredefinedMenuItem::hide_others(app, None)?,
+                &PredefinedMenuItem::show_all(app, None)?,
+                &separator()?,
                 &PredefinedMenuItem::quit(app, None)?,
             ],
         )?;
-        // After the application menu on macOS, first elsewhere.
-        let position = usize::from(cfg!(target_os = "macos"));
-        menu.insert(&file, position)?;
-    }
+        Menu::with_items(app, &[&app_menu, &file, &edit, &window])?
+    };
+    #[cfg(not(target_os = "macos"))]
+    let menu = {
+        let help = Submenu::with_items(
+            app,
+            "Help",
+            true,
+            &[&PredefinedMenuItem::about(app, None, Some(about))?],
+        )?;
+        Menu::with_items(app, &[&file, &edit, &window, &help])?
+    };
+    #[cfg(target_os = "macos")]
+    window.set_as_windows_menu_for_nsapp()?;
+
     app.set_menu(menu)?;
     app.on_menu_event(|app, event| {
         let id = event.id().as_ref();

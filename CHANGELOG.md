@@ -28,6 +28,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - History view: the History button shows the open note's earlier versions, newest first. Pick one to read it (in preview or source, like the editor), then restore it (the text it replaces goes into the history first, and a change made elsewhere meanwhile stops the restore) or copy it as a new note with its own `id`.
 - Tables (GitHub Flavored Markdown) show as tables in the live preview, with column alignment; their Markdown appears while the cursor is in the table. Cells show their text as written for now.
 - History retention can be set per vault in `.notesapp/settings.yaml` (format.md 0.8 §7, ADR-0017): `history_keep_all_days` (default 7) and `history_keep_daily_days` (default 90).
+- Own menu bar on the desktop: File (New Note, Open Vault…, Close Window), Edit, Window (Minimize, Zoom, Full Screen) and, on macOS, the app menu. "Close Window" no longer appears twice.
 - Test UI: open a vault folder, edit notes with autosave, reload external changes, resolve conflicts (spike).
 
 ### Changed

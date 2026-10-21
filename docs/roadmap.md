@@ -31,7 +31,7 @@ Carried over from the spike:
 - [x] Make check-and-rename atomic enough: hash re-checked after the temp file is flushed, creates never replace (file coordination still open above)
 - [ ] Move the iOS bookmark from `UserDefaults` to Application Support
 - [ ] Tauri iOS template override so the "Build Rust Code" PATH fix survives `ios init`
-- [ ] Own menu bar instead of Tauri's default (duplicate Close Window in File and Window menus)
+- [x] Own menu bar instead of Tauri's default: Close Window only in File, next to New Note and Open Vault…; Window has Minimize, Zoom and Full Screen
 - [x] Detect and show iCloud conflict versions (`NSFileVersion`, ADR-0006); C7 and C8 passed on the iPhone
 - [x] Show iCloud duplicate copies (`Name 2.md`) as conflicts: two files with the same `id` (format.md §4); same folder for now, vault-wide with the index (M2)
 
