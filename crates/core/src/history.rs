@@ -9,7 +9,8 @@
 //! Retention (ADR-0011): [`Vault::thin_history`] keeps every snapshot for 7
 //! days, then the last of each day until 90 days, then the last of each ISO
 //! week. Ages come from the UTC stamps in the names; a name it cannot read
-//! is kept.
+//! is kept. The two periods can be changed in `.notesapp/settings.yaml`
+//! (format.md §7, ADR-0017), see [`Vault::retention`].
 //!
 //! The history view works with note paths: [`Vault::versions`] lists the
 //! snapshots of a note, [`Vault::restore_version`] makes one the note's text
@@ -59,6 +60,28 @@ impl Default for Retention {
         Self {
             all_days: 7,
             daily_days: 90,
+        }
+    }
+}
+
+impl Retention {
+    /// The retention set in a `settings.yaml` (format.md §7):
+    /// `history_keep_all_days` and `history_keep_daily_days`, whole numbers of
+    /// days. A missing or invalid value keeps its default; a daily period
+    /// shorter than the first is extended to it.
+    #[must_use]
+    pub fn from_settings(settings: &str) -> Self {
+        let defaults = Self::default();
+        let days = |key: &str, default: u64| {
+            crate::flat_yaml::value(settings, key)
+                .and_then(|v| v.parse::<u64>().ok())
+                .unwrap_or(default)
+        };
+        let all_days = days("history_keep_all_days", defaults.all_days);
+        let daily_days = days("history_keep_daily_days", defaults.daily_days).max(all_days);
+        Self {
+            all_days,
+            daily_days,
         }
     }
 }
@@ -143,6 +166,25 @@ impl Vault {
             return Ok(None);
         }
         self.snapshot(id, content).map(Some)
+    }
+
+    /// The retention set in `.notesapp/settings.yaml`, or the default if the
+    /// file is missing or cannot be read.
+    #[must_use]
+    pub fn retention(&self) -> Retention {
+        let file = self.root().join(crate::layout::SETTINGS_FILE);
+        let text = self.coordinated(Access::Read, &file, |file| match fs::read(file) {
+            Ok(bytes) => Ok(String::from_utf8_lossy(&bytes).into_owned()),
+            Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(String::new()),
+            Err(e) => Err(e.into()),
+        });
+        text.map_or_else(
+            |e| {
+                eprintln!("settings not readable, default retention: {e}");
+                Retention::default()
+            },
+            |text| Retention::from_settings(&text),
+        )
     }
 
     /// Removes the snapshots `retention` no longer keeps, in every note's
@@ -603,5 +645,63 @@ mod tests {
             vault.read_version("bare.md", "20261015T212937Z.md.zst"),
             Err(VaultError::InvalidId(_))
         ));
+    }
+
+    #[test]
+    fn retention_from_settings() {
+        let defaults = Retention::default();
+        assert_eq!(Retention::from_settings(""), defaults);
+        assert_eq!(
+            Retention::from_settings("history_keep_all_days: 14\nhistory_keep_daily_days: 365\n"),
+            Retention {
+                all_days: 14,
+                daily_days: 365
+            }
+        );
+        // Invalid values keep their default; daily never ends before "all".
+        assert_eq!(
+            Retention::from_settings("history_keep_all_days: -3\nhistory_keep_daily_days: lots\n"),
+            defaults
+        );
+        assert_eq!(
+            Retention::from_settings("history_keep_all_days: 120 # four months\n"),
+            Retention {
+                all_days: 120,
+                daily_days: 120
+            }
+        );
+    }
+
+    /// format.md §7: the example settings in `tests/fixtures/format/7-settings/`.
+    #[test]
+    fn golden_settings() {
+        let fixtures = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/format/7-settings");
+        let settings = std::fs::read_to_string(fixtures.join("settings.yaml")).unwrap();
+        assert_eq!(
+            Retention::from_settings(&settings),
+            Retention {
+                all_days: 14,
+                daily_days: 180
+            }
+        );
+    }
+
+    #[test]
+    fn vault_reads_its_settings() {
+        let (dir, vault) = vault();
+        assert_eq!(vault.retention(), Retention::default());
+        std::fs::write(
+            dir.path().join(crate::layout::SETTINGS_FILE),
+            "history_keep_all_days: 3\nother_setting: kept\n",
+        )
+        .unwrap();
+        assert_eq!(
+            vault.retention(),
+            Retention {
+                all_days: 3,
+                daily_days: 90
+            }
+        );
     }
 }

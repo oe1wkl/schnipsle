@@ -215,7 +215,7 @@ fn thin_history_in_background(vault: &Vault) {
         .name("history-retention".into())
         .spawn(move || {
             let now = schnipsle_core::stamp::now_ms();
-            match vault.thin_history(schnipsle_core::Retention::default(), now) {
+            match vault.thin_history(vault.retention(), now) {
                 Ok(0) | Err(VaultError::ReadOnly(_)) => {}
                 Ok(n) => eprintln!("history: {n} old snapshots removed"),
                 Err(e) => eprintln!("history not thinned: {e}"),

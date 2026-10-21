@@ -30,3 +30,4 @@ This folder records every significant architectural decision of the project, one
 | [0014](0014-lyrics-with-chords-chordpro.md) | Lyrics with chords as ChordPro in fenced code blocks | Accepted | 2026-10-14 |
 | [0015](0015-apple-file-coordination-objc2.md) | Apple file coordination in a Rust crate using objc2 | Accepted | 2026-10-15 |
 | [0016](0016-rewrite-relative-links-when-notes-move.md) | Rewrite relative links when a note moves to another folder | Accepted | 2026-10-17 |
+| [0017](0017-history-retention-settings.md) | History retention settings in `settings.yaml` | Accepted | 2026-10-21 |

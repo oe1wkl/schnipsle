@@ -46,7 +46,7 @@ Editor:
 - [x] Keep relative links working when a note lands at another folder depth (restore into `notes/` as fallback, moving notes in from the vault root): rewritten, old text in the history (ADR-0016)
 - [x] Autosave with history snapshots (format.md §7, ADR-0011): after a 30 s typing pause, when leaving a note, before delete, and when another version replaces the open note or wins a conflict; duplicates skipped; retention (7 days all, 90 days daily, then weekly) runs when a vault opens
 - [x] History view: list a note's snapshots, show one, restore it or copy it as a new note (ADR-0011)
-- [ ] Retention settings from `.notesapp/settings.yaml` (format.md §7); the defaults are built in for now
+- [x] Retention settings from `.notesapp/settings.yaml` (format.md §7, ADR-0017): `history_keep_all_days`, `history_keep_daily_days`
 - [ ] Phone layout: list and editor as separate views
 
 Housekeeping:
