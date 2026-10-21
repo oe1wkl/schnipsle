@@ -33,5 +33,6 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Changed
 
+- iOS remembers the vault folder in a file in the app's Application Support folder instead of `UserDefaults`, excluded from backups since it only works on the device that made it. The folder picked with an earlier build is taken over automatically.
 - Trash records store `original_path` relative to the vault root (`notes/…`, format.md 0.6); records written by earlier M1 builds are restored into `notes/` under their file name.
 - Safer saving: the conflict check now runs after the new text is flushed to disk, right before the rename, and creating a note can no longer replace one created at the same moment by another device or process.

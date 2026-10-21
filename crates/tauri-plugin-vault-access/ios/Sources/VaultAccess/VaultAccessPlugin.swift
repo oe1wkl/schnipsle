@@ -4,8 +4,11 @@
 //
 // An iOS app may read a folder outside its sandbox (e.g. in iCloud Drive or on
 // another file provider) only after the user picked it in the system picker, and
-// only while it holds a security-scoped access. A bookmark stored in UserDefaults
-// lets the app regain that access after a restart without asking again.
+// only while it holds a security-scoped access. A bookmark lets the app regain
+// that access after a restart without asking again. It is per-device state, so
+// it lives in Application Support (excluded from backups: a bookmark only works
+// on the device that made it), like the desktop's vault.json. Builds before M1
+// kept it in UserDefaults; it is moved over the first time it is read.
 
 import SwiftRs
 import Tauri
@@ -33,7 +36,9 @@ final class FolderPickerDelegate: NSObject, UIDocumentPickerDelegate {
 }
 
 class VaultAccessPlugin: Plugin {
-  private let bookmarkKey = "schnipsle.vault.bookmark"
+  /// Where builds before M1 kept the bookmark.
+  private let legacyBookmarkKey = "schnipsle.vault.bookmark"
+  private let bookmarkFileName = "vault.bookmark"
   private let pickerDelegate = FolderPickerDelegate()
   /// The folder we currently hold security-scoped access to.
   private var activeURL: URL?
@@ -74,7 +79,7 @@ class VaultAccessPlugin: Plugin {
 
   /// Re-opens the stored folder; resolves `{ path }` or `{ path: null }`.
   @objc public func restoreFolder(_ invoke: Invoke) {
-    guard let data = UserDefaults.standard.data(forKey: bookmarkKey) else {
+    guard let data = loadBookmark() else {
       invoke.resolve(["path": nil])
       return
     }
@@ -90,7 +95,7 @@ class VaultAccessPlugin: Plugin {
       invoke.resolve(["path": url.path])
     } catch {
       // The folder is gone or access was revoked: forget it, the user picks again.
-      UserDefaults.standard.removeObject(forKey: bookmarkKey)
+      forgetBookmark()
       invoke.resolve(["path": nil])
     }
   }
@@ -119,7 +124,47 @@ class VaultAccessPlugin: Plugin {
   private func saveBookmark(for url: URL) throws {
     let data = try url.bookmarkData(
       options: [], includingResourceValuesForKeys: nil, relativeTo: nil)
-    UserDefaults.standard.set(data, forKey: bookmarkKey)
+    try writeBookmark(data)
+  }
+
+  /// `Library/Application Support/vault.bookmark`, creating the folder if needed.
+  private func bookmarkFile() throws -> URL {
+    let folder = try FileManager.default.url(
+      for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+    return folder.appendingPathComponent(bookmarkFileName)
+  }
+
+  private func writeBookmark(_ data: Data) throws {
+    var file = try bookmarkFile()
+    try data.write(to: file, options: .atomic)
+    var values = URLResourceValues()
+    values.isExcludedFromBackup = true
+    try? file.setResourceValues(values)
+  }
+
+  /// The stored bookmark; one still in UserDefaults is moved to the file.
+  private func loadBookmark() -> Data? {
+    if let file = try? bookmarkFile(), let data = try? Data(contentsOf: file) {
+      return data
+    }
+    guard let legacy = UserDefaults.standard.data(forKey: legacyBookmarkKey) else {
+      return nil
+    }
+    do {
+      try writeBookmark(legacy)
+      UserDefaults.standard.removeObject(forKey: legacyBookmarkKey)
+    } catch {
+      // Keep it where it is; it still works and is moved next time.
+      Logger.error("bookmark not moved to Application Support: \(error.localizedDescription)")
+    }
+    return legacy
+  }
+
+  private func forgetBookmark() {
+    if let file = try? bookmarkFile() {
+      try? FileManager.default.removeItem(at: file)
+    }
+    UserDefaults.standard.removeObject(forKey: legacyBookmarkKey)
   }
 }
 
