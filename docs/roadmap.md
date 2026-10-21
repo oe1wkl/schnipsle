@@ -1,14 +1,14 @@
 # Roadmap and status
 
 - Updated: 2026-10-21
-- Current milestone: **M1 – Core editor** (M0 complete and merged)
+- Current milestone: **M2 – Index and organization** (M1 complete once the wrap-up PR is merged)
 
 Each milestone ends in a usable build. Scope can move between milestones; the order should not.
 
 | Milestone | Content | Status |
 | --- | --- | --- |
 | M0 – Foundations | Decisions (ADR-0001…0014), format spec, repository and CI, iOS feasibility spike | Done 2026-10-14 |
-| M1 – Core editor | Open a vault, CodeMirror editor with live preview, images, autosave, safe writes, change detection | In progress |
+| M1 – Core editor | Open a vault, CodeMirror editor with live preview, images, autosave, safe writes, change detection | Done 2026-10-21 |
 | M2 – Index and organization | SQLite/FTS5 index, tag folders with combination subfolders, full-text search | |
 | M3 – Smart folders | Query language, saved searches | |
 | M4 – Import | Apple Notes (macOS 26 Markdown export), Simplenote, HTML, Markdown folders | |
@@ -21,6 +21,14 @@ Each milestone ends in a usable build. Scope can move between milestones; the or
 - Tauri 2 confirmed for iOS by the spike (`docs/spikes/ios-vault.md`); ADR-0003 unconditional.
 - Working: folder picker and persistent access on iOS, list/read/write with conflict detection, test UI on macOS, Linux and iPhone.
 - C8 (offline editing) passed on 2026-10-15 and C7 (simultaneous edits on two devices) on 2026-10-16, both with the M1 build. In C7, iCloud sometimes keeps the other side as a visible copy (`Name 2.md`) instead of a conflict version; such copies are shown as conflicts once the note has an `id`.
+
+## M1 results
+
+- Vaults follow format.md §1–2 (`vault.yaml`, notes in `notes/`); existing folders are converted only after asking, notes left outside `notes/` are found and moved in on request.
+- Editor: CodeMirror 6 with live preview (headings, emphasis, code, links, lists, tasks, quotes, images, tables) and a source toggle; images by paste, drop or picker, stored content-addressed in `attachments/`.
+- Data safety: atomic, coordinated writes with conflict checks; iCloud conflict versions and same-id copies resolved without losing text; trash; history snapshots with retention and a history view to read, restore or copy versions; relative links kept working when notes move (ADR-0016).
+- Format spec at draft revision 0.8; ADR-0016 and ADR-0017 added. Tested on macOS and on the iPhone (iOS 27).
+- Moved to later milestones: loading the editor on demand (bundle ~530 kB), inline formatting inside table cells, a settings view.
 
 ## M1 backlog
 
@@ -47,7 +55,7 @@ Editor:
 - [x] Autosave with history snapshots (format.md §7, ADR-0011): after a 30 s typing pause, when leaving a note, before delete, and when another version replaces the open note or wins a conflict; duplicates skipped; retention (7 days all, 90 days daily, then weekly) runs when a vault opens
 - [x] History view: list a note's snapshots, show one, restore it or copy it as a new note (ADR-0011)
 - [x] Retention settings from `.notesapp/settings.yaml` (format.md §7, ADR-0017): `history_keep_all_days`, `history_keep_daily_days`
-- [ ] Phone layout: list and editor as separate views
+- [x] Phone layout: list and editor as separate views, with a back button; the bottom bar wraps
 
 Housekeeping:
 
