@@ -24,6 +24,11 @@ Some *emphasis*, **strong** and ~~struck~~ text, \`inline code\` and a [link](ht
 1. first
 2. second
 
+| Band | Frequenz | Notiz |
+|:-----|--------:|:-----:|
+| 40 m | 7,030 MHz | QRP \\| CW |
+| 20 m | 14,060 MHz | *gut* |
+
 \`\`\`sh
 cargo test --workspace
 \`\`\`

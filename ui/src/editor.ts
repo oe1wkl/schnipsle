@@ -17,6 +17,8 @@ import {
   type Extension,
   Facet,
   type Range,
+  StateEffect,
+  StateField,
   Transaction,
 } from "@codemirror/state";
 import {
@@ -293,6 +295,129 @@ const livePreview = ViewPlugin.fromClass(
   },
 );
 
+// --- Tables ---
+//
+// A table spans several lines, which only a state field may replace (with a
+// block widget). It shows as a table unless the cursor is in it while the
+// editor has focus; then its Markdown shows, like any other line being edited.
+
+const setFocused = StateEffect.define<boolean>();
+const focused = StateField.define<boolean>({
+  create: () => false,
+  update(value, tr) {
+    for (const effect of tr.effects) if (effect.is(setFocused)) value = effect.value;
+    return value;
+  },
+});
+const trackFocus = [
+  focused,
+  EditorView.focusChangeEffect.of((_state, focusing) => setFocused.of(focusing)),
+];
+
+type Align = "left" | "center" | "right" | null;
+
+/** The cells of a table row: outer pipes dropped, split at unescaped `|`. */
+function tableCells(line: string): string[] {
+  let row = line.trim();
+  if (row.startsWith("|")) row = row.slice(1);
+  if (row.endsWith("|") && !row.endsWith("\\|")) row = row.slice(0, -1);
+  // No regex lookbehind: Safari 16.0–16.3 (our minimum, ADR-0002) lacks it.
+  const cells: string[] = [];
+  let cell = "";
+  for (let i = 0; i < row.length; i++) {
+    const c = row.charAt(i);
+    if (c === "\\" && row.charAt(i + 1) === "|") {
+      cell += "|";
+      i++;
+    } else if (c === "|") {
+      cells.push(cell.trim());
+      cell = "";
+    } else {
+      cell += c;
+    }
+  }
+  cells.push(cell.trim());
+  return cells;
+}
+
+function alignOf(delimiter: string): Align {
+  const left = delimiter.startsWith(":");
+  const right = delimiter.endsWith(":");
+  if (left && right) return "center";
+  if (right) return "right";
+  return left ? "left" : null;
+}
+
+/** A GFM table, shown as a table; its cells show their text as written. */
+class TableWidget extends WidgetType {
+  constructor(private readonly source: string) {
+    super();
+  }
+  override eq(other: TableWidget): boolean {
+    return other.source === this.source;
+  }
+  override toDOM(): HTMLElement {
+    const [head = "", delimiter = "", ...body] = this.source.split("\n");
+    const aligns = tableCells(delimiter).map(alignOf);
+    const row = (line: string, tag: "th" | "td"): HTMLTableRowElement => {
+      const tr = document.createElement("tr");
+      tableCells(line).forEach((text, i) => {
+        const cell = document.createElement(tag);
+        cell.textContent = text;
+        const align = aligns[i];
+        if (align) cell.style.textAlign = align;
+        tr.append(cell);
+      });
+      return tr;
+    };
+    const table = document.createElement("table");
+    const thead = document.createElement("thead");
+    thead.append(row(head, "th"));
+    const tbody = document.createElement("tbody");
+    tbody.append(...body.filter((line) => line.trim() !== "").map((line) => row(line, "td")));
+    table.append(thead, tbody);
+    const wrap = document.createElement("div");
+    wrap.className = "cm-table"; // scrolls sideways instead of widening the page
+    wrap.append(table);
+    return wrap;
+  }
+  override ignoreEvent(): boolean {
+    return false; // a click puts the cursor into the table, which shows its Markdown
+  }
+}
+
+function tableDecorations(state: EditorState): DecorationSet {
+  const hasFocus = state.field(focused, false) ?? false;
+  const found: Range<Decoration>[] = [];
+  syntaxTree(state).iterate({
+    enter: (node) => {
+      if (node.name !== "Table") return;
+      const from = state.doc.lineAt(node.from).from;
+      const to = state.doc.lineAt(node.to).to;
+      const edited = hasFocus && state.selection.ranges.some((r) => r.from <= to && r.to >= from);
+      if (!edited) {
+        const widget = new TableWidget(state.doc.sliceString(from, to));
+        found.push(Decoration.replace({ widget, block: true }).range(from, to));
+      }
+      return false;
+    },
+  });
+  return Decoration.set(found);
+}
+
+const tablePreview = StateField.define<DecorationSet>({
+  create: tableDecorations,
+  update(decorations, tr) {
+    const changed =
+      tr.docChanged ||
+      tr.selection !== undefined ||
+      tr.effects.some((e) => e.is(setFocused)) ||
+      syntaxTree(tr.startState) !== syntaxTree(tr.state); // the parser caught up
+    return changed ? tableDecorations(tr.state) : decorations;
+  },
+  provide: (field) => EditorView.decorations.from(field),
+});
+
 /** Front matter lines in muted colour, in both modes: it is metadata, not the note. */
 const frontMatterLine = Decoration.line({ class: "cm-frontmatter" });
 function frontMatterDecorations(state: EditorState): DecorationSet {
@@ -368,6 +493,15 @@ const theme = EditorView.theme({
   ".cm-frontmatter, .cm-frontmatter *": { color: "var(--muted)", fontSize: "0.9em" },
   ".cm-image img": { maxWidth: "100%", maxHeight: "24rem", verticalAlign: "bottom" },
   ".cm-image-missing": { color: "var(--muted)", fontStyle: "italic" },
+  ".cm-table": { overflowX: "auto", margin: "4px 0" },
+  ".cm-table table": { borderCollapse: "collapse", fontSize: "0.95em" },
+  ".cm-table th, .cm-table td": {
+    border: "1px solid var(--line)",
+    padding: "4px 10px",
+    textAlign: "left",
+    verticalAlign: "top",
+  },
+  ".cm-table th": { backgroundColor: "var(--panel)", fontWeight: "600" },
 });
 
 const sourceTheme = EditorView.theme({
@@ -375,7 +509,7 @@ const sourceTheme = EditorView.theme({
 });
 
 const modes: Record<EditorMode, Extension> = {
-  live: [livePreview, syntaxHighlighting(liveStyle)],
+  live: [livePreview, tablePreview, syntaxHighlighting(liveStyle)],
   source: [syntaxHighlighting(sourceStyle), sourceTheme],
 };
 
@@ -413,6 +547,7 @@ export function createEditor(
         language.of(startsWithFrontMatter(doc) ? withFrontMatter : markdownSupport),
         switchLanguage,
         mutedFrontMatter,
+        trackFocus,
         imageLoader.of(events.loadImage),
         mode.of(modes[currentMode]),
         enabled.of(enabledExtension(isEnabled)),
