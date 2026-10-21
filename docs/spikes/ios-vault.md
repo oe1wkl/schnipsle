@@ -56,7 +56,7 @@ Each step below stopped the first device build; all are fixed on this branch. Th
 
 Consequences:
 
-- **Do not run `pnpm tauri ios init` again** without re-applying the PATH fix to the "Build Rust Code" phase; the regenerated `project.yml` would lose it. M1 moves this into a Tauri iOS template override so it survives.
+- **Do not run `pnpm tauri ios init` again** without re-applying the PATH fix to the "Build Rust Code" phase; the regenerated `project.yml` would lose it. M1 moves this into a Tauri iOS template override so it survives. (Done in M1: `src-tauri/templates/ios/project.yml`, see `docs/dev-setup.md` §6.)
 - Minimum Rust version is 1.90 (required by Tauri 2.12).
 
 ## Test plan on the Mac and iPhone

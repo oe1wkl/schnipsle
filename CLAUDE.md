@@ -58,7 +58,7 @@ Before reporting work as done, run tests, clippy, fmt and `pnpm check`; all must
 
 ## Pitfalls already paid for
 
-- **Do not run `pnpm tauri ios init`.** The committed Xcode project's "Build Rust Code" phase sources `scripts/hook-env.sh` (Xcode has no shell PATH); regeneration loses this.
+- **Avoid `pnpm tauri ios init`.** The committed Xcode project's "Build Rust Code" phase sources `scripts/hook-env.sh` (Xcode has no shell PATH); the template `src-tauri/templates/ios/project.yml` keeps that on regeneration, but review the diff (`docs/dev-setup.md` §6) before committing a regenerated project.
 - iOS 27 needs the UIScene life cycle: Tauri ≥ 2.12 and `src-tauri/Info.ios.plist`. Do not downgrade Tauri.
 - Tauri's dialog plugin has no folder picker on iOS; use `tauri-plugin-vault-access`.
 - Plugin calls that wait for iOS block: call them only from `async` commands, never on the main thread.

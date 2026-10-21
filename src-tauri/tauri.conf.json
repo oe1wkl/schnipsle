@@ -30,7 +30,8 @@
     "targets": "all",
     "category": "Productivity",
     "iOS": {
-      "minimumSystemVersion": "16.0"
+      "minimumSystemVersion": "16.0",
+      "template": "src-tauri/templates/ios/project.yml"
     },
     "copyright": "Copyright 2026 Willi Kraml and contributors. Apache-2.0.",
     "icon": [

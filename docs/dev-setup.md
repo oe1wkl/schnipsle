@@ -64,7 +64,7 @@ Then add the two lines it prints to `~/.zshrc` and open a new terminal.
 
 ## 6. iOS
 
-The Xcode project lives in `src-tauri/gen/apple` and is committed. **Do not regenerate it** with `pnpm tauri ios init`: its "Build Rust Code" phase was changed to load `scripts/hook-env.sh`, because Xcode runs build scripts without your shell's PATH (see `docs/spikes/ios-vault.md`).
+The Xcode project lives in `src-tauri/gen/apple` and is committed. Its "Build Rust Code" phase loads `scripts/hook-env.sh`, because Xcode runs build scripts without your shell's PATH (see `docs/spikes/ios-vault.md`). That change lives in the project template `src-tauri/templates/ios/project.yml` (`bundle.iOS.template`), so it survives `pnpm tauri ios init`. Regenerate only when needed, from the repository root, and review the diff before committing: `ios init` writes your `DEVELOPMENT_TEAM` into `project.yml` (remove it; the team comes from `APPLE_DEVELOPMENT_TEAM`), and it drops the `UIApplicationSceneManifest` from `Info.plist`, which `src-tauri/Info.ios.plist` provides. After a Tauri CLI update, take the new CLI's template and re-apply the PATH change (see the comment at the top of the template).
 
 One-time setup for a real iPhone:
 
