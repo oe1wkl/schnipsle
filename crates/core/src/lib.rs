@@ -23,7 +23,9 @@ pub mod vault;
 pub mod watch;
 
 pub use attachments::AddedAttachment;
-pub use conflicts::{ConflictVersion, NoSyncConflicts, RawVersion, SyncConflicts};
+pub use conflicts::{
+    ConflictVersion, NoIdLookup, NoSyncConflicts, NotesById, RawVersion, SyncConflicts,
+};
 pub use coordination::{Coordinator, Uncoordinated};
 pub use history::{Retention, Version};
 pub use index::{Index, IndexError};

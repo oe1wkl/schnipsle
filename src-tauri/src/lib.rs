@@ -187,7 +187,8 @@ fn request_download(app: &tauri::AppHandle, file: &Path) {
 
 /// Makes `vault` the open vault and starts watching it.
 fn remember(app: &tauri::AppHandle, state: &AppState, vault: Vault) -> CmdResult<VaultInfo> {
-    let vault = with_sync_conflicts(vault);
+    let ids = indexing::IndexIds::new(state.index.clone(), vault.root().to_owned());
+    let vault = with_sync_conflicts(vault).with_notes_by_id(Arc::new(ids));
     let path = vault.root();
     let info = VaultInfo {
         name: vault

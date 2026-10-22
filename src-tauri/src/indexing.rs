@@ -13,10 +13,11 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use schnipsle_core::vault::sha256_hex;
 use schnipsle_core::watch::VaultChanges;
-use schnipsle_core::{Index, Vault};
+use schnipsle_core::{Index, NotesById, Vault};
 use tauri::{AppHandle, Emitter as _, Manager as _};
 
 /// The index and the root of the vault it belongs to.
+#[derive(Debug)]
 struct Open {
     root: PathBuf,
     index: Index,
@@ -24,7 +25,7 @@ struct Open {
 
 /// The index of the open vault, shared between commands, the watcher and the
 /// background sync. Cheap to clone.
-#[derive(Clone, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct SharedIndex {
     open: Arc<Mutex<Option<Open>>>,
     /// Paths changed while the index was busy, by vault root.
@@ -133,6 +134,37 @@ impl SharedIndex {
             .partition(|(root, _)| root == vault.root());
         *pending = others;
         mine.into_iter().map(|(_, key)| key).collect()
+    }
+}
+
+/// Finds copies of a note in other folders (format.md §4) through the index
+/// of the vault at `root`. While a sync holds the index it answers nothing,
+/// and the copies in the note's own folder are still found.
+#[derive(Debug)]
+pub struct IndexIds {
+    shared: SharedIndex,
+    root: PathBuf,
+}
+
+impl IndexIds {
+    pub fn new(shared: SharedIndex, root: PathBuf) -> Self {
+        Self { shared, root }
+    }
+}
+
+impl NotesById for IndexIds {
+    fn paths_with_id(&self, id: &str) -> Vec<String> {
+        let Ok(open) = self.shared.open.try_lock() else {
+            return Vec::new();
+        };
+        let prefix = format!("{}/", schnipsle_core::layout::NOTES_DIR);
+        open.as_ref()
+            .filter(|o| o.root == self.root)
+            .and_then(|o| o.index.paths_with_id(id).ok())
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|key| key.strip_prefix(&prefix).map(str::to_owned))
+            .collect()
     }
 }
 
