@@ -10,6 +10,7 @@ pub mod coordination;
 mod flat_yaml;
 pub mod front_matter;
 pub mod history;
+pub mod index;
 pub mod layout;
 pub mod links;
 pub mod names;

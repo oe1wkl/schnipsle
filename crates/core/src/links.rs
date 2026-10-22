@@ -150,7 +150,7 @@ type VaultPath = Vec<String>;
 /// Resolves the relative link path `link` (decoded, without `?` or `#`) from
 /// the folder `dir`; `None` if it is not relative, leaves the vault or
 /// reaches a hidden file.
-fn resolve_from(dir: &[String], link: &str) -> Option<VaultPath> {
+pub(crate) fn resolve_from(dir: &[String], link: &str) -> Option<VaultPath> {
     if link.is_empty() || link.starts_with('/') || link.contains('\\') || link.contains(':') {
         return None;
     }
