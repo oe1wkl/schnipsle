@@ -15,7 +15,7 @@ use std::sync::{Arc, Mutex};
 use schnipsle_core::layout::VAULT_FILE;
 use schnipsle_core::{
     AddedAttachment, Coordinator, Folder, MovedNotes, NewNote, NoteContent, NoteEntry, SavedNote,
-    SortOrder, StrayNotes, Tag, TagFolder, TrashedNote, Vault, VaultError, Version,
+    SearchHit, SortOrder, StrayNotes, Tag, TagFolder, TrashedNote, Vault, VaultError, Version,
 };
 use serde::Serialize;
 use tauri::State;
@@ -456,6 +456,13 @@ async fn tag_folders(state: State<'_, AppState>, keys: Vec<String>) -> CmdResult
     with_index(&state, |i| i.tag_folders(&keys))
 }
 
+/// Full-text search (F-09): words, "phrases", #tags, -exclusions, OR and
+/// parentheses; best matches first, with snippets.
+#[tauri::command]
+async fn search_notes(state: State<'_, AppState>, query: String) -> CmdResult<Vec<SearchHit>> {
+    with_index(&state, |i| i.search(&query))
+}
+
 /// Number of notes without any tag.
 #[tauri::command]
 async fn untagged_count(state: State<'_, AppState>) -> CmdResult<usize> {
@@ -742,6 +749,7 @@ pub fn run() {
             create_vault,
             list_notes,
             tag_folders,
+            search_notes,
             untagged_count,
             notes_in_tags,
             snapshot_note,
