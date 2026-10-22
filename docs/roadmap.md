@@ -39,7 +39,8 @@ Goal: notes findable by tags and full text, under 200 ms for 10,000 notes on the
 - [x] Copies with the same `id` found vault-wide via the index (carried over from M1): `NotesById`, answered by the index in the app; candidates are checked on disk
 - [x] Tag folders (ADR-0008, `tag_folders.rs`; shown in the UI with the last package): tags by normalized key with the most common spelling, hierarchy (`#a/b` counts for `#a`), combination subfolders A › B as intersections with counts, depth fixed at 3, "Untagged"
 - [x] Search (`query.rs`, `search.rs`; shown in the UI with the last package): query parsed to an AST and compiled to parameterized SQL (shared with tag folders); M2 syntax: words (prefix), `"phrases"`, `-term`, `#tag`, `OR`, parentheses; `bm25` ranking and highlighted snippets
-- [ ] Performance: generator for 20,000 notes, timing test in CI (N-03), check on the iPhone
+- [x] Performance: generator for 20,000 notes (`crates/core/tests/support/generate.rs`, also `--example generate_notes`), timing test in CI in release mode (N-03). On a Mac (M-series), worst case with very common words: searches 2–34 ms, tag folders ≤ 48 ms, building the index 5.4 s, a sync with nothing changed 38 ms
+- [ ] Check on the iPhone with a generated test vault (with the UI)
 - [ ] UI: split `ui/src/main.ts` into modules; search field and collapsible tag tree above the note list (hierarchy and combinations visually distinct, with counts); Tags as its own view on the phone
 
 Not in M2: saved searches and the operators `created:`, `modified:`, `has:`, `is:`, `in:trash` (M3, same parser); a setting for the combination depth (when needed, with format.md and an ADR); renaming and merging tags (F-11, M3 or later).

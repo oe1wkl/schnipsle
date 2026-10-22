@@ -141,20 +141,25 @@ impl Index {
             .into_iter()
             .filter_map(fts_term)
             .collect();
-        let ranked = !rank_terms.is_empty();
-        let sql = if ranked {
-            params.insert(0, rank_terms.join(" OR "));
+        let rank_query = (!rank_terms.is_empty()).then(|| rank_terms.join(" OR "));
+        // The ranking is computed once (MATERIALIZED), not per note; snippets
+        // only for the hits returned, in a second query that goes through the
+        // matches once: `+rowid` keeps the rowid list away from FTS5, which
+        // would otherwise run the MATCH again for every rowid in it.
+        let sql = if let Some(rank_query) = &rank_query {
+            params.insert(0, rank_query.clone());
             format!(
-                "SELECT n.path, n.title, n.mtime_ms, r.snip FROM notes n
-                 LEFT JOIN (SELECT rowid, bm25(notes_fts, 5.0, 1.0) AS rank,
-                                   snippet(notes_fts, -1, char(2), char(3), '…', 16) AS snip
-                            FROM notes_fts WHERE notes_fts MATCH ?) r ON r.rowid = n.rowid
+                "WITH r AS MATERIALIZED (
+                     SELECT rowid, bm25(notes_fts, 5.0, 1.0) AS rank
+                     FROM notes_fts WHERE notes_fts MATCH ?)
+                 SELECT n.rowid, n.path, n.title, n.mtime_ms FROM notes n
+                 LEFT JOIN r ON r.rowid = n.rowid
                  WHERE n.state = 'active' AND {condition}
                  ORDER BY r.rank IS NULL, r.rank, n.mtime_ms DESC LIMIT {MAX_HITS}"
             )
         } else {
             format!(
-                "SELECT n.path, n.title, n.mtime_ms, NULL FROM notes n
+                "SELECT n.rowid, n.path, n.title, n.mtime_ms FROM notes n
                  WHERE n.state = 'active' AND {condition}
                  ORDER BY n.mtime_ms DESC LIMIT {MAX_HITS}"
             )
@@ -162,16 +167,40 @@ impl Index {
         let mut statement = self.db().prepare(&sql)?;
         let prefix = format!("{NOTES_DIR}/");
         let rows = statement.query_map(params_from_iter(&params), |row| {
-            let path: String = row.get(0)?;
-            let snippet: Option<String> = row.get(3)?;
-            Ok(SearchHit {
-                path: path.strip_prefix(&prefix).unwrap_or(&path).to_owned(),
-                title: row.get(1)?,
-                modified_ms: u64::try_from(row.get::<_, i64>(2)?).unwrap_or(0),
-                snippet: snippet.as_deref().map(snippet_parts).unwrap_or_default(),
-            })
+            let path: String = row.get(1)?;
+            Ok((
+                row.get::<_, i64>(0)?,
+                SearchHit {
+                    path: path.strip_prefix(&prefix).unwrap_or(&path).to_owned(),
+                    title: row.get(2)?,
+                    modified_ms: u64::try_from(row.get::<_, i64>(3)?).unwrap_or(0),
+                    snippet: Vec::new(),
+                },
+            ))
         })?;
-        Ok(rows.collect::<rusqlite::Result<_>>()?)
+        let mut hits: Vec<(i64, SearchHit)> = rows.collect::<rusqlite::Result<_>>()?;
+        if let Some(rank_query) = rank_query
+            && !hits.is_empty()
+        {
+            let marks = vec!["?"; hits.len()].join(", ");
+            let mut snippets = self.db().prepare(&format!(
+                "SELECT rowid, snippet(notes_fts, -1, char(2), char(3), '…', 16) FROM notes_fts
+                 WHERE notes_fts MATCH ? AND +rowid IN ({marks})"
+            ))?;
+            let args = std::iter::once(rusqlite::types::Value::Text(rank_query)).chain(
+                hits.iter()
+                    .map(|(rowid, _)| rusqlite::types::Value::Integer(*rowid)),
+            );
+            let found: std::collections::HashMap<i64, String> = snippets
+                .query_map(params_from_iter(args), |row| Ok((row.get(0)?, row.get(1)?)))?
+                .collect::<rusqlite::Result<_>>()?;
+            for (rowid, hit) in &mut hits {
+                if let Some(snippet) = found.get(rowid) {
+                    hit.snippet = snippet_parts(snippet);
+                }
+            }
+        }
+        Ok(hits.into_iter().map(|(_, hit)| hit).collect())
     }
 }
 
