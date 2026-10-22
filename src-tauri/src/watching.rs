@@ -14,6 +14,8 @@ use schnipsle_core::Vault;
 use schnipsle_core::watch::spawn_dispatcher;
 use tauri::{AppHandle, Emitter as _};
 
+use crate::indexing::SharedIndex;
+
 /// How long the vault must be quiet before a burst of events is reported.
 const QUIET: Duration = Duration::from_millis(200);
 
@@ -30,9 +32,12 @@ pub struct VaultWatch {
 ///
 /// # Errors
 /// If a source cannot be started; the caller decides whether that matters.
-pub fn start(app: &AppHandle, vault: &Vault) -> io::Result<VaultWatch> {
+pub fn start(app: &AppHandle, vault: &Vault, index: SharedIndex) -> io::Result<VaultWatch> {
     let app = app.clone();
+    let indexed = vault.clone();
     let hints = spawn_dispatcher(vault.clone(), QUIET, move |changes| {
+        // The index first, so the UI finds it current when it reacts.
+        index.apply(&app, &indexed, &changes);
         let _ = app.emit("vault-changed", changes);
     })?;
     Ok(VaultWatch {

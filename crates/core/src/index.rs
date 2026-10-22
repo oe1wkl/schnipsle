@@ -471,6 +471,24 @@ impl Index {
         Ok(rows.collect::<rusqlite::Result<_>>()?)
     }
 
+    /// Updates the stamp of the note at `path` only: its file was touched
+    /// but its content is unchanged. `false` if it is not in the index.
+    ///
+    /// # Errors
+    /// SQLite errors.
+    pub fn set_stamp(&mut self, path: &str, stamp: &FileStamp) -> Result<bool> {
+        let changed = self.db.execute(
+            "UPDATE notes SET mtime_ms = ?2, size = ?3, hash = ?4 WHERE path = ?1",
+            params![
+                path,
+                i64::try_from(stamp.mtime_ms).unwrap_or(i64::MAX),
+                i64::try_from(stamp.size).unwrap_or(i64::MAX),
+                stamp.hash
+            ],
+        )?;
+        Ok(changed > 0)
+    }
+
     /// Number of indexed notes, the trash included.
     ///
     /// # Errors
