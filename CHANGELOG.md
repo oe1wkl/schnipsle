@@ -7,8 +7,8 @@ All notable changes to this project are documented here. The format follows [Kee
 ### Added
 
 - Repository foundation: Cargo workspace (`schnipsle-core`, `-import`, `-export`, Tauri 2 shell), TypeScript UI, CI, dependency licence checks, macOS bootstrap script.
-- Architecture decision records ADR-0001 to ADR-0016.
-- Vault format specification, draft revision 0.7 (notes, front matter, tags, links, attachments, music in ABC, song sheets in ChordPro, history, trash, smart folders).
+- Architecture decision records ADR-0001 to ADR-0017.
+- Vault format specification, draft revision 0.8 (notes, front matter, tags, links, attachments, music in ABC, song sheets in ChordPro, history, trash, smart folders).
 - Hashtag extraction in `schnipsle-core` following format.md §5.3, with the specification examples as tests.
 - Vault access in `schnipsle-core`: list notes (with iCloud placeholders), read, atomic write with conflict detection, create (spike, see docs/spikes/ios-vault.md).
 - `tauri-plugin-vault-access`: iOS folder picker with security-scoped bookmarks and iCloud download requests (spike).
@@ -26,9 +26,13 @@ All notable changes to this project are documented here. The format follows [Kee
 - Image and file links keep working when a note moves to another folder (format.md 0.7 §5.5, ADR-0016): when a restore from the trash falls back to `notes/`, or notes are moved in from the vault root, relative links that worked before are rewritten, and the previous text goes into the note's history. URLs, note links and links that were already broken stay as written.
 - Version history for every note (format.md §7, ADR-0011): a version is stored after a 30-second typing pause, when you leave a note, before it is deleted, and before another version replaces it (a change from elsewhere, or either side of an editing conflict, which so far dropped the losing text). A version equal to the last stored one is skipped. When a vault opens, old versions are thinned in the background: all are kept for 7 days, then the last of each day for 90 days, then the last of each week.
 - History view: the History button shows the open note's earlier versions, newest first. Pick one to read it (in preview or source, like the editor), then restore it (the text it replaces goes into the history first, and a change made elsewhere meanwhile stops the restore) or copy it as a new note with its own `id`.
+- Tables (GitHub Flavored Markdown) show as tables in the live preview, with column alignment; their Markdown appears while the cursor is in the table. Cells show their text as written for now.
+- History retention can be set per vault in `.notesapp/settings.yaml` (format.md 0.8 §7, ADR-0017): `history_keep_all_days` (default 7) and `history_keep_daily_days` (default 90).
+- Own menu bar on the desktop: File (New Note, Open Vault…, Close Window), Edit, Window (Minimize, Zoom, Full Screen) and, on macOS, the app menu. "Close Window" no longer appears twice.
 - Test UI: open a vault folder, edit notes with autosave, reload external changes, resolve conflicts (spike).
 
 ### Changed
 
+- iOS remembers the vault folder in a file in the app's Application Support folder instead of `UserDefaults`, excluded from backups since it only works on the device that made it. The folder picked with an earlier build is taken over automatically.
 - Trash records store `original_path` relative to the vault root (`notes/…`, format.md 0.6); records written by earlier M1 builds are restored into `notes/` under their file name.
 - Safer saving: the conflict check now runs after the new text is flushed to disk, right before the rename, and creating a note can no longer replace one created at the same moment by another device or process.

@@ -9,7 +9,7 @@ Work as a professional software developer: follow the decisions below, keep docs
 | File                       | What it holds                                                                                               |
 | -------------------------- | ----------------------------------------------------------------------------------------------------------- |
 | `docs/roadmap.md`          | Current milestone, open tasks, what is next                                                                 |
-| `docs/adr/`                | Architecture decisions (ADR-0001 … 0016). Do not contradict an accepted ADR; propose a new one              |
+| `docs/adr/`                | Architecture decisions (ADR-0001 … 0017). Do not contradict an accepted ADR; propose a new one              |
 | `docs/format.md`           | Vault file format (normative): notes, tags §5.3, music §5.6, chords §5.7, history, trash, writing rules §10 |
 | `docs/design/hld.md`       | High-level design snapshot (requirements F-xx / N-xx, architecture)                                         |
 | `docs/spikes/ios-vault.md` | iOS findings, including the iOS 27 build pitfalls                                                           |
@@ -58,7 +58,7 @@ Before reporting work as done, run tests, clippy, fmt and `pnpm check`; all must
 
 ## Pitfalls already paid for
 
-- **Do not run `pnpm tauri ios init`.** The committed Xcode project's "Build Rust Code" phase sources `scripts/hook-env.sh` (Xcode has no shell PATH); regeneration loses this.
+- **Avoid `pnpm tauri ios init`.** The committed Xcode project's "Build Rust Code" phase sources `scripts/hook-env.sh` (Xcode has no shell PATH); the template `src-tauri/templates/ios/project.yml` keeps that on regeneration, but review the diff (`docs/dev-setup.md` §6) before committing a regenerated project.
 - iOS 27 needs the UIScene life cycle: Tauri ≥ 2.12 and `src-tauri/Info.ios.plist`. Do not downgrade Tauri.
 - Tauri's dialog plugin has no folder picker on iOS; use `tauri-plugin-vault-access`.
 - Plugin calls that wait for iOS block: call them only from `async` commands, never on the main thread.

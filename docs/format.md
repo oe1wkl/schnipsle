@@ -1,9 +1,9 @@
 # Vault File Format Specification
 
 - Format version: **1** (draft)
-- Spec revision: 0.7, 2026-10-17 (§5.5 relative links are kept working when a note moves; 0.6: §8 `original_path` is relative to the vault root; 0.5: §8 trash names for notes without `id` and for collisions; 0.4: §5.3 refined by the first implementation, §5.6 music notation, §5.7 lyrics with chords)
+- Spec revision: 0.8, 2026-10-21 (§7 retention settings; 0.7: §5.5 relative links are kept working when a note moves; 0.6: §8 `original_path` is relative to the vault root; 0.5: §8 trash names for notes without `id` and for collisions; 0.4: §5.3 refined by the first implementation, §5.6 music notation, §5.7 lyrics with chords)
 - Status: Draft — becomes normative when M1 ships
-- Related: ADR-0004, ADR-0008, ADR-0009, ADR-0011, ADR-0013, ADR-0014, ADR-0016
+- Related: ADR-0004, ADR-0008, ADR-0009, ADR-0011, ADR-0013, ADR-0014, ADR-0016, ADR-0017
 
 The key words MUST, MUST NOT, SHOULD, SHOULD NOT and MAY are used as described in RFC 2119.
 
@@ -220,7 +220,14 @@ Rules:
 - Snapshots are stored as `.notesapp/history/<note-id>/<timestamp>.md.zst`, where `<timestamp>` is UTC in the form `YYYYMMDDTHHMMSSZ` (with `-n` suffix on collision).
 - Content is the complete note file (front matter and body) compressed with zstd.
 - Snapshots are immutable; they are only removed by the retention policy or by the user.
-- Retention policy (default, configurable in `settings.yaml`): keep all snapshots for 7 days, then the last snapshot of each day for 3 months, then the last of each ISO week.
+- Retention policy: keep all snapshots for 7 days, then the last snapshot of each UTC day until 90 days, then the last of each ISO week. Both periods are configurable in `settings.yaml` as whole numbers of days (ADR-0017):
+
+  ```yaml
+  history_keep_all_days: 7
+  history_keep_daily_days: 90
+  ```
+
+  A missing or invalid value means its default; a daily period shorter than the first is extended to it.
 
 ## 8. Trash
 
