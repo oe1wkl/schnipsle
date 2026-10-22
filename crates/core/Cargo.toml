@@ -14,6 +14,7 @@ comrak.workspace = true
 unicode-normalization.workspace = true
 serde.workspace = true
 sha2.workspace = true
+rusqlite.workspace = true
 getrandom = "0.4"
 ruzstd = "0.9"
 

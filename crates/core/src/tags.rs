@@ -71,7 +71,7 @@ pub fn extract_tags(markdown: &str) -> Vec<Tag> {
 }
 
 /// The Markdown dialect of format.md §5.1, as far as it matters for tag extraction.
-fn parse_options() -> Options<'static> {
+pub(crate) fn parse_options() -> Options<'static> {
     let mut options = Options::default();
     options.extension.table = true;
     options.extension.tasklist = true;

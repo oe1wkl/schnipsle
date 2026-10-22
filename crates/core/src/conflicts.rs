@@ -74,6 +74,24 @@ impl SyncConflicts for NoSyncConflicts {
     }
 }
 
+/// Finds notes by their `id` anywhere in the vault, e.g. through the search
+/// index (ADR-0009), so copies in other folders are found too.
+pub trait NotesById: Send + Sync + fmt::Debug {
+    /// Paths (relative to `notes/`) of the notes whose front matter had `id`
+    /// when they were last seen; may be behind the files.
+    fn paths_with_id(&self, id: &str) -> Vec<String>;
+}
+
+/// No lookup: copies are only searched in the note's own folder.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct NoIdLookup;
+
+impl NotesById for NoIdLookup {
+    fn paths_with_id(&self, _id: &str) -> Vec<String> {
+        Vec::new()
+    }
+}
+
 /// A conflict version as the UI sees it. Serialized with camelCase names.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -150,9 +168,10 @@ impl Vault {
             .collect())
     }
 
-    /// Other notes in the same folder whose front matter has the same `id` as
-    /// `text` (format.md §4). Only the folder is searched: that is where iCloud
-    /// Drive puts its copies; a vault-wide check comes with the index (M2).
+    /// Other notes whose front matter has the same `id` as `text` (format.md
+    /// §4): those in the same folder, where iCloud Drive puts its copies, and
+    /// those [`NotesById`] knows anywhere in the vault. Each one is checked on
+    /// disk, since the lookup may be behind.
     fn copies_of(&self, path: &str, text: &str) -> Result<Vec<Copy>> {
         let Some(id) = front_matter::get(text, "id") else {
             return Ok(Vec::new());
@@ -181,9 +200,17 @@ impl Vault {
             }
             Ok(names)
         })?;
+        let mut candidates: Vec<String> = names
+            .into_iter()
+            .map(|name| format!("{prefix}{name}"))
+            .collect();
+        for other in self.by_id().paths_with_id(&id) {
+            if other != path && !candidates.contains(&other) && self.resolve(&other).is_ok() {
+                candidates.push(other);
+            }
+        }
         let mut copies = Vec::new();
-        for name in names {
-            let copy_path = format!("{prefix}{name}");
+        for copy_path in candidates {
             let copy_full = self.resolve(&copy_path)?;
             let read = self.coordinated(Access::Read, &copy_full, |file| {
                 Ok(fs::read(file)
@@ -191,8 +218,8 @@ impl Vault {
                     .map(|bytes| (bytes, modified_ms_of(file))))
             })?;
             if let Some((bytes, modified_ms)) = read
-                && front_matter::get(&String::from_utf8_lossy(&bytes), "id").as_deref()
-                    == Some(id.as_str())
+                && front_matter::get(&String::from_utf8_lossy(&bytes), "id")
+                    .is_some_and(|other| other.eq_ignore_ascii_case(&id))
             {
                 copies.push(Copy {
                     path: copy_path,
@@ -724,5 +751,50 @@ mod tests {
         let json = serde_json::to_string(&ConflictVersion::from(&version("x"))).unwrap();
         assert!(json.contains("\"modifiedMs\":1792099714000"), "{json}");
         assert!(json.contains("\"device\":\"wklPhone\""), "{json}");
+    }
+
+    #[derive(Debug)]
+    struct Lookup(Vec<String>);
+
+    impl NotesById for Lookup {
+        fn paths_with_id(&self, _id: &str) -> Vec<String> {
+            self.0.clone()
+        }
+    }
+
+    #[test]
+    fn copies_in_other_folders_are_found_through_the_lookup() {
+        let dir = tempfile::tempdir().unwrap();
+        let notes = dir.path().join("notes");
+        let lookup = Lookup(vec![
+            "a.md".into(),            // the note itself
+            "Archiv/a.md".into(),     // a real copy elsewhere
+            "Archiv/stale.md".into(), // id changed since it was indexed
+            "gone.md".into(),         // deleted since
+            "../outside.md".into(),   // never followed
+        ]);
+        let vault = Vault::create(dir.path())
+            .unwrap()
+            .with_notes_by_id(std::sync::Arc::new(lookup));
+        fs::create_dir_all(notes.join("Archiv")).unwrap();
+        fs::write(notes.join("a.md"), note_with(SAME, "mine")).unwrap();
+        fs::write(
+            notes.join("Archiv/a.md"),
+            note_with(&SAME.to_lowercase(), "copy"),
+        )
+        .unwrap();
+        fs::write(
+            notes.join("Archiv/stale.md"),
+            note_with("01JA7Q5Y0Z8H3K2M6N4P9R1S2T", "other"),
+        )
+        .unwrap();
+
+        let note = vault.read_note("a.md").unwrap();
+        let copies: Vec<_> = note
+            .conflicts
+            .iter()
+            .filter_map(|c| c.copy_path.clone())
+            .collect();
+        assert_eq!(copies, ["Archiv/a.md"]);
     }
 }

@@ -5,6 +5,7 @@
 //! here (ADR-0003). Commands that may show system UI or wait for iOS are `async`,
 //! so they run off the main thread.
 
+mod indexing;
 mod vault_location;
 mod watching;
 
@@ -14,7 +15,7 @@ use std::sync::{Arc, Mutex};
 use schnipsle_core::layout::VAULT_FILE;
 use schnipsle_core::{
     AddedAttachment, Coordinator, Folder, MovedNotes, NewNote, NoteContent, NoteEntry, SavedNote,
-    SortOrder, StrayNotes, Tag, TrashedNote, Vault, VaultError, Version,
+    SortOrder, StrayNotes, Tag, TagFolder, TrashedNote, Vault, VaultError, Version,
 };
 use serde::Serialize;
 use tauri::State;
@@ -27,6 +28,8 @@ struct AppState {
     /// A picked folder that is not a vault yet; [`create_vault`] makes it one
     /// once the user agreed.
     pending: Mutex<Option<PathBuf>>,
+    /// The search index of the open vault (ADR-0009).
+    index: indexing::SharedIndex,
 }
 
 /// Error sent to the UI: a machine-readable `kind` plus a message.
@@ -184,7 +187,8 @@ fn request_download(app: &tauri::AppHandle, file: &Path) {
 
 /// Makes `vault` the open vault and starts watching it.
 fn remember(app: &tauri::AppHandle, state: &AppState, vault: Vault) -> CmdResult<VaultInfo> {
-    let vault = with_sync_conflicts(vault);
+    let ids = indexing::IndexIds::new(state.index.clone(), vault.root().to_owned());
+    let vault = with_sync_conflicts(vault).with_notes_by_id(Arc::new(ids));
     let path = vault.root();
     let info = VaultInfo {
         name: vault
@@ -200,9 +204,10 @@ fn remember(app: &tauri::AppHandle, state: &AppState, vault: Vault) -> CmdResult
     *watch = None;
     // Without events the UI still re-checks when it becomes visible, so a
     // watch that fails to start must not keep the vault from opening.
-    *watch = watching::start(app, &vault)
+    *watch = watching::start(app, &vault, state.index.clone())
         .inspect_err(|e| eprintln!("vault changes will not be reported: {e}"))
         .ok();
+    state.index.open_for(app, &vault);
     thin_history_in_background(&vault);
     *state.vault.lock().map_err(CommandError::other)? = Some(vault);
     Ok(info)
@@ -224,6 +229,12 @@ fn thin_history_in_background(vault: &Vault) {
     if let Err(e) = spawned {
         eprintln!("history not thinned: {e}");
     }
+}
+
+/// Updates the index for notes the app itself wrote: on iOS no event reports
+/// them (the presenter ignores its own coordinated writes).
+fn reindex(state: &AppState, vault: &Vault, keys: &[String]) {
+    state.index.update(vault, keys);
 }
 
 fn with_vault<T>(state: &AppState, f: impl FnOnce(&Vault) -> CmdResult<T>) -> CmdResult<T> {
@@ -314,7 +325,9 @@ async fn move_stray_notes(
         for name in &not_downloaded {
             request_download(&app, &v.root().join(name));
         }
-        Ok(v.move_stray_notes()?)
+        let moved = v.move_stray_notes()?;
+        state.index.sync_in_background(&app, v); // whole folders may have moved in
+        Ok(moved)
     })
 }
 
@@ -398,7 +411,9 @@ async fn restore_version(
     expected_hash: String,
 ) -> CmdResult<SavedNote> {
     with_vault(&state, |v| {
-        Ok(v.restore_version(&path, &name, &expected_hash)?)
+        let saved = v.restore_version(&path, &name, &expected_hash)?;
+        reindex(&state, v, &[indexing::note_key(&path)]);
+        Ok(saved)
     })
 }
 
@@ -409,13 +424,62 @@ async fn copy_version(
     path: String,
     name: String,
 ) -> CmdResult<NewNote> {
-    with_vault(&state, |v| Ok(v.copy_version(&path, &name)?))
+    with_vault(&state, |v| {
+        let created = v.copy_version(&path, &name)?;
+        reindex(&state, v, &[indexing::note_key(&created.path)]);
+        Ok(created)
+    })
+}
+
+/// Runs a query on the index of the open vault.
+fn with_index<T>(
+    state: &AppState,
+    f: impl FnOnce(&schnipsle_core::Index) -> Result<T, schnipsle_core::IndexError>,
+) -> CmdResult<T> {
+    with_vault(state, |v| {
+        state
+            .index
+            .read(v, f)
+            .ok_or_else(|| CommandError {
+                kind: "noIndex",
+                message: "The search index is not available".into(),
+                current_hash: None,
+            })?
+            .map_err(CommandError::other)
+    })
+}
+
+/// The subfolders of the tag folder with `keys`, or the top level for none
+/// (ADR-0008).
+#[tauri::command]
+async fn tag_folders(state: State<'_, AppState>, keys: Vec<String>) -> CmdResult<Vec<TagFolder>> {
+    with_index(&state, |i| i.tag_folders(&keys))
+}
+
+/// Number of notes without any tag.
+#[tauri::command]
+async fn untagged_count(state: State<'_, AppState>) -> CmdResult<usize> {
+    with_index(&state, schnipsle_core::Index::untagged_count)
+}
+
+/// The notes of the tag folder with `keys`; the untagged notes for none.
+#[tauri::command]
+async fn notes_in_tags(
+    state: State<'_, AppState>,
+    keys: Vec<String>,
+    sort: Option<SortOrder>,
+) -> CmdResult<Vec<NoteEntry>> {
+    with_index(&state, |i| i.notes_in(&keys, sort.unwrap_or_default()))
 }
 
 /// Creates a note named after its title (format.md §3).
 #[tauri::command]
 async fn new_note(state: State<'_, AppState>, text: String) -> CmdResult<NewNote> {
-    with_vault(&state, |v| Ok(v.create_titled("", &text)?))
+    with_vault(&state, |v| {
+        let created = v.create_titled("", &text)?;
+        reindex(&state, v, &[indexing::note_key(&created.path)]);
+        Ok(created)
+    })
 }
 
 /// After the user left a note: renames it to match its title if that changed
@@ -426,13 +490,28 @@ async fn rename_after_edit(
     path: String,
     title_at_open: String,
 ) -> CmdResult<String> {
-    with_vault(&state, |v| Ok(v.rename_after_edit(&path, &title_at_open)?))
+    with_vault(&state, |v| {
+        let renamed = v.rename_after_edit(&path, &title_at_open)?;
+        if renamed != path {
+            reindex(
+                &state,
+                v,
+                &[indexing::note_key(&path), indexing::note_key(&renamed)],
+            );
+        }
+        Ok(renamed)
+    })
 }
 
 /// Moves a note to the trash, unchanged (format.md §8).
 #[tauri::command]
 async fn trash_note(state: State<'_, AppState>, path: String) -> CmdResult<TrashedNote> {
-    with_vault(&state, |v| Ok(v.trash_note(&path)?))
+    with_vault(&state, |v| {
+        let trashed = v.trash_note(&path)?;
+        let keys = [indexing::note_key(&path), indexing::trash_key(&trashed.key)];
+        reindex(&state, v, &keys);
+        Ok(trashed)
+    })
 }
 
 #[tauri::command]
@@ -443,7 +522,15 @@ async fn list_trash(state: State<'_, AppState>) -> CmdResult<Vec<TrashedNote>> {
 /// Moves a note out of the trash; returns where it is now.
 #[tauri::command]
 async fn restore_note(state: State<'_, AppState>, key: String) -> CmdResult<String> {
-    with_vault(&state, |v| Ok(v.restore_note(&key)?))
+    with_vault(&state, |v| {
+        let restored = v.restore_note(&key)?;
+        reindex(
+            &state,
+            v,
+            &[indexing::trash_key(&key), indexing::note_key(&restored)],
+        );
+        Ok(restored)
+    })
 }
 
 #[tauri::command]
@@ -461,7 +548,9 @@ async fn save_note(
     expected_hash: String,
 ) -> CmdResult<SavedNote> {
     with_vault(&state, |v| {
-        Ok(v.write_note(&path, &text, &expected_hash)?)
+        let saved = v.write_note(&path, &text, &expected_hash)?;
+        reindex(&state, v, &[indexing::note_key(&path)]);
+        Ok(saved)
     })
 }
 
@@ -471,20 +560,28 @@ async fn create_note(
     path: String,
     text: String,
 ) -> CmdResult<SavedNote> {
-    with_vault(&state, |v| Ok(v.create_note(&path, &text)?))
+    with_vault(&state, |v| {
+        let saved = v.create_note(&path, &text)?;
+        reindex(&state, v, &[indexing::note_key(&path)]);
+        Ok(saved)
+    })
 }
 
 /// Settles a sync conflict: `text` becomes the note, every other version goes
 /// into its history (ADR-0006, ADR-0011). Returns the note as now on disk.
 #[tauri::command]
 async fn resolve_conflict(
+    app: tauri::AppHandle,
     state: State<'_, AppState>,
     path: String,
     text: String,
     expected_hash: String,
 ) -> CmdResult<NoteContent> {
     with_vault(&state, |v| {
-        Ok(v.resolve_conflict(&path, &text, &expected_hash)?)
+        let note = v.resolve_conflict(&path, &text, &expected_hash)?;
+        // Copies with the same id may have been removed anywhere.
+        state.index.sync_in_background(&app, v);
+        Ok(note)
     })
 }
 
@@ -496,7 +593,15 @@ async fn keep_both(
     path: String,
     copy_path: String,
 ) -> CmdResult<NoteContent> {
-    with_vault(&state, |v| Ok(v.keep_both(&path, &copy_path)?))
+    with_vault(&state, |v| {
+        let note = v.keep_both(&path, &copy_path)?;
+        reindex(
+            &state,
+            v,
+            &[indexing::note_key(&path), indexing::note_key(&copy_path)],
+        );
+        Ok(note)
+    })
 }
 
 /// Asks iCloud to download a note that is only a placeholder (iOS); no-op elsewhere.
@@ -636,6 +741,9 @@ pub fn run() {
             restore_vault,
             create_vault,
             list_notes,
+            tag_folders,
+            untagged_count,
+            notes_in_tags,
             snapshot_note,
             list_versions,
             read_version,

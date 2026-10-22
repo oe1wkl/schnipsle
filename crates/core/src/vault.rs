@@ -27,7 +27,7 @@ use std::time::UNIX_EPOCH;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 
-use crate::conflicts::{ConflictVersion, NoSyncConflicts, SyncConflicts};
+use crate::conflicts::{ConflictVersion, NoIdLookup, NoSyncConflicts, NotesById, SyncConflicts};
 use crate::coordination::{Coordinator, Uncoordinated};
 use crate::front_matter;
 use crate::layout::{ATTACHMENTS_DIR, FORMAT, NOTES_DIR, VAULT_FILE, VaultIdentity};
@@ -108,9 +108,25 @@ pub enum SortOrder {
     Title,
 }
 
+/// Sorts a note list as [`Vault::list_notes_by`] does.
+pub fn sort_notes(notes: &mut [NoteEntry], order: SortOrder) {
+    match order {
+        SortOrder::Modified => notes.sort_by(|a, b| {
+            b.modified_ms
+                .cmp(&a.modified_ms)
+                .then_with(|| a.path.cmp(&b.path))
+        }),
+        SortOrder::Title => {
+            notes.sort_by_cached_key(|n| {
+                (title_sort_key(&n.title), n.title.clone(), n.path.clone())
+            });
+        }
+    }
+}
+
 /// Sort key for titles: case and accents removed, so the order matches what a
 /// reader expects in German and English alike.
-fn title_sort_key(title: &str) -> String {
+pub(crate) fn title_sort_key(title: &str) -> String {
     use unicode_normalization::UnicodeNormalization as _;
     title
         .nfd()
@@ -184,6 +200,7 @@ pub struct Vault {
     read_only: Option<String>,
     coordinator: Arc<dyn Coordinator>,
     sync: Arc<dyn SyncConflicts>,
+    by_id: Arc<dyn NotesById>,
 }
 
 impl Vault {
@@ -251,6 +268,7 @@ impl Vault {
             read_only: None,
             coordinator,
             sync: Arc::new(NoSyncConflicts),
+            by_id: Arc::new(NoIdLookup),
         })
     }
 
@@ -263,6 +281,17 @@ impl Vault {
 
     pub(crate) fn sync(&self) -> &dyn SyncConflicts {
         self.sync.as_ref()
+    }
+
+    pub(crate) fn by_id(&self) -> &dyn NotesById {
+        self.by_id.as_ref()
+    }
+
+    /// Uses `by_id` to find copies of a note in other folders (format.md §4).
+    #[must_use]
+    pub fn with_notes_by_id(mut self, by_id: Arc<dyn NotesById>) -> Self {
+        self.by_id = by_id;
+        self
     }
 
     /// The vault's root folder.
@@ -331,18 +360,7 @@ impl Vault {
             Err(VaultError::Io(e)) if e.kind() == io::ErrorKind::NotFound => Vec::new(),
             other => other?,
         };
-        match order {
-            SortOrder::Modified => notes.sort_by(|a, b| {
-                b.modified_ms
-                    .cmp(&a.modified_ms)
-                    .then_with(|| a.path.cmp(&b.path))
-            }),
-            SortOrder::Title => {
-                notes.sort_by_cached_key(|n| {
-                    (title_sort_key(&n.title), n.title.clone(), n.path.clone())
-                });
-            }
-        }
+        sort_notes(&mut notes, order);
         Ok(notes)
     }
 
