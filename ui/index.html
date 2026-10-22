@@ -63,13 +63,31 @@
 
     <main class="layout" data-view="list">
       <nav class="list" aria-label="Notes">
+        <input
+          id="search"
+          type="search"
+          placeholder="Search"
+          aria-label="Search notes"
+          autocomplete="off"
+          spellcheck="false"
+          disabled
+        />
+        <details id="tags-panel" class="tags-panel" open>
+          <summary>Tags</summary>
+          <ul id="tag-tree" class="tag-tree" role="tree" aria-label="Tags"></ul>
+        </details>
         <div class="list-tools">
           <select id="sort" aria-label="Sort notes">
             <option value="modified">Recently changed</option>
             <option value="title">Title</option>
           </select>
+          <button id="show-tags" type="button" class="small phone-only">Tags</button>
           <button id="show-trash" type="button" class="small" aria-pressed="false">Trash</button>
         </div>
+        <p id="list-filter" class="list-filter" hidden>
+          <span id="list-filter-text"></span>
+          <button id="clear-filter" type="button" class="small">Show all</button>
+        </p>
         <p id="empty" class="muted">
           Open a vault to start: pick its folder, or an empty folder for a new vault. On iPhone,
           pick a folder in iCloud Drive.

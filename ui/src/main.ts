@@ -8,6 +8,7 @@ import { listen } from "@tauri-apps/api/event";
 import { asError, setStatus, ui } from "./dom";
 import { createEditor, type EditorMode, frontMatterLength } from "./editor";
 import { createImageCache, fileName } from "./images";
+import { createSidebar, type ListFilter } from "./sidebar";
 import type {
   VaultInfo,
   FolderSetup,
@@ -24,6 +25,8 @@ import type {
   AddedAttachment,
   Version,
   NewNote,
+  SearchHit,
+  SnippetPart,
   SortOrder,
 } from "./types";
 
@@ -103,10 +106,18 @@ async function attachFiles(files: File[], pos: number | null): Promise<void> {
 
 const isDirty = (): boolean => current !== null && editor.text() !== current.savedText;
 
-function showView(view: "list" | "editor"): void {
+/** The view shown on the phone; on wider screens list and editor are side by side. */
+function showView(view: "list" | "editor" | "tags"): void {
   ui.layout.dataset["view"] = view;
   ui.back.hidden = view === "list";
 }
+
+/** Search and tags above the note list; picking one filters the list. */
+const sidebar = createSidebar(() => {
+  if (ui.layout.dataset["view"] === "tags") showView("list");
+  if (listMode === "trash") setListMode("notes");
+  else void refreshList();
+});
 
 function vaultOpened(info: VaultInfo): void {
   ui.setup.hidden = true;
@@ -119,6 +130,9 @@ function vaultOpened(info: VaultInfo): void {
   ui.readOnlyText.textContent = readOnly ?? "";
   ui.newNote.disabled = readOnly !== null;
   ui.empty.hidden = true;
+  sidebar.reset();
+  sidebar.setEnabled(true);
+  void sidebar.refresh();
 }
 
 /** Shows a vault that was picked or restored, or asks whether to make the folder one. */
@@ -168,10 +182,41 @@ function showSetup(folder: FolderSetup): void {
 
 async function refreshList(): Promise<void> {
   if (listMode === "trash") {
+    ui.listFilter.hidden = true;
     await showTrashList();
     return;
   }
-  entries = await invoke<NoteEntry[]>("list_notes", { sort: sortOrder });
+  const filter = sidebar.filter();
+  showFilter(filter);
+  let snippets = new Map<string, SnippetPart[]>();
+  try {
+    switch (filter.kind) {
+      case "all":
+        entries = await invoke<NoteEntry[]>("list_notes", { sort: sortOrder });
+        break;
+      case "tag":
+      case "untagged":
+        entries = await invoke<NoteEntry[]>("notes_in_tags", {
+          keys: filter.kind === "tag" ? filter.keys : [],
+          sort: sortOrder,
+        });
+        break;
+      case "search": {
+        const hits = await invoke<SearchHit[]>("search_notes", { query: filter.query });
+        entries = hits.map((h) => ({ ...h, available: true }));
+        snippets = new Map(hits.map((h) => [h.path, h.snippet]));
+        break;
+      }
+    }
+  } catch (e) {
+    const err = asError(e);
+    entries = [];
+    ui.notes.replaceChildren();
+    ui.empty.hidden = false;
+    ui.empty.textContent =
+      err.kind === "noIndex" ? "The index is being built; try again in a moment." : err.message;
+    return;
+  }
   ui.notes.replaceChildren(
     ...entries.map((note) => {
       const item = document.createElement("li");
@@ -184,15 +229,58 @@ async function refreshList(): Promise<void> {
       }
       if (note.path === current?.path) button.setAttribute("aria-current", "true");
       button.addEventListener("click", () => void openNote(note));
-      const meta = document.createElement("small");
-      meta.textContent = `${note.path} · ${new Date(note.modifiedMs).toLocaleString()}`;
-      item.append(button, meta);
+      item.append(button);
+      const snippet = snippets.get(note.path);
+      if (snippet && snippet.length > 0) {
+        item.append(snippetElement(snippet));
+      } else {
+        const meta = document.createElement("small");
+        meta.textContent = `${note.path} · ${new Date(note.modifiedMs).toLocaleString()}`;
+        item.append(meta);
+      }
       return item;
     }),
   );
   ui.empty.hidden = entries.length > 0;
-  if (entries.length === 0) ui.empty.textContent = "No notes in this folder yet. Tap New.";
+  if (entries.length === 0) {
+    ui.empty.textContent =
+      filter.kind === "search"
+        ? "Nothing found."
+        : filter.kind === "all"
+          ? "No notes in this folder yet. Tap New."
+          : "No notes here.";
+  }
   await checkStrays();
+}
+
+/** The line above the list saying what it shows, with "Show all". */
+function showFilter(filter: ListFilter): void {
+  ui.sort.hidden = filter.kind === "search"; // results come best first
+  ui.listFilter.hidden = filter.kind === "all";
+  ui.listFilterText.textContent =
+    filter.kind === "tag"
+      ? filter.label
+      : filter.kind === "untagged"
+        ? "Untagged notes"
+        : filter.kind === "search"
+          ? `Search: ${filter.query}`
+          : "";
+}
+
+/** A search snippet with the matching words emphasized. */
+function snippetElement(parts: SnippetPart[]): HTMLElement {
+  const small = document.createElement("small");
+  small.className = "snippet";
+  for (const part of parts) {
+    if (part.hit) {
+      const mark = document.createElement("mark");
+      mark.textContent = part.text;
+      small.append(mark);
+    } else {
+      small.append(part.text);
+    }
+  }
+  return small;
 }
 
 /**
@@ -275,7 +363,7 @@ function setListMode(mode: "notes" | "trash"): void {
   listMode = mode;
   ui.showTrash.textContent = mode === "trash" ? "Notes" : "Trash";
   ui.showTrash.setAttribute("aria-pressed", String(mode === "trash"));
-  ui.sort.hidden = mode === "trash";
+  ui.sort.hidden = mode === "trash" || sidebar.filter().kind === "search";
   void refreshList();
 }
 
@@ -324,6 +412,18 @@ function closeEditor(): void {
 async function showTags(): Promise<void> {
   const tags = await invoke<Tag[]>("extract_tags", { markdown: editor.text() });
   ui.tags.textContent = tags.map((t) => `#${t.name}`).join(" ");
+}
+
+/** The open note's tags when the tag tree was last loaded. */
+let tagsInTree = "";
+
+/** After a save: reloads the tag tree if the note's tags changed. */
+function refreshTagTreeIfNeeded(): void {
+  const tags = ui.tags.textContent;
+  if (tags !== tagsInTree) {
+    tagsInTree = tags;
+    void sidebar.refresh();
+  }
 }
 
 async function openNote(note: NoteEntry): Promise<void> {
@@ -409,6 +509,7 @@ async function save(): Promise<void> {
     });
     applySaved(note, text, saved);
     setStatus(`Saved ${new Date().toLocaleTimeString()}`);
+    refreshTagTreeIfNeeded();
   } catch (e) {
     const err = asError(e);
     if (err.kind === "conflict") {
@@ -582,15 +683,19 @@ async function checkForChanges(changes?: VaultChanges): Promise<void> {
   if (ui.newNote.disabled) return; // no vault open
   try {
     await refreshList();
+    if (!changes || changes.rescan || changes.paths.length > 0) void sidebar.refresh();
     if (!current || conflictHash !== undefined) return;
     const path = current.path;
     if (changes && !changes.rescan && !changes.paths.includes(path)) return;
     const onDisk = entries.find((n) => n.path === path);
-    if (!onDisk) {
-      setStatus("This note was deleted or moved elsewhere.");
-      return;
+    if (sidebar.filter().kind === "all") {
+      // Only the full list tells whether the note is gone; a filtered one may just not show it.
+      if (!onDisk) {
+        setStatus("This note was deleted or moved elsewhere.");
+        return;
+      }
+      if (!onDisk.available) return;
     }
-    if (!onDisk.available) return;
     const content = await invoke<NoteContent>("read_note", { path });
     showSyncConflicts(content.conflicts);
     if (content.hash === current.hash) return;
@@ -613,6 +718,10 @@ async function checkForChanges(changes?: VaultChanges): Promise<void> {
 }
 
 ui.back.addEventListener("click", () => {
+  if (ui.layout.dataset["view"] === "tags") {
+    showView("list");
+    return;
+  }
   void leaveNote().then(async () => {
     showView("list");
     await refreshList();
@@ -920,6 +1029,21 @@ function queueCheck(changes?: VaultChanges): void {
 
 void listen<VaultChanges>("vault-changed", (event) => {
   queueCheck(event.payload);
+});
+
+// The index was (re)built: tags and filtered lists can be shown now.
+void listen("index-synced", () => {
+  void sidebar.refresh();
+  if (sidebar.filter().kind !== "all") void refreshList();
+});
+
+ui.showTags.addEventListener("click", () => {
+  sidebar.openTags();
+  showView("tags");
+});
+
+ui.clearFilter.addEventListener("click", () => {
+  sidebar.showAll();
 });
 
 document.addEventListener("visibilitychange", () => {

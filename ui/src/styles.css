@@ -215,6 +215,116 @@ button.small {
   color: var(--accent);
 }
 
+/* Search and tags above the note list (ADR-0008). */
+#search {
+  width: 100%;
+  font: inherit;
+  padding: 6px 10px;
+  margin-bottom: 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  color: inherit;
+}
+.tags-panel {
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 6px;
+}
+.tags-panel summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 13px;
+  padding: 2px 4px;
+}
+.tag-tree,
+.tag-tree ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: none;
+}
+.tag-tree {
+  max-height: 40vh;
+  overflow-y: auto;
+}
+.list .tag-tree li {
+  display: block;
+  padding: 0;
+  border: none;
+}
+.tag-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.list .tag-row button {
+  min-height: 28px;
+  font-weight: normal;
+}
+.list .tag-toggle {
+  flex: none;
+  width: 22px;
+  padding: 0;
+  color: var(--muted);
+  border: none;
+  text-align: center;
+}
+.list .tag-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg);
+}
+.list .tag-name[aria-current="true"] {
+  color: var(--accent);
+  font-weight: 600;
+}
+.list .tag-name.untagged {
+  font-style: italic;
+}
+.tag-count {
+  flex: none;
+  color: var(--muted);
+  font-size: 12px;
+  padding-right: 4px;
+}
+.tag-hint {
+  font-size: 13px;
+  padding: 4px;
+}
+.list-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 6px;
+  padding: 4px !important;
+  font-size: 13px;
+  color: var(--muted);
+}
+.list-filter[hidden] {
+  display: none;
+}
+.list-filter span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.snippet {
+  color: var(--muted);
+  font-size: 13px;
+  padding: 0 4px;
+}
+.snippet mark {
+  background: none;
+  color: var(--fg);
+  font-weight: 600;
+}
+
 /* History of the open note, in place of the editor. */
 .history {
   flex: 1;
@@ -278,6 +388,15 @@ button.small {
   .list {
     border-right: none;
   }
+  /* Tags are their own view on the phone. */
+  .layout[data-view="list"] .tags-panel,
+  .layout[data-view="tags"] .editor,
+  .layout[data-view="tags"] .list > :not(.tags-panel) {
+    display: none;
+  }
+  .layout[data-view="tags"] .tag-tree {
+    max-height: none;
+  }
   .history-body {
     grid-template-columns: 1fr;
     grid-template-rows: minmax(96px, 30%) 1fr;
@@ -288,7 +407,8 @@ button.small {
   }
 }
 @media (min-width: 701px) {
-  #back {
+  #back,
+  .phone-only {
     display: none;
   }
 }

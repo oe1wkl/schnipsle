@@ -98,3 +98,17 @@ export interface CommandError {
   message: string;
   currentHash: string | null;
 }
+
+/** A piece of a search snippet (schnipsle-core `SnippetPart`). */
+export interface SnippetPart {
+  text: string;
+  hit: boolean;
+}
+
+/** A search result (schnipsle-core `SearchHit`). */
+export interface SearchHit {
+  path: string;
+  title: string;
+  modifiedMs: number;
+  snippet: SnippetPart[];
+}
