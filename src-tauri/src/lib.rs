@@ -15,7 +15,7 @@ use std::sync::{Arc, Mutex};
 use schnipsle_core::layout::VAULT_FILE;
 use schnipsle_core::{
     AddedAttachment, Coordinator, Folder, MovedNotes, NewNote, NoteContent, NoteEntry, SavedNote,
-    SortOrder, StrayNotes, Tag, TrashedNote, Vault, VaultError, Version,
+    SortOrder, StrayNotes, Tag, TagFolder, TrashedNote, Vault, VaultError, Version,
 };
 use serde::Serialize;
 use tauri::State;
@@ -431,6 +431,47 @@ async fn copy_version(
     })
 }
 
+/// Runs a query on the index of the open vault.
+fn with_index<T>(
+    state: &AppState,
+    f: impl FnOnce(&schnipsle_core::Index) -> Result<T, schnipsle_core::IndexError>,
+) -> CmdResult<T> {
+    with_vault(state, |v| {
+        state
+            .index
+            .read(v, f)
+            .ok_or_else(|| CommandError {
+                kind: "noIndex",
+                message: "The search index is not available".into(),
+                current_hash: None,
+            })?
+            .map_err(CommandError::other)
+    })
+}
+
+/// The subfolders of the tag folder with `keys`, or the top level for none
+/// (ADR-0008).
+#[tauri::command]
+async fn tag_folders(state: State<'_, AppState>, keys: Vec<String>) -> CmdResult<Vec<TagFolder>> {
+    with_index(&state, |i| i.tag_folders(&keys))
+}
+
+/// Number of notes without any tag.
+#[tauri::command]
+async fn untagged_count(state: State<'_, AppState>) -> CmdResult<usize> {
+    with_index(&state, schnipsle_core::Index::untagged_count)
+}
+
+/// The notes of the tag folder with `keys`; the untagged notes for none.
+#[tauri::command]
+async fn notes_in_tags(
+    state: State<'_, AppState>,
+    keys: Vec<String>,
+    sort: Option<SortOrder>,
+) -> CmdResult<Vec<NoteEntry>> {
+    with_index(&state, |i| i.notes_in(&keys, sort.unwrap_or_default()))
+}
+
 /// Creates a note named after its title (format.md §3).
 #[tauri::command]
 async fn new_note(state: State<'_, AppState>, text: String) -> CmdResult<NewNote> {
@@ -700,6 +741,9 @@ pub fn run() {
             restore_vault,
             create_vault,
             list_notes,
+            tag_folders,
+            untagged_count,
+            notes_in_tags,
             snapshot_note,
             list_versions,
             read_version,

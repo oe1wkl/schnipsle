@@ -30,6 +30,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - History retention can be set per vault in `.notesapp/settings.yaml` (format.md 0.8 §7, ADR-0017): `history_keep_all_days` (default 7) and `history_keep_daily_days` (default 90).
 - Own menu bar on the desktop: File (New Note, Open Vault…, Close Window), Edit, Window (Minimize, Zoom, Full Screen) and, on macOS, the app menu. "Close Window" no longer appears twice.
 - Search index in `schnipsle-core` (ADR-0009): SQLite with FTS5 (bundled), per note its title, plain text, tags with their hierarchy, note links and linked files; a per-device cache that rebuilds itself when its schema changes or the file is damaged. The app keeps it current: a background sync when a vault opens (reading only files whose modification time or size changed), then change events and its own writes; trashed notes are indexed too. Nothing uses it for searching yet.
+- Tag folders from the index (ADR-0008), not shown in the UI yet: every top-level tag with its note count, hierarchy levels (`#projekte` › `#projekte/tuner`) and combinations with co-occurring tags as intersections up to three tags deep, plus the untagged notes. A tag is shown in its most used spelling; the trash does not count.
 - Test UI: open a vault folder, edit notes with autosave, reload external changes, resolve conflicts (spike).
 
 ### Changed

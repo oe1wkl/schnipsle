@@ -108,9 +108,25 @@ pub enum SortOrder {
     Title,
 }
 
+/// Sorts a note list as [`Vault::list_notes_by`] does.
+pub fn sort_notes(notes: &mut [NoteEntry], order: SortOrder) {
+    match order {
+        SortOrder::Modified => notes.sort_by(|a, b| {
+            b.modified_ms
+                .cmp(&a.modified_ms)
+                .then_with(|| a.path.cmp(&b.path))
+        }),
+        SortOrder::Title => {
+            notes.sort_by_cached_key(|n| {
+                (title_sort_key(&n.title), n.title.clone(), n.path.clone())
+            });
+        }
+    }
+}
+
 /// Sort key for titles: case and accents removed, so the order matches what a
 /// reader expects in German and English alike.
-fn title_sort_key(title: &str) -> String {
+pub(crate) fn title_sort_key(title: &str) -> String {
     use unicode_normalization::UnicodeNormalization as _;
     title
         .nfd()
@@ -344,18 +360,7 @@ impl Vault {
             Err(VaultError::Io(e)) if e.kind() == io::ErrorKind::NotFound => Vec::new(),
             other => other?,
         };
-        match order {
-            SortOrder::Modified => notes.sort_by(|a, b| {
-                b.modified_ms
-                    .cmp(&a.modified_ms)
-                    .then_with(|| a.path.cmp(&b.path))
-            }),
-            SortOrder::Title => {
-                notes.sort_by_cached_key(|n| {
-                    (title_sort_key(&n.title), n.title.clone(), n.path.clone())
-                });
-            }
-        }
+        sort_notes(&mut notes, order);
         Ok(notes)
     }
 

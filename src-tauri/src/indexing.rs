@@ -91,6 +91,15 @@ impl SharedIndex {
         }
     }
 
+    /// Runs `f` on the index of `vault`, waiting for a running sync; `None` if
+    /// there is no index for it.
+    pub fn read<T>(&self, vault: &Vault, f: impl FnOnce(&Index) -> T) -> Option<T> {
+        let open = lock(&self.open);
+        open.as_ref()
+            .filter(|o| o.root == vault.root())
+            .map(|o| f(&o.index))
+    }
+
     /// Updates the given paths (below the vault root) now, or after the sync
     /// that is running. Paths queued earlier for this vault come along.
     pub fn update(&self, vault: &Vault, keys: &[String]) {
