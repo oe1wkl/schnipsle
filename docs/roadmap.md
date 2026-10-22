@@ -1,7 +1,7 @@
 # Roadmap and status
 
-- Updated: 2026-10-21
-- Current milestone: **M2 – Index and organization** (M1 complete once the wrap-up PR is merged)
+- Updated: 2026-10-22
+- Current milestone: **M2 – Index and organization** (M1 complete)
 
 Each milestone ends in a usable build. Scope can move between milestones; the order should not.
 
@@ -9,7 +9,7 @@ Each milestone ends in a usable build. Scope can move between milestones; the or
 | --- | --- | --- |
 | M0 – Foundations | Decisions (ADR-0001…0014), format spec, repository and CI, iOS feasibility spike | Done 2026-10-14 |
 | M1 – Core editor | Open a vault, CodeMirror editor with live preview, images, autosave, safe writes, change detection | Done 2026-10-21 |
-| M2 – Index and organization | SQLite/FTS5 index, tag folders with combination subfolders, full-text search | |
+| M2 – Index and organization | SQLite/FTS5 index, tag folders with combination subfolders, full-text search | In progress |
 | M3 – Smart folders | Query language, saved searches | |
 | M4 – Import | Apple Notes (macOS 26 Markdown export), Simplenote, HTML, Markdown folders | |
 | M5 – Export | HTML, PDF, ODT built in; Pandoc formats on desktop | |
@@ -29,6 +29,20 @@ Each milestone ends in a usable build. Scope can move between milestones; the or
 - Data safety: atomic, coordinated writes with conflict checks; iCloud conflict versions and same-id copies resolved without losing text; trash; history snapshots with retention and a history view to read, restore or copy versions; relative links kept working when notes move (ADR-0016).
 - Format spec at draft revision 0.8; ADR-0016 and ADR-0017 added. Tested on macOS and on the iPhone (iOS 27).
 - Moved to later milestones: loading the editor on demand (bundle ~530 kB), inline formatting inside table cells, a settings view.
+
+## M2 backlog
+
+Goal: notes findable by tags and full text, under 200 ms for 10,000 notes on the iPhone (N-03). Order: index, sync, same-id copies, tags, search, performance, UI.
+
+- [ ] Index in `schnipsle-core` (ADR-0009): `rusqlite` with bundled SQLite and FTS5; tables for notes (id, path, title, created, modified, hash, state), FTS5 over title and plain text (`unicode61`, diacritics removed), note–tag, note–link, note–attachment; schema version, rebuild on mismatch; one file per vault id in the per-device cache folder, never in the vault
+- [ ] Keep the index current: background sync when a vault opens (path, modification time and size, hash only on difference), then change events and own saves; trashed notes indexed as `trash` (F-15)
+- [ ] Copies with the same `id` found vault-wide via the index (carried over from M1)
+- [ ] Tag folders (ADR-0008): tags by normalized key with the most common spelling, hierarchy (`#a/b` counts for `#a`), combination subfolders A › B as intersections with counts, depth fixed at 3, "Untagged"
+- [ ] Search: query parsed to an AST and compiled to parameterized SQL (shared with tag folders); M2 syntax: words (prefix), `"phrases"`, `-term`, `#tag`, `OR`, parentheses; `bm25` ranking and highlighted snippets
+- [ ] Performance: generator for 20,000 notes, timing test in CI (N-03), check on the iPhone
+- [ ] UI: split `ui/src/main.ts` into modules; search field and collapsible tag tree above the note list (hierarchy and combinations visually distinct, with counts); Tags as its own view on the phone
+
+Not in M2: saved searches and the operators `created:`, `modified:`, `has:`, `is:`, `in:trash` (M3, same parser); a setting for the combination depth (when needed, with format.md and an ADR); renaming and merging tags (F-11, M3 or later).
 
 ## M1 backlog
 
