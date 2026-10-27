@@ -38,6 +38,17 @@ jobs:
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - run: cargo test --workspace --locked
 
+  perf:
+    name: Performance (20,000 notes, N-03)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Toolchain from rust-toolchain.toml
+        run: rustup toolchain install && rustup show active-toolchain
+      - uses: Swatinem/rust-cache@v2
+      # Release build: the timings in a debug build say nothing about the app.
+      - run: cargo test -p schnipsle-core --release --locked --test perf -- --ignored --nocapture
+
   ui:
     name: UI (TypeScript)
     runs-on: ubuntu-latest

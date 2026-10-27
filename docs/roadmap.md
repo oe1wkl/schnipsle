@@ -1,7 +1,7 @@
 # Roadmap and status
 
-- Updated: 2026-10-22
-- Current milestone: **M2 – Index and organization** (M1 complete)
+- Updated: 2026-10-27
+- Current milestone: **M3 – Smart folders** (M2 complete once its last PR is merged)
 
 Each milestone ends in a usable build. Scope can move between milestones; the order should not.
 
@@ -9,7 +9,7 @@ Each milestone ends in a usable build. Scope can move between milestones; the or
 | --- | --- | --- |
 | M0 – Foundations | Decisions (ADR-0001…0014), format spec, repository and CI, iOS feasibility spike | Done 2026-10-14 |
 | M1 – Core editor | Open a vault, CodeMirror editor with live preview, images, autosave, safe writes, change detection | Done 2026-10-21 |
-| M2 – Index and organization | SQLite/FTS5 index, tag folders with combination subfolders, full-text search | In progress |
+| M2 – Index and organization | SQLite/FTS5 index, tag folders with combination subfolders, full-text search | Done 2026-10-27 |
 | M3 – Smart folders | Query language, saved searches | |
 | M4 – Import | Apple Notes (macOS 26 Markdown export), Simplenote, HTML, Markdown folders | |
 | M5 – Export | HTML, PDF, ODT built in; Pandoc formats on desktop | |
@@ -30,6 +30,15 @@ Each milestone ends in a usable build. Scope can move between milestones; the or
 - Format spec at draft revision 0.8; ADR-0016 and ADR-0017 added. Tested on macOS and on the iPhone (iOS 27).
 - Moved to later milestones: loading the editor on demand (bundle ~530 kB), inline formatting inside table cells, a settings view.
 
+## M2 results
+
+- Search index (ADR-0009): SQLite/FTS5 per device in the app's cache folder, synced in the background when a vault opens and kept current by change events and the app's own writes; trashed notes indexed.
+- Tag folders (ADR-0008): hierarchy and combination subfolders with counts, in a tag tree above the note list (a Tags view on the phone).
+- Full-text search: words (prefix), phrases, tags, exclusions, `OR`, parentheses; bm25 ranking with snippets.
+- Copies with the same `id` found in every folder.
+- Performance (N-03): with 20,000 generated worst-case notes all searches and tag queries 2–48 ms on a Mac (CI job in release mode); 5,000 notes on an iPhone 18 Pro instant after a first build of a few seconds.
+- Moved on: saved searches and the remaining operators (M3), a setting for the combination depth, renaming and merging tags (F-11), splitting the open-note logic in `main.ts` further.
+
 ## M2 backlog
 
 Goal: notes findable by tags and full text, under 200 ms for 10,000 notes on the iPhone (N-03). Order: index, sync, same-id copies, tags, search, performance, UI.
@@ -38,9 +47,10 @@ Goal: notes findable by tags and full text, under 200 ms for 10,000 notes on the
 - [x] Keep the index current (`index_sync.rs`, `src-tauri/src/indexing.rs`): background sync when a vault opens (path, modification time and size, hash only on difference), then change events and own saves; trashed notes indexed as `trash` (F-15)
 - [x] Copies with the same `id` found vault-wide via the index (carried over from M1): `NotesById`, answered by the index in the app; candidates are checked on disk
 - [x] Tag folders (ADR-0008, `tag_folders.rs`; shown in the UI with the last package): tags by normalized key with the most common spelling, hierarchy (`#a/b` counts for `#a`), combination subfolders A › B as intersections with counts, depth fixed at 3, "Untagged"
-- [ ] Search: query parsed to an AST and compiled to parameterized SQL (shared with tag folders); M2 syntax: words (prefix), `"phrases"`, `-term`, `#tag`, `OR`, parentheses; `bm25` ranking and highlighted snippets
-- [ ] Performance: generator for 20,000 notes, timing test in CI (N-03), check on the iPhone
-- [ ] UI: split `ui/src/main.ts` into modules; search field and collapsible tag tree above the note list (hierarchy and combinations visually distinct, with counts); Tags as its own view on the phone
+- [x] Search (`query.rs`, `search.rs`; shown in the UI with the last package): query parsed to an AST and compiled to parameterized SQL (shared with tag folders); M2 syntax: words (prefix), `"phrases"`, `-term`, `#tag`, `OR`, parentheses; `bm25` ranking and highlighted snippets
+- [x] Performance: generator for 20,000 notes (`crates/core/tests/support/generate.rs`, also `--example generate_notes`), timing test in CI in release mode (N-03). On a Mac (M-series), worst case with very common words: searches 2–34 ms, tag folders ≤ 48 ms, building the index 5.4 s, a sync with nothing changed 38 ms
+- [x] Check on the iPhone with a generated test vault: 5,000 notes on an iPhone 18 Pro (iOS 27), first index build a few seconds, search and tag folders instant
+- [x] UI: split `ui/src/main.ts` into modules (`types.ts`, `dom.ts`, `images.ts`, `sidebar.ts`; the open-note logic stays in `main.ts`); search field and collapsible tag tree above the note list (hierarchy and combinations visually distinct, with counts); Tags as its own view on the phone
 
 Not in M2: saved searches and the operators `created:`, `modified:`, `has:`, `is:`, `in:trash` (M3, same parser); a setting for the combination depth (when needed, with format.md and an ADR); renaming and merging tags (F-11, M3 or later).
 

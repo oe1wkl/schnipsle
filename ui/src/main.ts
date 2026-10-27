@@ -5,171 +5,41 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
+import { asError, setStatus, ui } from "./dom";
 import { createEditor, type EditorMode, frontMatterLength } from "./editor";
-
-interface VaultInfo {
-  name: string;
-  path: string;
-  /** Why the vault is read-only (format.md §2), if it is. */
-  readOnly: string | null;
-}
-/** A picked folder that is not a vault yet (src-tauri `Opened::Setup`). */
-interface FolderSetup {
-  name: string;
-  path: string;
-  /** Visible items at its top level that would move into notes/. */
-  items: string[];
-  notes: number;
-  /** Items only in iCloud; their download was requested. */
-  notDownloaded: string[];
-}
-/** Notes outside notes/, e.g. from an older build (schnipsle-core `StrayNotes`). */
-interface StrayNotes {
-  items: string[];
-  notes: number;
-  notDownloaded: string[];
-}
-/** What moving them did (schnipsle-core `MovedNotes`). */
-interface MovedNotes {
-  moved: string[];
-  skipped: string[];
-  /** Notes whose links were rewritten to keep working (ADR-0016). */
-  relinked: string[];
-}
-/** Result of picking or restoring a folder (src-tauri `Opened`). */
-type Opened = ({ kind: "vault" } & VaultInfo) | ({ kind: "setup" } & FolderSetup);
-interface NoteEntry {
-  path: string;
-  title: string;
-  modifiedMs: number;
-  available: boolean;
-}
-/** A version a sync service kept because it conflicts (schnipsle-core `ConflictVersion`). */
-interface ConflictVersion {
-  text: string;
-  hash: string;
-  modifiedMs: number;
-  device: string | null;
-  /** Set for another file with the same id, e.g. iCloud's copy `Name 2.md`. */
-  copyPath: string | null;
-}
-interface NoteContent {
-  path: string;
-  title: string;
-  text: string;
-  hash: string;
-  conflicts: ConflictVersion[];
-  conflictsError: string | null;
-}
-interface Tag {
-  name: string;
-  key: string;
-}
-/** Payload of the `vault-changed` event (schnipsle-core `VaultChanges`). */
-interface VaultChanges {
-  paths: string[];
-  rescan: boolean;
-}
-/** What a save wrote: the text on disk, with the front matter the core maintains. */
-interface SavedNote {
-  text: string;
-  hash: string;
-}
-/** A note in the trash (schnipsle-core `TrashedNote`). */
-interface TrashedNote {
-  key: string;
-  title: string;
-  originalPath: string;
-  deleted: string;
-}
-/** A stored attachment (schnipsle-core `AddedAttachment`). */
-interface AddedAttachment {
-  path: string;
-  link: string;
-  markdown: string;
-}
-/** A version in a note's history (schnipsle-core `Version`). */
-interface Version {
-  name: string;
-  takenMs: number | null;
-}
-interface NewNote {
-  path: string;
-  saved: SavedNote;
-}
-type SortOrder = "modified" | "title";
-interface CommandError {
-  kind: string;
-  message: string;
-  currentHash: string | null;
-}
+import { createImageCache, fileName } from "./images";
+import { createSidebar, type ListFilter } from "./sidebar";
+import type {
+  VaultInfo,
+  FolderSetup,
+  StrayNotes,
+  MovedNotes,
+  Opened,
+  NoteEntry,
+  ConflictVersion,
+  NoteContent,
+  Tag,
+  VaultChanges,
+  SavedNote,
+  TrashedNote,
+  AddedAttachment,
+  Version,
+  NewNote,
+  SearchHit,
+  SnippetPart,
+  SortOrder,
+} from "./types";
 
 const AUTOSAVE_MS = 1000;
 /** A typing pause this long stores a version in the history (ADR-0011). */
 const HISTORY_PAUSE_MS = 30_000;
-
-function el(id: string): HTMLElement {
-  const found = document.getElementById(id);
-  if (!found) throw new Error(`missing #${id}`);
-  return found;
-}
-
-const ui = {
-  layout: document.querySelector<HTMLElement>(".layout") ?? document.body,
-  back: el("back") as HTMLButtonElement,
-  vaultName: el("vault-name"),
-  vaultHint: el("vault-hint"),
-  pick: el("pick-vault") as HTMLButtonElement,
-  newNote: el("new-note") as HTMLButtonElement,
-  empty: el("empty"),
-  notes: el("notes") as HTMLUListElement,
-  editorHost: el("editor-host"),
-  mode: el("mode") as HTMLButtonElement,
-  sort: el("sort") as HTMLSelectElement,
-  showTrash: el("show-trash") as HTMLButtonElement,
-  deleteNote: el("delete-note") as HTMLButtonElement,
-  addImage: el("add-image") as HTMLButtonElement,
-  showHistory: el("show-history") as HTMLButtonElement,
-  history: el("history"),
-  historyHint: el("history-hint"),
-  historyRestore: el("history-restore") as HTMLButtonElement,
-  historyCopy: el("history-copy") as HTMLButtonElement,
-  historyClose: el("history-close") as HTMLButtonElement,
-  historyList: el("history-list") as HTMLUListElement,
-  historyPreview: el("history-preview"),
-  imageFile: el("image-file") as HTMLInputElement,
-  undoDelete: el("undo-delete") as HTMLButtonElement,
-  status: el("status"),
-  tags: el("tags"),
-  conflict: el("conflict"),
-  useTheirs: el("use-theirs") as HTMLButtonElement,
-  keepMine: el("keep-mine") as HTMLButtonElement,
-  syncConflict: el("sync-conflict"),
-  syncConflictText: el("sync-conflict-text"),
-  syncOther: el("sync-other") as HTMLTextAreaElement,
-  syncKeepMine: el("sync-keep-mine") as HTMLButtonElement,
-  syncUseOther: el("sync-use-other") as HTMLButtonElement,
-  syncKeepBoth: el("sync-keep-both") as HTMLButtonElement,
-  setup: el("setup"),
-  setupText: el("setup-text"),
-  setupCreate: el("setup-create") as HTMLButtonElement,
-  setupCancel: el("setup-cancel") as HTMLButtonElement,
-  setupDetails: el("setup-details") as HTMLDetailsElement,
-  setupItems: el("setup-items") as HTMLUListElement,
-  strays: el("strays"),
-  straysText: el("strays-text"),
-  straysMove: el("strays-move") as HTMLButtonElement,
-  straysLater: el("strays-later") as HTMLButtonElement,
-  straysItems: el("strays-items") as HTMLUListElement,
-  readOnly: el("read-only"),
-  readOnlyText: el("read-only-text"),
-};
 
 /**
  * The note in the editor. `savedText` is what is on disk (as far as we know);
  * `titleAtOpen` decides whether leaving the note renames its file.
  */
 let current: { path: string; hash: string; savedText: string; titleAtOpen: string } | null = null;
+const images = createImageCache(() => current?.path ?? null);
 let listMode: "notes" | "trash" = "notes";
 let sortOrder: SortOrder = "modified";
 let lastTrashed: TrashedNote | null = null;
@@ -193,7 +63,7 @@ const editor = createEditor(ui.editorHost, {
   },
   onBlur: () => void flushSave(),
   onFiles: (files, pos) => void attachFiles(files, pos),
-  loadImage,
+  loadImage: (url) => images.load(url),
 });
 
 /**
@@ -204,60 +74,9 @@ const historyView = createEditor(ui.historyPreview, {
   onChange: () => undefined,
   onBlur: () => undefined,
   onFiles: () => undefined,
-  loadImage,
+  loadImage: (url) => images.load(url),
   placeholderText: "Select a version",
 });
-
-/** Object URLs of the images shown for the open note, by link. */
-let images = new Map<string, Promise<string>>();
-
-const IMAGE_TYPES: Record<string, string> = {
-  avif: "image/avif",
-  gif: "image/gif",
-  heic: "image/heic",
-  jpeg: "image/jpeg",
-  jpg: "image/jpeg",
-  png: "image/png",
-  svg: "image/svg+xml",
-  webp: "image/webp",
-};
-
-/** Loads an image the open note links to (format.md §5.5) for the live preview. */
-function loadImage(url: string): Promise<string> {
-  const note = current;
-  if (!note) return Promise.reject(new Error("no note open"));
-  let image = images.get(url);
-  if (!image) {
-    const ext = /\.([a-z0-9]+)(?:[?#]|$)/i.exec(url)?.[1]?.toLowerCase() ?? "";
-    image = invoke<ArrayBuffer>("read_linked_file", { notePath: note.path, link: url }).then(
-      (bytes) => URL.createObjectURL(new Blob([bytes], { type: IMAGE_TYPES[ext] ?? "" })),
-    );
-    images.set(url, image);
-  }
-  return image;
-}
-
-/** Releases the images of the note that was open. */
-function forgetImages(): void {
-  for (const image of images.values()) {
-    image.then(
-      (url) => {
-        URL.revokeObjectURL(url);
-      },
-      () => undefined,
-    );
-  }
-  images = new Map();
-}
-
-const EXTENSION_OF_TYPE: Record<string, string> = {
-  "image/gif": "gif",
-  "image/heic": "heic",
-  "image/jpeg": "jpg",
-  "image/png": "png",
-  "image/svg+xml": "svg",
-  "image/webp": "webp",
-};
 
 /**
  * Stores files as attachments (format.md §6) and inserts links to them at
@@ -271,7 +90,7 @@ async function attachFiles(files: File[], pos: number | null): Promise<void> {
   }
   const links: string[] = [];
   for (const file of files) {
-    const name = file.name || `image.${EXTENSION_OF_TYPE[file.type] ?? "bin"}`;
+    const name = fileName(file);
     try {
       const bytes = new Uint8Array(await file.arrayBuffer());
       const added = await invoke<AddedAttachment>("add_attachment", bytes, {
@@ -287,19 +106,18 @@ async function attachFiles(files: File[], pos: number | null): Promise<void> {
 
 const isDirty = (): boolean => current !== null && editor.text() !== current.savedText;
 
-function asError(e: unknown): CommandError {
-  if (typeof e === "object" && e !== null && "kind" in e) return e as CommandError;
-  return { kind: "other", message: String(e), currentHash: null };
-}
-
-function setStatus(message: string): void {
-  ui.status.textContent = message;
-}
-
-function showView(view: "list" | "editor"): void {
+/** The view shown on the phone; on wider screens list and editor are side by side. */
+function showView(view: "list" | "editor" | "tags"): void {
   ui.layout.dataset["view"] = view;
   ui.back.hidden = view === "list";
 }
+
+/** Search and tags above the note list; picking one filters the list. */
+const sidebar = createSidebar(() => {
+  if (ui.layout.dataset["view"] === "tags") showView("list");
+  if (listMode === "trash") setListMode("notes");
+  else void refreshList();
+});
 
 function vaultOpened(info: VaultInfo): void {
   ui.setup.hidden = true;
@@ -312,6 +130,9 @@ function vaultOpened(info: VaultInfo): void {
   ui.readOnlyText.textContent = readOnly ?? "";
   ui.newNote.disabled = readOnly !== null;
   ui.empty.hidden = true;
+  sidebar.reset();
+  sidebar.setEnabled(true);
+  void sidebar.refresh();
 }
 
 /** Shows a vault that was picked or restored, or asks whether to make the folder one. */
@@ -361,10 +182,41 @@ function showSetup(folder: FolderSetup): void {
 
 async function refreshList(): Promise<void> {
   if (listMode === "trash") {
+    ui.listFilter.hidden = true;
     await showTrashList();
     return;
   }
-  entries = await invoke<NoteEntry[]>("list_notes", { sort: sortOrder });
+  const filter = sidebar.filter();
+  showFilter(filter);
+  let snippets = new Map<string, SnippetPart[]>();
+  try {
+    switch (filter.kind) {
+      case "all":
+        entries = await invoke<NoteEntry[]>("list_notes", { sort: sortOrder });
+        break;
+      case "tag":
+      case "untagged":
+        entries = await invoke<NoteEntry[]>("notes_in_tags", {
+          keys: filter.kind === "tag" ? filter.keys : [],
+          sort: sortOrder,
+        });
+        break;
+      case "search": {
+        const hits = await invoke<SearchHit[]>("search_notes", { query: filter.query });
+        entries = hits.map((h) => ({ ...h, available: true }));
+        snippets = new Map(hits.map((h) => [h.path, h.snippet]));
+        break;
+      }
+    }
+  } catch (e) {
+    const err = asError(e);
+    entries = [];
+    ui.notes.replaceChildren();
+    ui.empty.hidden = false;
+    ui.empty.textContent =
+      err.kind === "noIndex" ? "The index is being built; try again in a moment." : err.message;
+    return;
+  }
   ui.notes.replaceChildren(
     ...entries.map((note) => {
       const item = document.createElement("li");
@@ -377,15 +229,58 @@ async function refreshList(): Promise<void> {
       }
       if (note.path === current?.path) button.setAttribute("aria-current", "true");
       button.addEventListener("click", () => void openNote(note));
-      const meta = document.createElement("small");
-      meta.textContent = `${note.path} · ${new Date(note.modifiedMs).toLocaleString()}`;
-      item.append(button, meta);
+      item.append(button);
+      const snippet = snippets.get(note.path);
+      if (snippet && snippet.length > 0) {
+        item.append(snippetElement(snippet));
+      } else {
+        const meta = document.createElement("small");
+        meta.textContent = `${note.path} · ${new Date(note.modifiedMs).toLocaleString()}`;
+        item.append(meta);
+      }
       return item;
     }),
   );
   ui.empty.hidden = entries.length > 0;
-  if (entries.length === 0) ui.empty.textContent = "No notes in this folder yet. Tap New.";
+  if (entries.length === 0) {
+    ui.empty.textContent =
+      filter.kind === "search"
+        ? "Nothing found."
+        : filter.kind === "all"
+          ? "No notes in this folder yet. Tap New."
+          : "No notes here.";
+  }
   await checkStrays();
+}
+
+/** The line above the list saying what it shows, with "Show all". */
+function showFilter(filter: ListFilter): void {
+  ui.sort.hidden = filter.kind === "search"; // results come best first
+  ui.listFilter.hidden = filter.kind === "all";
+  ui.listFilterText.textContent =
+    filter.kind === "tag"
+      ? filter.label
+      : filter.kind === "untagged"
+        ? "Untagged notes"
+        : filter.kind === "search"
+          ? `Search: ${filter.query}`
+          : "";
+}
+
+/** A search snippet with the matching words emphasized. */
+function snippetElement(parts: SnippetPart[]): HTMLElement {
+  const small = document.createElement("small");
+  small.className = "snippet";
+  for (const part of parts) {
+    if (part.hit) {
+      const mark = document.createElement("mark");
+      mark.textContent = part.text;
+      small.append(mark);
+    } else {
+      small.append(part.text);
+    }
+  }
+  return small;
 }
 
 /**
@@ -468,7 +363,7 @@ function setListMode(mode: "notes" | "trash"): void {
   listMode = mode;
   ui.showTrash.textContent = mode === "trash" ? "Notes" : "Trash";
   ui.showTrash.setAttribute("aria-pressed", String(mode === "trash"));
-  ui.sort.hidden = mode === "trash";
+  ui.sort.hidden = mode === "trash" || sidebar.filter().kind === "search";
   void refreshList();
 }
 
@@ -504,7 +399,7 @@ function closeEditor(): void {
   window.clearTimeout(snapshotTimer);
   changedSinceSnapshot = false;
   current = null;
-  forgetImages();
+  images.forget();
   editor.load("");
   editor.setEnabled(false);
   ui.deleteNote.disabled = true;
@@ -517,6 +412,18 @@ function closeEditor(): void {
 async function showTags(): Promise<void> {
   const tags = await invoke<Tag[]>("extract_tags", { markdown: editor.text() });
   ui.tags.textContent = tags.map((t) => `#${t.name}`).join(" ");
+}
+
+/** The open note's tags when the tag tree was last loaded. */
+let tagsInTree = "";
+
+/** After a save: reloads the tag tree if the note's tags changed. */
+function refreshTagTreeIfNeeded(): void {
+  const tags = ui.tags.textContent;
+  if (tags !== tagsInTree) {
+    tagsInTree = tags;
+    void sidebar.refresh();
+  }
 }
 
 async function openNote(note: NoteEntry): Promise<void> {
@@ -547,7 +454,7 @@ function load(content: NoteContent): void {
   ui.showHistory.disabled = false;
   window.clearTimeout(snapshotTimer);
   changedSinceSnapshot = false;
-  forgetImages();
+  images.forget();
   current = {
     path: content.path,
     hash: content.hash,
@@ -602,6 +509,7 @@ async function save(): Promise<void> {
     });
     applySaved(note, text, saved);
     setStatus(`Saved ${new Date().toLocaleTimeString()}`);
+    refreshTagTreeIfNeeded();
   } catch (e) {
     const err = asError(e);
     if (err.kind === "conflict") {
@@ -775,15 +683,19 @@ async function checkForChanges(changes?: VaultChanges): Promise<void> {
   if (ui.newNote.disabled) return; // no vault open
   try {
     await refreshList();
+    if (!changes || changes.rescan || changes.paths.length > 0) void sidebar.refresh();
     if (!current || conflictHash !== undefined) return;
     const path = current.path;
     if (changes && !changes.rescan && !changes.paths.includes(path)) return;
     const onDisk = entries.find((n) => n.path === path);
-    if (!onDisk) {
-      setStatus("This note was deleted or moved elsewhere.");
-      return;
+    if (sidebar.filter().kind === "all") {
+      // Only the full list tells whether the note is gone; a filtered one may just not show it.
+      if (!onDisk) {
+        setStatus("This note was deleted or moved elsewhere.");
+        return;
+      }
+      if (!onDisk.available) return;
     }
-    if (!onDisk.available) return;
     const content = await invoke<NoteContent>("read_note", { path });
     showSyncConflicts(content.conflicts);
     if (content.hash === current.hash) return;
@@ -806,6 +718,10 @@ async function checkForChanges(changes?: VaultChanges): Promise<void> {
 }
 
 ui.back.addEventListener("click", () => {
+  if (ui.layout.dataset["view"] === "tags") {
+    showView("list");
+    return;
+  }
   void leaveNote().then(async () => {
     showView("list");
     await refreshList();
@@ -1113,6 +1029,21 @@ function queueCheck(changes?: VaultChanges): void {
 
 void listen<VaultChanges>("vault-changed", (event) => {
   queueCheck(event.payload);
+});
+
+// The index was (re)built: tags and filtered lists can be shown now.
+void listen("index-synced", () => {
+  void sidebar.refresh();
+  if (sidebar.filter().kind !== "all") void refreshList();
+});
+
+ui.showTags.addEventListener("click", () => {
+  sidebar.openTags();
+  showView("tags");
+});
+
+ui.clearFilter.addEventListener("click", () => {
+  sidebar.showAll();
 });
 
 document.addEventListener("visibilitychange", () => {
