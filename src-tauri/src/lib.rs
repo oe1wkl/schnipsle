@@ -456,11 +456,17 @@ async fn tag_folders(state: State<'_, AppState>, keys: Vec<String>) -> CmdResult
     with_index(&state, |i| i.tag_folders(&keys))
 }
 
-/// Full-text search (F-09): words, "phrases", #tags, -exclusions, OR and
-/// parentheses; best matches first, with snippets.
+/// Full-text search (F-09) in the query language of
+/// `docs/manual/query-language.md`; best matches first, with snippets.
+/// `utc_offset_minutes` (local time minus UTC) makes `created:2026-10-23`
+/// and `today` mean the user's local days.
 #[tauri::command]
-async fn search_notes(state: State<'_, AppState>, query: String) -> CmdResult<Vec<SearchHit>> {
-    with_index(&state, |i| i.search(&query))
+async fn search_notes(
+    state: State<'_, AppState>,
+    query: String,
+    utc_offset_minutes: i32,
+) -> CmdResult<Vec<SearchHit>> {
+    with_index(&state, |i| i.search(&query, utc_offset_minutes))
 }
 
 /// Number of notes without any tag.

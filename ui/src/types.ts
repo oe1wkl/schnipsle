@@ -111,4 +111,6 @@ export interface SearchHit {
   title: string;
   modifiedMs: number;
   snippet: SnippetPart[];
+  /** In the trash: `path` is below the vault root and the note must be restored first. */
+  inTrash: boolean;
 }

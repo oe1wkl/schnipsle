@@ -7,6 +7,7 @@
 pub mod attachments;
 pub mod conflicts;
 pub mod coordination;
+pub mod dates;
 mod flat_yaml;
 pub mod front_matter;
 pub mod history;

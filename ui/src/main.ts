@@ -189,6 +189,8 @@ async function refreshList(): Promise<void> {
   const filter = sidebar.filter();
   showFilter(filter);
   let snippets = new Map<string, SnippetPart[]>();
+  /** Search hits in the trash (`in:trash`): restored from the Trash view, not opened. */
+  let inTrash = new Set<string>();
   try {
     switch (filter.kind) {
       case "all":
@@ -202,9 +204,14 @@ async function refreshList(): Promise<void> {
         });
         break;
       case "search": {
-        const hits = await invoke<SearchHit[]>("search_notes", { query: filter.query });
+        const hits = await invoke<SearchHit[]>("search_notes", {
+          query: filter.query,
+          // Local days for created:/modified: (getTimezoneOffset is UTC minus local).
+          utcOffsetMinutes: -new Date().getTimezoneOffset(),
+        });
         entries = hits.map((h) => ({ ...h, available: true }));
         snippets = new Map(hits.map((h) => [h.path, h.snippet]));
+        inTrash = new Set(hits.filter((h) => h.inTrash).map((h) => h.path));
         break;
       }
     }
@@ -228,7 +235,15 @@ async function refreshList(): Promise<void> {
         button.title = "Stored in iCloud only – tap to download";
       }
       if (note.path === current?.path) button.setAttribute("aria-current", "true");
-      button.addEventListener("click", () => void openNote(note));
+      if (inTrash.has(note.path)) {
+        button.classList.add("trashed");
+        button.title = "In the trash – restore it from the Trash view";
+        button.addEventListener("click", () => {
+          setStatus(`“${note.title}” is in the trash. Restore it from the Trash view to open it.`);
+        });
+      } else {
+        button.addEventListener("click", () => void openNote(note));
+      }
       item.append(button);
       const snippet = snippets.get(note.path);
       if (snippet && snippet.length > 0) {

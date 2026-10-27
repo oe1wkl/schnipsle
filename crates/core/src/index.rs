@@ -24,6 +24,7 @@ use comrak::{Arena, parse_document};
 use rusqlite::{Connection, OptionalExtension as _, params};
 
 use crate::attachments::percent_decode;
+use crate::dates::parse_rfc3339;
 use crate::front_matter;
 use crate::links::resolve_from;
 use crate::stamp::is_ulid;
@@ -31,7 +32,7 @@ use crate::tags::{Tag, extract_tags, parse_options};
 use crate::vault::title_of;
 
 /// Version of the tables below; a file with another version is rebuilt.
-pub const SCHEMA_VERSION: i64 = 1;
+pub const SCHEMA_VERSION: i64 = 2;
 
 const SCHEMA: &str = "
 CREATE TABLE notes (
@@ -45,8 +46,12 @@ CREATE TABLE notes (
     mtime_ms INTEGER NOT NULL,      -- file modification time, for the sync
     size INTEGER NOT NULL,
     hash TEXT NOT NULL,             -- SHA-256 of the file
+    created_ms INTEGER NOT NULL,    -- front matter `created`, else the file time
+    modified_ms INTEGER NOT NULL,   -- front matter `modified`, else the file time
+    pinned INTEGER NOT NULL,
     has_task INTEGER NOT NULL,
-    has_image INTEGER NOT NULL
+    has_image INTEGER NOT NULL,
+    has_link INTEGER NOT NULL
 );
 CREATE INDEX notes_id ON notes(id);
 -- rowid = notes.rowid; stores the text, so results can show snippets
@@ -149,6 +154,7 @@ pub enum NoteLink {
 
 /// What the index stores about a note, see [`analyze`].
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[allow(clippy::struct_excessive_bools)] // independent facts, one index column each
 pub struct NoteFacts {
     /// The front matter `id`, upper case, if valid.
     pub id: Option<String>,
@@ -171,6 +177,10 @@ pub struct NoteFacts {
     pub has_task: bool,
     /// The note has an image.
     pub has_image: bool,
+    /// The note has a link (to a note, a file or the web).
+    pub has_link: bool,
+    /// Front matter `pinned: true` (format.md §4).
+    pub pinned: bool,
 }
 
 /// Analyzes the note at `path` (below the vault root, e.g. `notes/a/b.md`)
@@ -190,6 +200,7 @@ pub fn analyze(path: &str, text: &str) -> NoteFacts {
         files: Vec::new(),
         has_task: false,
         has_image: false,
+        has_link: false,
     };
     walk.node(root);
 
@@ -207,6 +218,8 @@ pub fn analyze(path: &str, text: &str) -> NoteFacts {
         files: walk.files,
         has_task: walk.has_task,
         has_image: walk.has_image,
+        has_link: walk.has_link,
+        pinned: field("pinned").is_some_and(|v| v.eq_ignore_ascii_case("true")),
     }
 }
 
@@ -217,6 +230,7 @@ struct Walk<'d> {
     files: Vec<String>,
     has_task: bool,
     has_image: bool,
+    has_link: bool,
 }
 
 impl Walk<'_> {
@@ -235,11 +249,14 @@ impl Walk<'_> {
             NodeValue::Link(link) | NodeValue::Image(link) => {
                 if matches!(value, NodeValue::Image(_)) {
                     self.has_image = true;
+                } else {
+                    self.has_link = true;
                 }
                 self.destination(&link.url);
                 self.children(node);
             }
             NodeValue::WikiLink(link) => {
+                self.has_link = true;
                 let title = link.url.trim();
                 if !title.is_empty() {
                     self.links.push(NoteLink::Title(title.to_owned()));
@@ -379,10 +396,13 @@ impl Index {
             tx.execute("DELETE FROM notes_fts WHERE rowid = ?1", [rowid])?;
             tx.execute("DELETE FROM notes WHERE rowid = ?1", [rowid])?;
         }
+        let mtime = i64::try_from(stamp.mtime_ms).unwrap_or(i64::MAX);
+        let time_of =
+            |field: &Option<String>| field.as_deref().and_then(parse_rfc3339).unwrap_or(mtime);
         tx.execute(
             "INSERT INTO notes (path, state, id, title, created, modified, mtime_ms, size, hash,
-                                has_task, has_image)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+                                created_ms, modified_ms, pinned, has_task, has_image, has_link)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
             params![
                 path,
                 state.as_str(),
@@ -393,8 +413,12 @@ impl Index {
                 i64::try_from(stamp.mtime_ms).unwrap_or(i64::MAX),
                 i64::try_from(stamp.size).unwrap_or(i64::MAX),
                 stamp.hash,
+                time_of(&facts.created),
+                time_of(&facts.modified),
+                facts.pinned,
                 facts.has_task,
                 facts.has_image,
+                facts.has_link,
             ],
         )?;
         let rowid = tx.last_insert_rowid();

@@ -250,7 +250,7 @@ folders:
     sort: modified-desc       # modified-desc | modified-asc | created-desc | title-asc
 ```
 
-The query syntax is defined in the user manual (Query language reference). Unknown keys MUST be preserved.
+The query syntax is defined in the user manual: [Query language](manual/query-language.md). Unknown keys MUST be preserved.
 
 ## 10. Writing rules
 

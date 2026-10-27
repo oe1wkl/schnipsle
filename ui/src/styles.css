@@ -160,6 +160,12 @@ button.icon {
 .list li button[aria-current="true"] {
   color: var(--accent);
 }
+.list li button.trashed {
+  color: var(--muted);
+}
+.list li button.trashed::after {
+  content: " 🗑";
+}
 .list li button.cloud::after {
   content: " ☁︎";
   color: var(--muted);

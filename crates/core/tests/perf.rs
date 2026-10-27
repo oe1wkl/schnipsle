@@ -59,7 +59,7 @@ fn twenty_thousand_notes() {
         "(spule OR dipol) #radio/cw",
         "-#radio",
     ] {
-        let (hits, time) = slowest(|| index.search(query).unwrap());
+        let (hits, time) = slowest(|| index.search(query, 0).unwrap());
         println!("search {query:?}: {} hits, {time:?}", hits.len());
         if time > LIMIT {
             slow.push(format!("search {query:?}: {time:?}"));

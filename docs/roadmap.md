@@ -34,7 +34,7 @@ Each milestone ends in a usable build. Scope can move between milestones; the or
 
 Goal: saved searches (F-10) on a full query language. Order: query language, ChordPro indexing, smart folders in the core, pinning, UI.
 
-- [ ] Query language complete (HLD §7): `created:`/`modified:` with `2026`, `2026-10`, `2026-10-23`, `>`, `<`, `>=`, `<=`, ranges `a..b`, `today`, `yesterday`, `Nd`/`Nw`/`Nm`/`Ny`; `has:image|task|link|chord`, `chord:Am`, `is:pinned|untagged`, `in:trash`, `tag:x`; index schema 2 for the fields it needs; reference in `docs/manual/query-language.md` (format.md §9)
+- [x] Query language complete (HLD §7; `dates.rs`, `query.rs`, `search.rs`; `has:chord` and `chord:` with the next package): `created:`/`modified:` with `2026`, `2026-10`, `2026-10-23`, `>`, `<`, `>=`, `<=`, ranges `a..b`, `today`, `yesterday`, `Nd`/`Nw`/`Nm`/`Ny`; `has:image|task|link|chord`, `chord:Am`, `is:pinned|untagged`, `in:trash`, `tag:x`; index schema 2 for the fields it needs; reference in `docs/manual/query-language.md` (format.md §9)
 - [ ] ChordPro indexing (format.md §5.7 rule 8): lyrics without chord brackets and the `title`, `subtitle`, `artist`, `composer`, `lyricist` directives in the full text, chord names separately; rendering and transposition stay with the music milestone
 - [ ] Smart folders in `schnipsle-core` (format.md §9): read and write `.notesapp/smart-folders.yaml` atomically, coordinated and with a conflict check, unknown keys kept (`yaml-rust2`); nesting via `parent`, `sort` per folder; golden files
 - [ ] Pinning: a Pin button sets `pinned` in the front matter (§4); pinned notes first in every list

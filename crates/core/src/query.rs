@@ -1,14 +1,62 @@
 // SPDX-License-Identifier: Apache-2.0
 //! The search query language (HLD §7), parsed into an AST.
 //!
-//! M2 understands: words (matched as prefixes), `"phrases"`, `#tags` (a tag
-//! also matches its subtags), `-term` to exclude, `OR`, and parentheses.
-//! Terms next to each other must all match. The parser never fails: a missing
-//! `)` closes at the end, a stray `)` or a lone `-` is ignored, and an empty
-//! query gives `None`. M3 adds `created:`, `modified:`, `has:`, `is:` and
-//! `in:` on the same parser, for saved searches too.
+//! Terms: words (matched as prefixes), `"phrases"`, `#tags` or `tag:x` (a tag
+//! also matches its subtags), `created:` and `modified:` with a date, period
+//! or range (see [`DateSpec`]), `has:image|task|link`, `is:pinned|untagged`
+//! and `in:trash`. `-term` excludes, `OR` and parentheses combine; terms next
+//! to each other must all match. The reference for users is
+//! `docs/manual/query-language.md`.
+//!
+//! The parser never fails: a missing `)` closes at the end, a stray `)` or a
+//! lone `-` is ignored, an operator with a value it does not know (`has:x`,
+//! `created:soon`) is searched as a word, and an empty query gives `None`.
 
+use crate::dates::DateSpec;
 use crate::tags::normalize;
+
+/// Which date of a note a date term looks at.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DateField {
+    /// Front matter `created`, else the file time.
+    Created,
+    /// Front matter `modified`, else the file time.
+    Modified,
+}
+
+/// The dates a date term accepts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DateBound {
+    /// Within the period: `created:2026-10`.
+    Within(DateSpec),
+    /// After the period, or from its start if inclusive: `>2026`, `>=2026`.
+    After(DateSpec, bool),
+    /// Before the period, or until its end if inclusive: `<2026`, `<=2026`.
+    Before(DateSpec, bool),
+    /// From the start of the first to the end of the second; either may be
+    /// open: `2026-01..2026-03`, `2026-10..`, `..2025`.
+    Between(Option<DateSpec>, Option<DateSpec>),
+}
+
+/// What `has:` asks for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Feature {
+    /// An image.
+    Image,
+    /// A task list item.
+    Task,
+    /// A link to a note, a file or the web.
+    Link,
+}
+
+/// What `is:` asks for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Flag {
+    /// Front matter `pinned: true`.
+    Pinned,
+    /// No tags.
+    Untagged,
+}
 
 /// A parsed query.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -19,6 +67,14 @@ pub enum Query {
     Phrase(String),
     /// A tag key (normalized, format.md §5.3); matches its subtags too.
     Tag(String),
+    /// A date of the note in a period.
+    Date(DateField, DateBound),
+    /// The note has this.
+    Has(Feature),
+    /// The note is this.
+    Is(Flag),
+    /// The note is in the trash; without this term the trash is not searched.
+    InTrash,
     /// Notes not matching.
     Not(Box<Query>),
     /// Notes matching all.
@@ -63,9 +119,87 @@ impl Query {
                     part.collect_positive(out);
                 }
             }
-            Self::Tag(_) | Self::Not(_) => {}
+            Self::Tag(_)
+            | Self::Not(_)
+            | Self::Date(..)
+            | Self::Has(_)
+            | Self::Is(_)
+            | Self::InTrash => {}
         }
     }
+
+    /// `true` if `in:trash` occurs anywhere, so the search covers the trash.
+    #[must_use]
+    pub fn mentions_trash(&self) -> bool {
+        match self {
+            Self::InTrash => true,
+            Self::Not(inner) => inner.mentions_trash(),
+            Self::And(parts) | Self::Or(parts) => parts.iter().any(Self::mentions_trash),
+            _ => false,
+        }
+    }
+}
+
+/// An operator term such as `created:2026` or `has:task`; `None` if `word`
+/// is not one this parser knows.
+fn operator(word: &str) -> Option<Query> {
+    let (name, value) = word.split_once(':')?;
+    if value.is_empty() {
+        return None;
+    }
+    match name.to_ascii_lowercase().as_str() {
+        "tag" => {
+            let tag = value.trim_start_matches('#').trim_end_matches(['/', '-']);
+            tag.chars()
+                .any(char::is_alphabetic)
+                .then(|| Query::Tag(normalize(tag)))
+        }
+        "created" => date_bound(value).map(|b| Query::Date(DateField::Created, b)),
+        "modified" => date_bound(value).map(|b| Query::Date(DateField::Modified, b)),
+        "has" => match value.to_ascii_lowercase().as_str() {
+            "image" => Some(Query::Has(Feature::Image)),
+            "task" => Some(Query::Has(Feature::Task)),
+            "link" => Some(Query::Has(Feature::Link)),
+            _ => None,
+        },
+        "is" => match value.to_ascii_lowercase().as_str() {
+            "pinned" => Some(Query::Is(Flag::Pinned)),
+            "untagged" => Some(Query::Is(Flag::Untagged)),
+            _ => None,
+        },
+        "in" => value
+            .eq_ignore_ascii_case("trash")
+            .then_some(Query::InTrash),
+        _ => None,
+    }
+}
+
+fn date_bound(value: &str) -> Option<DateBound> {
+    if let Some((from, to)) = value.split_once("..") {
+        let side = |s: &str| {
+            if s.is_empty() {
+                Ok(None)
+            } else {
+                DateSpec::parse(s).map(Some).ok_or(())
+            }
+        };
+        let (from, to) = (side(from).ok()?, side(to).ok()?);
+        return (from.is_some() || to.is_some()).then_some(DateBound::Between(from, to));
+    }
+    for (prefix, make) in [
+        (
+            ">=",
+            (|s| DateBound::After(s, true)) as fn(DateSpec) -> DateBound,
+        ),
+        ("<=", |s| DateBound::Before(s, true)),
+        (">", |s| DateBound::After(s, false)),
+        ("<", |s| DateBound::Before(s, false)),
+    ] {
+        if let Some(rest) = value.strip_prefix(prefix) {
+            return DateSpec::parse(rest).map(make);
+        }
+    }
+    DateSpec::parse(value).map(DateBound::Within)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -77,6 +211,7 @@ enum Token {
     Word(String),
     Phrase(String),
     Tag(String),
+    Operator(Query),
 }
 
 fn tokenize(text: &str) -> Vec<Token> {
@@ -119,6 +254,8 @@ fn tokenize(text: &str) -> Vec<Token> {
                 }
                 if word == "OR" {
                     tokens.push(Token::Or);
+                } else if let Some(term) = operator(&word) {
+                    tokens.push(Token::Operator(term));
                 } else if let Some(tag) = word.strip_prefix('#') {
                     let tag = tag.trim_end_matches(['/', '-']);
                     if tag.chars().any(char::is_alphabetic) {
@@ -192,6 +329,7 @@ impl Parser {
             Token::Word(w) => Some(Query::Word(w)),
             Token::Phrase(p) => Some(Query::Phrase(p)),
             Token::Tag(t) => Some(Query::Tag(t)),
+            Token::Operator(q) => Some(q),
             Token::Close | Token::Or | Token::Minus => None,
         }
     }
@@ -280,5 +418,81 @@ mod tests {
         let q = Query::parse("a -b (c OR \"d e\") #t -(f)").unwrap();
         let terms = q.positive_terms();
         assert_eq!(terms, [&w("a"), &w("c"), &Query::Phrase("d e".into())]);
+    }
+
+    #[test]
+    fn operators() {
+        use crate::dates::{AgoUnit, DateSpec as D};
+        let date = |f, b| Query::Date(f, b);
+        assert_eq!(Query::parse("tag:Radio/QRP"), Some(tag("radio/qrp")));
+        assert_eq!(Query::parse("tag:#chor"), Some(tag("chor")));
+        assert_eq!(
+            Query::parse("created:2026-10"),
+            Some(date(
+                DateField::Created,
+                DateBound::Within(D::Month(2026, 10))
+            ))
+        );
+        assert_eq!(
+            Query::parse("modified:>=2026-01-01"),
+            Some(date(
+                DateField::Modified,
+                DateBound::After(D::Day(2026, 1, 1), true)
+            ))
+        );
+        assert_eq!(
+            Query::parse("MODIFIED:<yesterday"),
+            Some(date(
+                DateField::Modified,
+                DateBound::Before(D::Yesterday, false)
+            ))
+        );
+        assert_eq!(
+            Query::parse("created:2026-01..2026-03"),
+            Some(date(
+                DateField::Created,
+                DateBound::Between(Some(D::Month(2026, 1)), Some(D::Month(2026, 3)))
+            ))
+        );
+        assert_eq!(
+            Query::parse("created:..2025"),
+            Some(date(
+                DateField::Created,
+                DateBound::Between(None, Some(D::Year(2025)))
+            ))
+        );
+        assert_eq!(
+            Query::parse("modified:7d"),
+            Some(date(
+                DateField::Modified,
+                DateBound::Within(D::Ago(7, AgoUnit::Day))
+            ))
+        );
+        assert_eq!(
+            Query::parse("has:task -is:pinned in:trash"),
+            Some(Query::And(vec![
+                Query::Has(Feature::Task),
+                not(Query::Is(Flag::Pinned)),
+                Query::InTrash
+            ]))
+        );
+        // Unknown operators or values are words.
+        for text in [
+            "has:music",
+            "created:soon",
+            "created:..",
+            "foo:bar",
+            "is:",
+            "in:archive",
+        ] {
+            assert_eq!(Query::parse(text), Some(w(text)), "{text}");
+        }
+    }
+
+    #[test]
+    fn trash_is_searched_only_when_asked() {
+        assert!(Query::parse("a in:trash").unwrap().mentions_trash());
+        assert!(Query::parse("a OR (b -in:trash)").unwrap().mentions_trash());
+        assert!(!Query::parse("a #trash").unwrap().mentions_trash());
     }
 }
