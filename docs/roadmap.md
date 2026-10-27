@@ -30,6 +30,16 @@ Each milestone ends in a usable build. Scope can move between milestones; the or
 - Format spec at draft revision 0.8; ADR-0016 and ADR-0017 added. Tested on macOS and on the iPhone (iOS 27).
 - Moved to later milestones: loading the editor on demand (bundle ~530 kB), inline formatting inside table cells, a settings view.
 
+## M3 backlog
+
+Goal: saved searches (F-10) on a full query language. Order: query language, ChordPro indexing, smart folders in the core, pinning, UI.
+
+- [ ] Query language complete (HLD §7): `created:`/`modified:` with `2026`, `2026-10`, `2026-10-23`, `>`, `<`, `>=`, `<=`, ranges `a..b`, `today`, `yesterday`, `Nd`/`Nw`/`Nm`/`Ny`; `has:image|task|link|chord`, `chord:Am`, `is:pinned|untagged`, `in:trash`, `tag:x`; index schema 2 for the fields it needs; reference in `docs/manual/query-language.md` (format.md §9)
+- [ ] ChordPro indexing (format.md §5.7 rule 8): lyrics without chord brackets and the `title`, `subtitle`, `artist`, `composer`, `lyricist` directives in the full text, chord names separately; rendering and transposition stay with the music milestone
+- [ ] Smart folders in `schnipsle-core` (format.md §9): read and write `.notesapp/smart-folders.yaml` atomically, coordinated and with a conflict check, unknown keys kept (`yaml-rust2`); nesting via `parent`, `sort` per folder; golden files
+- [ ] Pinning: a Pin button sets `pinned` in the front matter (§4); pinned notes first in every list
+- [ ] UI: "Smart folders" above Tags, nested; "Save search" next to the search field; edit name, query, parent and sort in a form, delete with confirmation; reorder and nest by drag and drop (also on the phone); on the phone inside the Tags view
+
 ## M2 results
 
 - Search index (ADR-0009): SQLite/FTS5 per device in the app's cache folder, synced in the background when a vault opens and kept current by change events and the app's own writes; trashed notes indexed.
