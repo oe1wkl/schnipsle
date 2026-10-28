@@ -40,6 +40,9 @@ pub const SMART_FOLDERS_FILE: &str = ".notesapp/smart-folders.yaml";
 /// The folder of attachments, relative to the vault root (format.md §1, §6).
 pub const ATTACHMENTS_DIR: &str = "attachments";
 
+/// One log per import run, relative to the vault root (format.md §12.2).
+pub const IMPORT_LOG_DIR: &str = ".notesapp/import-log";
+
 /// The highest `format` in `vault.yaml` this version reads and writes.
 pub const FORMAT: u32 = 1;
 

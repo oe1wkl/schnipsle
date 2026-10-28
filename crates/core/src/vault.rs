@@ -537,12 +537,60 @@ impl Vault {
     pub fn create_note(&self, path: &str, text: &str) -> Result<SavedNote> {
         self.check_writable()?;
         let full = self.resolve(path)?;
+        let stamped = stamp_for_save(text, None, now_ms())?;
+        self.create_exact(path, &full, stamped)
+    }
+
+    /// Creates a new note with exactly `text`, front matter included, for an
+    /// import that sets `id`, `created` and `modified` itself (format.md
+    /// §12.1); fails if the file already exists.
+    ///
+    /// # Errors
+    /// As for [`Vault::create_note`].
+    pub fn create_note_as_is(&self, path: &str, text: &str) -> Result<SavedNote> {
+        self.check_writable()?;
+        let full = self.resolve(path)?;
+        self.create_exact(path, &full, text.to_owned())
+    }
+
+    /// Replaces a note with exactly `text`, but only if it still has the
+    /// content with `expected_hash`; for a re-import (format.md §12.3).
+    ///
+    /// # Errors
+    /// As for [`Vault::write_note`].
+    pub fn replace_note_as_is(
+        &self,
+        path: &str,
+        text: &str,
+        expected_hash: &str,
+    ) -> Result<SavedNote> {
+        self.check_writable()?;
+        let full = self.resolve(path)?;
+        self.read_expected(path, &full, expected_hash)?;
+        self.replace_expected(path, &full, expected_hash, text.to_owned())
+    }
+
+    /// The path (relative to `notes/`) of the note whose front matter has
+    /// `id`: `hint` if that note has it, else one the id lookup knows.
+    /// Notes that cannot be read are passed over.
+    #[must_use]
+    pub fn find_note(&self, id: &str, hint: Option<&str>) -> Option<String> {
+        let has_id = |path: &str| {
+            self.read_note(path)
+                .is_ok_and(|n| front_matter::get(&n.text, "id").as_deref() == Some(id))
+        };
+        hint.filter(|p| has_id(p))
+            .map(str::to_owned)
+            .or_else(|| self.by_id.paths_with_id(id).into_iter().find(|p| has_id(p)))
+    }
+
+    /// Writes `stamped` as the new note at `full`, never replacing a file.
+    fn create_exact(&self, path: &str, full: &Path, stamped: String) -> Result<SavedNote> {
         if let Some(parent) = full.parent() {
             fs::create_dir_all(parent)?;
         }
-        let stamped = stamp_for_save(text, None, now_ms())?;
-        let mut tmp = Some(TempFile::write(&full, stamped.as_bytes())?);
-        self.coordinated(Access::Write, &full, |file| {
+        let mut tmp = Some(TempFile::write(full, stamped.as_bytes())?);
+        self.coordinated(Access::Write, full, |file| {
             let exists = || VaultError::AlreadyExists(path.to_owned());
             if placeholder_of(file).exists() {
                 return Err(exists());

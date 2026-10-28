@@ -12,6 +12,7 @@ pub mod dates;
 mod flat_yaml;
 pub mod front_matter;
 pub mod history;
+pub mod import_log;
 pub mod index;
 pub mod index_sync;
 pub mod layout;
@@ -34,6 +35,7 @@ pub use conflicts::{
 };
 pub use coordination::{Coordinator, Uncoordinated};
 pub use history::{Retention, Version};
+pub use import_log::{ImportLog, ImportLogError, LogAction, LogEntry};
 pub use index::{Index, IndexError};
 pub use index_sync::IndexSync;
 pub use layout::{Folder, VaultIdentity, inspect};
