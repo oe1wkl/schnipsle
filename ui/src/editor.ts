@@ -62,6 +62,17 @@ export function frontMatterLength(text: string): number {
   return match ? match[0].length : 0;
 }
 
+/**
+ * `true` if the front matter says `pinned: true` (format.md §4), read as the
+ * core reads it: the first top-level `pinned` line, the value optionally
+ * quoted, in any case.
+ */
+export function isPinned(text: string): boolean {
+  const block = text.slice(0, frontMatterLength(text));
+  const match = /^pinned:[ \t]*(["']?)(.*?)\1[ \t]*\r?$/m.exec(block);
+  return match?.[2]?.toLowerCase() === "true";
+}
+
 /** Marks transactions made by the app rather than the user. */
 const programmatic = Annotation.define<boolean>();
 

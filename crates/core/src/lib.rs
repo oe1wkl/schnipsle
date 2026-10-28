@@ -5,8 +5,10 @@
 //! This crate must build and test on every platform without a `WebView`.
 
 pub mod attachments;
+pub mod chordpro;
 pub mod conflicts;
 pub mod coordination;
+pub mod dates;
 mod flat_yaml;
 pub mod front_matter;
 pub mod history;
@@ -17,6 +19,7 @@ pub mod links;
 pub mod names;
 pub mod query;
 pub mod search;
+pub mod smart_folders;
 pub mod stamp;
 pub mod strays;
 pub mod tag_folders;
@@ -36,6 +39,7 @@ pub use index_sync::IndexSync;
 pub use layout::{Folder, VaultIdentity, inspect};
 pub use names::{NewNote, slug};
 pub use search::{SearchHit, SnippetPart};
+pub use smart_folders::{FolderSort, SmartFolder, SmartFolderError, SmartFolders};
 pub use strays::{MovedNotes, StrayNotes};
 pub use tag_folders::{FolderKind, TagFolder};
 pub use tags::{Tag, extract_tags};

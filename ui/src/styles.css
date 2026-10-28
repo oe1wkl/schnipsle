@@ -160,6 +160,15 @@ button.icon {
 .list li button[aria-current="true"] {
   color: var(--accent);
 }
+.list li button.trashed {
+  color: var(--muted);
+}
+.list li button.trashed::after {
+  content: " 🗑";
+}
+.list li button.pinned::before {
+  content: "📌 ";
+}
 .list li button.cloud::after {
   content: " ☁︎";
   color: var(--muted);
@@ -215,12 +224,18 @@ button.small {
   color: var(--accent);
 }
 
-/* Search and tags above the note list (ADR-0008). */
+/* Search, smart folders and tags above the note list (ADR-0008, ADR-0018). */
+.search-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 6px;
+}
 #search {
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   font: inherit;
   padding: 6px 10px;
-  margin-bottom: 6px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--bg);
@@ -290,6 +305,41 @@ button.small {
   color: var(--muted);
   font-size: 12px;
   padding-right: 4px;
+}
+.list .tag-row .row-action {
+  flex: none;
+  min-height: 28px;
+  padding: 0 6px;
+  border: none;
+  color: var(--muted);
+}
+.list .tag-row .drag-handle {
+  cursor: grab;
+  touch-action: none; /* a drag on the handle moves the folder, not the page */
+  font-size: 18px;
+}
+.smart-row {
+  border-top: 2px solid transparent;
+  border-bottom: 2px solid transparent;
+  border-radius: 4px;
+}
+.smart-row.dragging {
+  opacity: 0.4;
+}
+.smart-row.drop-before {
+  border-top-color: var(--accent);
+}
+.smart-row.drop-after {
+  border-bottom-color: var(--accent);
+}
+.smart-row.drop-into {
+  background: rgb(76 155 255 / 22%);
+}
+.tag-tree.drop-end {
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+.add-folder {
+  margin: 4px;
 }
 .tag-hint {
   font-size: 13px;
@@ -397,6 +447,11 @@ button.small {
   .layout[data-view="tags"] .tag-tree {
     max-height: none;
   }
+  /* Big enough to hit with a finger. */
+  .list .tag-row .row-action {
+    min-width: 40px;
+    min-height: 40px;
+  }
   .history-body {
     grid-template-columns: 1fr;
     grid-template-rows: minmax(96px, 30%) 1fr;
@@ -411,4 +466,70 @@ button.small {
   .phone-only {
     display: none;
   }
+}
+
+/* The smart folder form. */
+dialog {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px;
+  width: min(420px, calc(100vw - 32px));
+  background: var(--bg);
+  color: var(--fg);
+}
+dialog::backdrop {
+  background: rgb(0 0 0 / 30%);
+}
+.folder-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.folder-form h2 {
+  margin: 0;
+  font-size: 17px;
+}
+.folder-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.folder-form input,
+.folder-form select {
+  font: inherit;
+  font-size: 16px; /* smaller text makes iOS zoom in */
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--fg);
+}
+.folder-buttons,
+.folder-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.folder-buttons .spacer {
+  flex: 1;
+}
+.folder-confirm[hidden] {
+  display: none;
+}
+.folder-confirm {
+  padding: 8px;
+  border-radius: 8px;
+  background: var(--warn-bg);
+  color: var(--warn-fg);
+}
+.folder-error {
+  margin: 0;
+  color: #c4271b;
+  font-size: 13px;
+}
+button.danger {
+  color: #c4271b;
 }

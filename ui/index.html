@@ -63,15 +63,33 @@
 
     <main class="layout" data-view="list">
       <nav class="list" aria-label="Notes">
-        <input
-          id="search"
-          type="search"
-          placeholder="Search"
-          aria-label="Search notes"
-          autocomplete="off"
-          spellcheck="false"
-          disabled
-        />
+        <div class="search-row">
+          <input
+            id="search"
+            type="search"
+            placeholder="Search"
+            aria-label="Search notes"
+            autocomplete="off"
+            spellcheck="false"
+            disabled
+          />
+          <button
+            id="save-search"
+            type="button"
+            class="small"
+            title="Keep this search as a smart folder"
+            hidden
+          >
+            Save
+          </button>
+        </div>
+        <details id="smart-panel" class="tags-panel" open>
+          <summary>Smart folders</summary>
+          <ul id="smart-tree" class="tag-tree" role="tree" aria-label="Smart folders"></ul>
+          <button id="new-smart-folder" type="button" class="small add-folder" hidden>
+            New smart folder
+          </button>
+        </details>
         <details id="tags-panel" class="tags-panel" open>
           <summary>Tags</summary>
           <ul id="tag-tree" class="tag-tree" role="tree" aria-label="Tags"></ul>
@@ -115,6 +133,7 @@
           <span id="status" aria-live="polite"></span>
           <span id="tags" class="tags"></span>
           <button id="undo-delete" type="button" class="small" hidden>Undo</button>
+          <button id="pin" type="button" class="small" aria-pressed="false" disabled>Pin</button>
           <button id="show-history" type="button" class="small" disabled>History</button>
           <button id="add-image" type="button" class="small" disabled>Image</button>
           <input id="image-file" type="file" accept="image/*" multiple hidden />
@@ -123,5 +142,46 @@
         </footer>
       </section>
     </main>
+
+    <dialog id="folder-dialog" aria-labelledby="folder-dialog-title">
+      <form id="folder-form" class="folder-form" novalidate>
+        <h2 id="folder-dialog-title">Smart folder</h2>
+        <label>
+          Name
+          <input id="folder-name" type="text" autocomplete="off" />
+        </label>
+        <label>
+          Search
+          <input
+            id="folder-query"
+            type="text"
+            autocomplete="off"
+            autocapitalize="off"
+            spellcheck="false"
+            placeholder="#radio modified:30d"
+          />
+        </label>
+        <label>
+          Inside
+          <select id="folder-parent"></select>
+        </label>
+        <label>
+          Order
+          <select id="folder-sort"></select>
+        </label>
+        <p id="folder-error" class="folder-error" role="alert" hidden></p>
+        <div id="folder-confirm" class="folder-confirm" role="alertdialog" hidden>
+          <span id="folder-confirm-text"></span>
+          <button id="folder-delete-yes" type="button" class="danger">Delete</button>
+          <button id="folder-delete-no" type="button">Keep</button>
+        </div>
+        <div class="folder-buttons">
+          <button id="folder-delete" type="button" class="danger">Delete…</button>
+          <span class="spacer"></span>
+          <button id="folder-cancel" type="button">Cancel</button>
+          <button id="folder-save" type="submit">Save</button>
+        </div>
+      </form>
+    </dialog>
   </body>
 </html>

@@ -1,14 +1,17 @@
 // SPDX-License-Identifier: Apache-2.0
-// Search field and tag tree above the note list (ADR-0008, ADR-0009).
+// Search field, smart folders and tag tree above the note list (ADR-0008,
+// ADR-0009, ADR-0018).
 //
-// Both choose what the note list shows: all notes, a tag folder, the untagged
-// notes, or search results. The tag tree loads a folder's subfolders when it
+// They choose what the note list shows: all notes, a tag folder, the untagged
+// notes, a smart folder, or search results. "Save" next to the search field
+// keeps a search as a smart folder (smart-folders.ts). The tag tree loads a folder's subfolders when it
 // is opened: hierarchy levels (`#projekte` › `tuner`) and combinations with
 // other tags (`∩ #cw`), each with its note count; it remembers which folders
 // are open across refreshes.
 import { invoke } from "@tauri-apps/api/core";
 
 import { asError, el } from "./dom";
+import { createSmartFolders, type SmartFolder } from "./smart-folders";
 
 /** A tag folder (schnipsle-core `TagFolder`). */
 interface TagFolder {
@@ -23,19 +26,28 @@ export type ListFilter =
   | { kind: "all" }
   | { kind: "tag"; keys: string[]; label: string }
   | { kind: "untagged" }
+  | { kind: "smart"; folder: SmartFolder }
   | { kind: "search"; query: string };
 
 const SEARCH_DELAY_MS = 250;
 
 const search = el("search") as HTMLInputElement;
+const saveSearch = el("save-search") as HTMLButtonElement;
 const tree = el("tag-tree") as HTMLUListElement;
 const tagsPanel = el("tags-panel") as HTMLDetailsElement;
+const smartPanel = el("smart-panel") as HTMLDetailsElement;
 
 const pathKey = (keys: string[]): string => keys.join("\u0000");
 
-/** Creates the sidebar; `onFilter` is called whenever the user picks a filter. */
-export function createSidebar(onFilter: (filter: ListFilter) => void): {
-  /** Reloads the tag tree, keeping open folders open. */
+/**
+ * Creates the sidebar; `onFilter` is called whenever the filter changes,
+ * `onError` when a change to the smart folders failed.
+ */
+export function createSidebar(
+  onFilter: (filter: ListFilter) => void,
+  onError: (message: string) => void,
+): {
+  /** Reloads smart folders and the tag tree, keeping open folders open. */
   refresh: () => Promise<void>;
   /** Clears search and selection, e.g. for another vault. */
   reset: () => void;
@@ -57,8 +69,31 @@ export function createSidebar(onFilter: (filter: ListFilter) => void): {
   const select = (next: ListFilter): void => {
     filter = next;
     markSelected();
+    saveSearch.hidden = next.kind !== "search" || !smartFolders.editable();
     onFilter(next);
   };
+
+  const smartFolders = createSmartFolders({
+    onSelect: (folder) => {
+      // The list shows the folder, not the search it may have been saved from.
+      search.value = "";
+      window.clearTimeout(searchTimer);
+      beforeSearch = { kind: "smart", folder };
+      select(beforeSearch);
+    },
+    selectedId: () => (filter.kind === "smart" ? filter.folder.id : null),
+    onRefresh: (folders) => {
+      // The selected folder changed or went away, here or on another device.
+      if (filter.kind !== "smart") return;
+      const shown = filter.folder;
+      const now = folders.find((f) => f.id === shown.id);
+      if (!now) select({ kind: "all" });
+      else if (now.name !== shown.name || now.query !== shown.query || now.sort !== shown.sort) {
+        select({ kind: "smart", folder: now });
+      }
+    },
+    onError,
+  });
 
   const markSelected = (): void => {
     const selected =
@@ -67,6 +102,7 @@ export function createSidebar(onFilter: (filter: ListFilter) => void): {
       if (button.dataset["path"] === selected) button.setAttribute("aria-current", "true");
       else button.removeAttribute("aria-current");
     }
+    smartFolders.markSelected();
   };
 
   /** One folder: a toggle for its subfolders, its name and count. */
@@ -130,6 +166,11 @@ export function createSidebar(onFilter: (filter: ListFilter) => void): {
   };
 
   const refresh = async (): Promise<void> => {
+    await Promise.all([smartFolders.refresh(), refreshTags()]);
+    saveSearch.hidden = filter.kind !== "search" || !smartFolders.editable();
+  };
+
+  const refreshTags = async (): Promise<void> => {
     try {
       const [folders, untagged] = await Promise.all([
         invoke<TagFolder[]>("tag_folders", { keys: [] }),
@@ -184,6 +225,9 @@ export function createSidebar(onFilter: (filter: ListFilter) => void): {
       select({ kind: "search", query });
     }, SEARCH_DELAY_MS);
   });
+  saveSearch.addEventListener("click", () => {
+    if (filter.kind === "search") smartFolders.saveSearch(filter.query);
+  });
   search.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && search.value !== "") {
       search.value = "";
@@ -200,6 +244,8 @@ export function createSidebar(onFilter: (filter: ListFilter) => void): {
       filter = { kind: "all" };
       beforeSearch = filter;
       tree.replaceChildren();
+      smartFolders.reset();
+      saveSearch.hidden = true;
     },
     setEnabled(on) {
       search.disabled = !on;
@@ -211,6 +257,7 @@ export function createSidebar(onFilter: (filter: ListFilter) => void): {
       select({ kind: "all" });
     },
     openTags() {
+      smartPanel.open = true;
       tagsPanel.open = true;
     },
   };

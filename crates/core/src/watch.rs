@@ -36,13 +36,15 @@ pub struct VaultChanges {
     pub paths: Vec<String>,
     /// `true` if notes not listed in `paths` may have changed too.
     pub rescan: bool,
+    /// `true` if the smart folders (format.md §9) may have changed.
+    pub smart_folders: bool,
 }
 
 impl VaultChanges {
     /// `true` if there is nothing to report.
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.paths.is_empty() && !self.rescan
+        self.paths.is_empty() && !self.rescan && !self.smart_folders
     }
 }
 
@@ -52,6 +54,7 @@ impl VaultChanges {
 pub fn collect(vault: &Vault, hints: impl IntoIterator<Item = Hint>) -> VaultChanges {
     let mut paths = BTreeSet::new();
     let mut rescan = false;
+    let mut smart_folders = false;
     for hint in hints {
         match hint {
             Hint::Rescan => rescan = true,
@@ -60,6 +63,7 @@ pub fn collect(vault: &Vault, hints: impl IntoIterator<Item = Hint>) -> VaultCha
                     paths.insert(note);
                 }
                 PathKind::Folder => rescan = true,
+                PathKind::SmartFolders => smart_folders = true,
                 PathKind::Ignored => {}
             },
         }
@@ -67,6 +71,7 @@ pub fn collect(vault: &Vault, hints: impl IntoIterator<Item = Hint>) -> VaultCha
     VaultChanges {
         paths: paths.into_iter().collect(),
         rescan,
+        smart_folders,
     }
 }
 
@@ -274,12 +279,20 @@ mod tests {
             changes,
             VaultChanges {
                 paths: vec!["a.md".into(), "b.md".into()],
-                rescan: false
+                rescan: false,
+                smart_folders: false,
             }
         );
         assert!(collect(&vault, [at(".DS_Store")]).is_empty());
         assert!(collect(&vault, [Hint::Rescan]).rescan);
         assert!(collect(&vault, [at("some-folder")]).rescan);
+        let smart = collect(
+            &vault,
+            [Hint::Path(
+                dir.path().join(crate::layout::SMART_FOLDERS_FILE),
+            )],
+        );
+        assert!(smart.smart_folders && !smart.rescan && smart.paths.is_empty());
     }
 
     #[test]
@@ -297,7 +310,8 @@ mod tests {
             emitted,
             [VaultChanges {
                 paths: vec!["a.md".into(), "b.md".into()],
-                rescan: false
+                rescan: false,
+                smart_folders: false,
             }]
         );
     }
@@ -307,9 +321,13 @@ mod tests {
         let json = serde_json::to_string(&VaultChanges {
             paths: vec!["a.md".into()],
             rescan: true,
+            smart_folders: false,
         })
         .unwrap();
-        assert_eq!(json, r#"{"paths":["a.md"],"rescan":true}"#);
+        assert_eq!(
+            json,
+            r#"{"paths":["a.md"],"rescan":true,"smartFolders":false}"#
+        );
     }
 
     #[cfg(not(any(target_os = "ios", target_os = "android")))]

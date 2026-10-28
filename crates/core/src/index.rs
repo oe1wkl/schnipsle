@@ -5,7 +5,9 @@
 //! [`analyze`] turns a note into what the index stores: title, `id` and dates
 //! from the front matter (format.md §4), plain text without Markdown syntax for
 //! full-text search, tags (§5.3, with their hierarchy ancestors), note links
-//! (`[[Title]]` and relative `.md` links) and linked files (attachments, §5.5).
+//! (`[[Title]]` and relative `.md` links), linked files (attachments, §5.5)
+//! and chord names; `chordpro` blocks contribute their lyrics and song
+//! details instead of their source (§5.7 rule 8).
 //! [`Index`] keeps that per note, keyed by its path below the vault root
 //! (`notes/…` or `.notesapp/trash/…`).
 //!
@@ -24,14 +26,16 @@ use comrak::{Arena, parse_document};
 use rusqlite::{Connection, OptionalExtension as _, params};
 
 use crate::attachments::percent_decode;
+use crate::chordpro::Song;
+use crate::dates::parse_rfc3339;
 use crate::front_matter;
 use crate::links::resolve_from;
 use crate::stamp::is_ulid;
 use crate::tags::{Tag, extract_tags, parse_options};
-use crate::vault::title_of;
+use crate::vault::{title_of, title_sort_key};
 
 /// Version of the tables below; a file with another version is rebuilt.
-pub const SCHEMA_VERSION: i64 = 1;
+pub const SCHEMA_VERSION: i64 = 4;
 
 const SCHEMA: &str = "
 CREATE TABLE notes (
@@ -40,13 +44,18 @@ CREATE TABLE notes (
     state TEXT NOT NULL,            -- 'active' or 'trash'
     id TEXT,                        -- front matter id (format.md §4), upper case
     title TEXT NOT NULL,
+    title_key TEXT NOT NULL,        -- the title without case and accents, for sorting
     created TEXT,
     modified TEXT,
     mtime_ms INTEGER NOT NULL,      -- file modification time, for the sync
     size INTEGER NOT NULL,
     hash TEXT NOT NULL,             -- SHA-256 of the file
+    created_ms INTEGER NOT NULL,    -- front matter `created`, else the file time
+    modified_ms INTEGER NOT NULL,   -- front matter `modified`, else the file time
+    pinned INTEGER NOT NULL,
     has_task INTEGER NOT NULL,
-    has_image INTEGER NOT NULL
+    has_image INTEGER NOT NULL,
+    has_link INTEGER NOT NULL
 );
 CREATE INDEX notes_id ON notes(id);
 -- rowid = notes.rowid; stores the text, so results can show snippets
@@ -71,6 +80,12 @@ CREATE TABLE note_files (
     path TEXT NOT NULL              -- linked file below the vault root, e.g. attachments/…
 );
 CREATE INDEX note_files_path ON note_files(path);
+CREATE TABLE note_chords (
+    note INTEGER NOT NULL REFERENCES notes(rowid) ON DELETE CASCADE,
+    chord TEXT NOT NULL,            -- normalized: chordpro::normalize_chord
+    PRIMARY KEY (note, chord)
+) WITHOUT ROWID;
+CREATE INDEX note_chords_chord ON note_chords(chord);
 ";
 
 /// Errors of the index. All of them can be cured by rebuilding it.
@@ -149,6 +164,7 @@ pub enum NoteLink {
 
 /// What the index stores about a note, see [`analyze`].
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[allow(clippy::struct_excessive_bools)] // independent facts, one index column each
 pub struct NoteFacts {
     /// The front matter `id`, upper case, if valid.
     pub id: Option<String>,
@@ -159,7 +175,8 @@ pub struct NoteFacts {
     /// Front matter `modified`, as written.
     pub modified: Option<String>,
     /// The visible text, without Markdown syntax, front matter or link
-    /// destinations; code is included.
+    /// destinations; code is included, `chordpro` blocks as their
+    /// [`Song::index_text`].
     pub body: String,
     /// Tags in order of first appearance (format.md §5.3).
     pub tags: Vec<Tag>,
@@ -167,10 +184,16 @@ pub struct NoteFacts {
     pub links: Vec<NoteLink>,
     /// Other linked files below the vault root (attachments, images).
     pub files: Vec<String>,
+    /// Chord names in `chordpro` blocks, each once ([`Song::chords`]).
+    pub chords: Vec<String>,
     /// The note has a task list item.
     pub has_task: bool,
     /// The note has an image.
     pub has_image: bool,
+    /// The note has a link (to a note, a file or the web).
+    pub has_link: bool,
+    /// Front matter `pinned: true` (format.md §4).
+    pub pinned: bool,
 }
 
 /// Analyzes the note at `path` (below the vault root, e.g. `notes/a/b.md`)
@@ -188,8 +211,10 @@ pub fn analyze(path: &str, text: &str) -> NoteFacts {
         body: String::new(),
         links: Vec::new(),
         files: Vec::new(),
+        chords: Vec::new(),
         has_task: false,
         has_image: false,
+        has_link: false,
     };
     walk.node(root);
 
@@ -205,8 +230,11 @@ pub fn analyze(path: &str, text: &str) -> NoteFacts {
         tags: extract_tags(text),
         links: walk.links,
         files: walk.files,
+        chords: walk.chords,
         has_task: walk.has_task,
         has_image: walk.has_image,
+        has_link: walk.has_link,
+        pinned: field("pinned").is_some_and(|v| v.eq_ignore_ascii_case("true")),
     }
 }
 
@@ -215,8 +243,10 @@ struct Walk<'d> {
     body: String,
     links: Vec<NoteLink>,
     files: Vec<String>,
+    chords: Vec<String>,
     has_task: bool,
     has_image: bool,
+    has_link: bool,
 }
 
 impl Walk<'_> {
@@ -228,18 +258,32 @@ impl Walk<'_> {
             NodeValue::Code(code) => self.body.push_str(&code.literal),
             NodeValue::Math(math) => self.body.push_str(&math.literal),
             NodeValue::CodeBlock(block) => {
-                self.body.push_str(&block.literal);
-                self.body.push('\n');
+                let lang = block.info.split_whitespace().next().unwrap_or_default();
+                if lang.eq_ignore_ascii_case("chordpro") {
+                    let song = Song::parse(&block.literal);
+                    self.body.push_str(&song.index_text());
+                    for chord in song.chords() {
+                        if !self.chords.contains(&chord) {
+                            self.chords.push(chord);
+                        }
+                    }
+                } else {
+                    self.body.push_str(&block.literal);
+                    self.body.push('\n');
+                }
             }
             NodeValue::SoftBreak | NodeValue::LineBreak => self.body.push('\n'),
             NodeValue::Link(link) | NodeValue::Image(link) => {
                 if matches!(value, NodeValue::Image(_)) {
                     self.has_image = true;
+                } else {
+                    self.has_link = true;
                 }
                 self.destination(&link.url);
                 self.children(node);
             }
             NodeValue::WikiLink(link) => {
+                self.has_link = true;
                 let title = link.url.trim();
                 if !title.is_empty() {
                     self.links.push(NoteLink::Title(title.to_owned()));
@@ -379,22 +423,31 @@ impl Index {
             tx.execute("DELETE FROM notes_fts WHERE rowid = ?1", [rowid])?;
             tx.execute("DELETE FROM notes WHERE rowid = ?1", [rowid])?;
         }
+        let mtime = i64::try_from(stamp.mtime_ms).unwrap_or(i64::MAX);
+        let time_of =
+            |field: &Option<String>| field.as_deref().and_then(parse_rfc3339).unwrap_or(mtime);
         tx.execute(
-            "INSERT INTO notes (path, state, id, title, created, modified, mtime_ms, size, hash,
-                                has_task, has_image)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+            "INSERT INTO notes (path, state, id, title, title_key, created, modified, mtime_ms,
+                                size, hash, created_ms, modified_ms, pinned, has_task,
+                                has_image, has_link)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
             params![
                 path,
                 state.as_str(),
                 facts.id,
                 facts.title,
+                title_sort_key(&facts.title),
                 facts.created,
                 facts.modified,
                 i64::try_from(stamp.mtime_ms).unwrap_or(i64::MAX),
                 i64::try_from(stamp.size).unwrap_or(i64::MAX),
                 stamp.hash,
+                time_of(&facts.created),
+                time_of(&facts.modified),
+                facts.pinned,
                 facts.has_task,
                 facts.has_image,
+                facts.has_link,
             ],
         )?;
         let rowid = tx.last_insert_rowid();
@@ -425,6 +478,10 @@ impl Index {
             let mut file = tx.prepare("INSERT INTO note_files (note, path) VALUES (?1, ?2)")?;
             for f in &facts.files {
                 file.execute(params![rowid, f])?;
+            }
+            let mut chord = tx.prepare("INSERT INTO note_chords (note, chord) VALUES (?1, ?2)")?;
+            for c in &facts.chords {
+                chord.execute(params![rowid, c])?;
             }
         }
         tx.commit()?;
@@ -610,6 +667,31 @@ mod tests {
         let plain = analyze("notes/b.md", "just text");
         assert_eq!((plain.id, plain.title.as_str()), (None, "just text"));
         assert!(!plain.has_task && !plain.has_image);
+    }
+
+    #[test]
+    fn chordpro_blocks_give_lyrics_and_chords() {
+        let text = "# Lieder\n\n```chordpro notation=german\n{title: Abendlied}\n\
+                    {key: G}\n# geheim\nDer [G]Mond ist aufge[D]gangen\n```\n\n\
+                    ```ChordPro\n[Em]Zwei[G]tes\n```\n\n```text\n[Am]bleibt\n```\n";
+        let facts = analyze("notes/a.md", text);
+        assert_eq!(
+            facts.body,
+            "Lieder\nAbendlied\nDer Mond ist aufgegangen\nZweites\n[Am]bleibt"
+        );
+        assert_eq!(facts.chords, ["G", "D", "Em"]);
+
+        let mut index = Index::in_memory().unwrap();
+        index
+            .put("notes/a.md", NoteState::Active, &stamp("h"), &facts)
+            .unwrap();
+        assert_eq!(matches(&index, "aufgegangen"), ["notes/a.md"]);
+        assert!(matches(&index, "geheim").is_empty(), "no ChordPro comments");
+        let chords: i64 = index
+            .db()
+            .query_row("SELECT count(*) FROM note_chords", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(chords, 3);
     }
 
     #[test]

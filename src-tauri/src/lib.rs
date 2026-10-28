@@ -6,6 +6,7 @@
 //! so they run off the main thread.
 
 mod indexing;
+mod smart_folders;
 mod vault_location;
 mod watching;
 
@@ -456,11 +457,17 @@ async fn tag_folders(state: State<'_, AppState>, keys: Vec<String>) -> CmdResult
     with_index(&state, |i| i.tag_folders(&keys))
 }
 
-/// Full-text search (F-09): words, "phrases", #tags, -exclusions, OR and
-/// parentheses; best matches first, with snippets.
+/// Full-text search (F-09) in the query language of
+/// `docs/manual/query-language.md`; best matches first, with snippets.
+/// `utc_offset_minutes` (local time minus UTC) makes `created:2026-10-23`
+/// and `today` mean the user's local days.
 #[tauri::command]
-async fn search_notes(state: State<'_, AppState>, query: String) -> CmdResult<Vec<SearchHit>> {
-    with_index(&state, |i| i.search(&query))
+async fn search_notes(
+    state: State<'_, AppState>,
+    query: String,
+    utc_offset_minutes: i32,
+) -> CmdResult<Vec<SearchHit>> {
+    with_index(&state, |i| i.search(&query, utc_offset_minutes))
 }
 
 /// Number of notes without any tag.
@@ -556,6 +563,22 @@ async fn save_note(
 ) -> CmdResult<SavedNote> {
     with_vault(&state, |v| {
         let saved = v.write_note(&path, &text, &expected_hash)?;
+        reindex(&state, v, &[indexing::note_key(&path)]);
+        Ok(saved)
+    })
+}
+
+/// Pins or unpins a note if it still has the content with `expected_hash`;
+/// returns the text now on disk and its hash.
+#[tauri::command]
+async fn set_pinned(
+    state: State<'_, AppState>,
+    path: String,
+    pinned: bool,
+    expected_hash: String,
+) -> CmdResult<SavedNote> {
+    with_vault(&state, |v| {
+        let saved = v.set_pinned(&path, pinned, &expected_hash)?;
         reindex(&state, v, &[indexing::note_key(&path)]);
         Ok(saved)
     })
@@ -768,6 +791,13 @@ pub fn run() {
             restore_note,
             read_note,
             save_note,
+            set_pinned,
+            smart_folders::list_smart_folders,
+            smart_folders::add_smart_folder,
+            smart_folders::update_smart_folder,
+            smart_folders::remove_smart_folder,
+            smart_folders::move_smart_folder,
+            smart_folders::smart_folder_notes,
             create_note,
             resolve_conflict,
             keep_both,

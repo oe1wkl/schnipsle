@@ -108,17 +108,24 @@ pub enum SortOrder {
     Title,
 }
 
-/// Sorts a note list as [`Vault::list_notes_by`] does.
+/// Sorts a note list as [`Vault::list_notes_by`] does: pinned notes first,
+/// each group in `order`.
 pub fn sort_notes(notes: &mut [NoteEntry], order: SortOrder) {
     match order {
         SortOrder::Modified => notes.sort_by(|a, b| {
-            b.modified_ms
-                .cmp(&a.modified_ms)
+            b.pinned
+                .cmp(&a.pinned)
+                .then_with(|| b.modified_ms.cmp(&a.modified_ms))
                 .then_with(|| a.path.cmp(&b.path))
         }),
         SortOrder::Title => {
             notes.sort_by_cached_key(|n| {
-                (title_sort_key(&n.title), n.title.clone(), n.path.clone())
+                (
+                    !n.pinned,
+                    title_sort_key(&n.title),
+                    n.title.clone(),
+                    n.path.clone(),
+                )
             });
         }
     }
@@ -147,6 +154,8 @@ pub struct NoteEntry {
     pub modified_ms: u64,
     /// `false` if only a cloud placeholder is on this device.
     pub available: bool,
+    /// Front matter `pinned: true` (format.md §4): listed first.
+    pub pinned: bool,
 }
 
 /// A note's content together with the hash used for conflict detection.
@@ -187,6 +196,8 @@ pub enum PathKind {
     /// The root, `notes/` or a folder in it: any notes below it may have
     /// changed. Also a change that may add or remove a note outside `notes/`.
     Folder,
+    /// `.notesapp/smart-folders.yaml` (format.md §9).
+    SmartFolders,
     /// Outside `notes/`, hidden, or not a note.
     Ignored,
 }
@@ -420,19 +431,7 @@ impl Vault {
     pub fn write_note(&self, path: &str, text: &str, expected_hash: &str) -> Result<SavedNote> {
         self.check_writable()?;
         let full = self.resolve(path)?;
-        let current = self.coordinated(Access::Read, &full, |file| match fs::read(file) {
-            Ok(bytes) => Ok(Some(bytes)),
-            Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(None),
-            Err(e) => Err(e.into()),
-        })?;
-        let current_hash = current.as_deref().map(sha256_hex);
-        let Some(current) = current.filter(|_| current_hash.as_deref() == Some(expected_hash))
-        else {
-            return Err(VaultError::Conflict {
-                path: path.to_owned(),
-                current_hash,
-            });
-        };
+        let current = self.read_expected(path, &full, expected_hash)?;
         if current == text.as_bytes() {
             return Ok(SavedNote {
                 text: text.to_owned(),
@@ -444,12 +443,70 @@ impl Vault {
             Some(&String::from_utf8_lossy(&current)),
             created_ms(&full),
         )?;
+        self.replace_expected(path, &full, expected_hash, stamped)
+    }
 
+    /// Pins or unpins a note (format.md §4: `pinned`), but only if it still
+    /// has the content with `expected_hash`. Only the front matter changes:
+    /// `modified` stays, as the content did not change; `id` and `created`
+    /// are added if missing, as with every write. Returns what is now on disk.
+    ///
+    /// # Errors
+    /// [`VaultError::Conflict`] as for [`Vault::write_note`]; an I/O error of
+    /// kind `InvalidData` if the note is not UTF-8, which is then left alone.
+    pub fn set_pinned(&self, path: &str, pinned: bool, expected_hash: &str) -> Result<SavedNote> {
+        self.check_writable()?;
+        let full = self.resolve(path)?;
+        let current = String::from_utf8(self.read_expected(path, &full, expected_hash)?)
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        let text = front_matter::with_pinned(&current, pinned);
+        if text == current {
+            return Ok(SavedNote {
+                text,
+                hash: expected_hash.to_owned(),
+            });
+        }
+        let id = front_matter::get(&text, "id").map_or_else(new_ulid, Ok)?;
+        let created =
+            front_matter::get(&text, "created").unwrap_or_else(|| rfc3339_utc(created_ms(&full)));
+        let modified = front_matter::get(&text, "modified").unwrap_or_else(|| {
+            let mtime = fs::metadata(&full).map_or_else(|_| now_ms(), |m| modified_ms(&m));
+            rfc3339_utc(mtime)
+        });
+        let stamped = front_matter::stamp(&text, &id, &created, &modified);
+        self.replace_expected(path, &full, expected_hash, stamped)
+    }
+
+    /// The bytes of the note at `full`, if their hash is `expected_hash`.
+    fn read_expected(&self, path: &str, full: &Path, expected_hash: &str) -> Result<Vec<u8>> {
+        let current = self.coordinated(Access::Read, full, |file| match fs::read(file) {
+            Ok(bytes) => Ok(Some(bytes)),
+            Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(e.into()),
+        })?;
+        let current_hash = current.as_deref().map(sha256_hex);
+        current
+            .filter(|_| current_hash.as_deref() == Some(expected_hash))
+            .ok_or_else(|| VaultError::Conflict {
+                path: path.to_owned(),
+                current_hash,
+            })
+    }
+
+    /// Replaces the note at `full` with `stamped` if its hash is still
+    /// `expected_hash`.
+    fn replace_expected(
+        &self,
+        path: &str,
+        full: &Path,
+        expected_hash: &str,
+        stamped: String,
+    ) -> Result<SavedNote> {
         // Write and flush first, then check and replace while holding exclusive
         // access: with a real coordinator nothing can change the note in between;
         // without one the window shrinks to one read plus the rename.
-        let mut tmp = Some(TempFile::write(&full, stamped.as_bytes())?);
-        self.coordinated(Access::Write, &full, |file| {
+        let mut tmp = Some(TempFile::write(full, stamped.as_bytes())?);
+        self.coordinated(Access::Write, full, |file| {
             let current_hash = match fs::read(file) {
                 Ok(bytes) => Some(sha256_hex(&bytes)),
                 Err(e) if e.kind() == io::ErrorKind::NotFound => None,
@@ -572,6 +629,9 @@ impl Vault {
                 Component::Normal(part) => parts.push(part.to_string_lossy().into_owned()),
                 _ => return PathKind::Ignored,
             }
+        }
+        if parts.join("/") == crate::layout::SMART_FOLDERS_FILE {
+            return PathKind::SmartFolders;
         }
         match parts.first() {
             None => return PathKind::Folder, // the vault root itself
@@ -748,6 +808,7 @@ fn collect(dir: &Path, prefix: &str, out: &mut Vec<NoteEntry>, is_root: bool) ->
                 title: real.trim_end_matches(".md").to_owned(),
                 modified_ms,
                 available: false,
+                pinned: false,
             });
         } else if name.starts_with('.') {
             // hidden file or folder, including .notesapp/
@@ -755,13 +816,16 @@ fn collect(dir: &Path, prefix: &str, out: &mut Vec<NoteEntry>, is_root: bool) ->
             collect(&entry.path(), &format!("{prefix}{name}/"), out, false)?;
         } else if file_type.is_file() && has_md_extension(&name) {
             let stem = name[..name.len() - 3].to_owned();
-            let title = read_head(&entry.path())
-                .map_or_else(|_| stem.clone(), |head| title_of(&head, &stem));
+            let head = read_head(&entry.path());
+            let title = head
+                .as_ref()
+                .map_or_else(|_| stem.clone(), |head| title_of(head, &stem));
             out.push(NoteEntry {
                 path: format!("{prefix}{name}"),
                 title,
                 modified_ms,
                 available: true,
+                pinned: head.is_ok_and(|head| front_matter::is_pinned(&head)),
             });
         }
     }
@@ -1116,6 +1180,92 @@ mod tests {
     }
 
     #[test]
+    fn pinning_changes_only_the_front_matter() {
+        let (dir, vault) = vault();
+        let file = dir.path().join("notes").join("n.md");
+        let disk = "---\nid: 01ARZ3NDEKTSV4RRFFQ69G5FAV\ncreated: 2026-01-01T00:00:00Z\nmodified: 2026-01-02T00:00:00Z\n---\nBody\n";
+        fs::write(&file, disk).unwrap();
+        let hash = sha256_hex(disk.as_bytes());
+
+        let pinned = vault.set_pinned("n.md", true, &hash).unwrap();
+        assert_eq!(
+            pinned.text,
+            disk.replace("---\nBody", "pinned: true\n---\nBody")
+        );
+        assert_eq!(fs::read_to_string(&file).unwrap(), pinned.text);
+        assert_eq!(pinned.hash, sha256_hex(pinned.text.as_bytes()));
+        // Pinning again changes nothing; an old hash is a conflict.
+        assert_eq!(
+            vault.set_pinned("n.md", true, &pinned.hash).unwrap(),
+            pinned
+        );
+        assert!(matches!(
+            vault.set_pinned("n.md", false, &hash),
+            Err(VaultError::Conflict { .. })
+        ));
+        let unpinned = vault.set_pinned("n.md", false, &pinned.hash).unwrap();
+        assert_eq!(unpinned.text, disk);
+    }
+
+    #[test]
+    fn pinning_a_plain_note_keeps_its_modification_time() {
+        let (dir, vault) = vault();
+        let file = dir.path().join("notes").join("n.md");
+        fs::write(&file, "Body").unwrap();
+        let mtime = UNIX_EPOCH + std::time::Duration::from_secs(1_767_225_600); // 2026-01-01
+        fs::File::options()
+            .write(true)
+            .open(&file)
+            .unwrap()
+            .set_modified(mtime)
+            .unwrap();
+        let saved = vault
+            .set_pinned("n.md", true, &sha256_hex(b"Body"))
+            .unwrap();
+        assert!(front_matter::is_pinned(&saved.text));
+        assert!(front_matter::get(&saved.text, "id").is_some());
+        assert!(front_matter::get(&saved.text, "created").is_some());
+        assert_eq!(
+            front_matter::get(&saved.text, "modified").as_deref(),
+            Some("2026-01-01T00:00:00Z")
+        );
+        assert_eq!(front_matter::body(&saved.text), "Body");
+
+        // Text that is not UTF-8 is left alone.
+        fs::write(&file, b"\xff").unwrap();
+        let err = vault.set_pinned("n.md", true, &sha256_hex(b"\xff"));
+        assert!(matches!(err, Err(VaultError::Io(e)) if e.kind() == io::ErrorKind::InvalidData));
+        assert_eq!(fs::read(&file).unwrap(), b"\xff");
+    }
+
+    #[test]
+    fn pinned_notes_are_listed_first() {
+        let (dir, vault) = vault();
+        let notes = dir.path().join("notes");
+        fs::write(notes.join("a.md"), "# Apfel").unwrap();
+        fs::write(notes.join("z.md"), "---\npinned: true\n---\n# Zebra").unwrap();
+        fs::write(notes.join("m.md"), "# Mango").unwrap();
+        let listed = |order| -> Vec<(String, bool)> {
+            vault
+                .list_notes_by(order)
+                .unwrap()
+                .into_iter()
+                .map(|n| (n.title, n.pinned))
+                .collect()
+        };
+        let by_title = listed(SortOrder::Title);
+        assert_eq!(
+            by_title,
+            [
+                ("Zebra".to_owned(), true),
+                ("Apfel".to_owned(), false),
+                ("Mango".to_owned(), false)
+            ]
+        );
+        assert_eq!(listed(SortOrder::Modified)[0], ("Zebra".to_owned(), true));
+    }
+
+    #[test]
     fn unchanged_text_is_not_written_again() {
         let (dir, vault) = vault();
         let saved = vault.create_note("n.md", "x").unwrap();
@@ -1412,6 +1562,7 @@ mod tests {
             title: "A".into(),
             modified_ms: 1,
             available: true,
+            pinned: false,
         };
         let json = serde_json::to_string(&entry).unwrap();
         assert!(json.contains("\"modifiedMs\":1"), "{json}");

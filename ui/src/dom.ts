@@ -27,6 +27,7 @@ export const ui = {
   clearFilter: el("clear-filter") as HTMLButtonElement,
   showTrash: el("show-trash") as HTMLButtonElement,
   deleteNote: el("delete-note") as HTMLButtonElement,
+  pin: el("pin") as HTMLButtonElement,
   addImage: el("add-image") as HTMLButtonElement,
   showHistory: el("show-history") as HTMLButtonElement,
   history: el("history"),

@@ -38,6 +38,8 @@ export interface NoteEntry {
   title: string;
   modifiedMs: number;
   available: boolean;
+  /** Front matter `pinned: true` (format.md §4); listed first. */
+  pinned: boolean;
 }
 /** A version a sync service kept because it conflicts (schnipsle-core `ConflictVersion`). */
 export interface ConflictVersion {
@@ -64,6 +66,8 @@ export interface Tag {
 export interface VaultChanges {
   paths: string[];
   rescan: boolean;
+  /** The smart folders may have changed (`.notesapp/smart-folders.yaml`). */
+  smartFolders: boolean;
 }
 /** What a save wrote: the text on disk, with the front matter the core maintains. */
 export interface SavedNote {
@@ -111,4 +115,7 @@ export interface SearchHit {
   title: string;
   modifiedMs: number;
   snippet: SnippetPart[];
+  /** In the trash: `path` is below the vault root and the note must be restored first. */
+  inTrash: boolean;
+  pinned: boolean;
 }
