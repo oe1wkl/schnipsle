@@ -1,7 +1,7 @@
 # Roadmap and status
 
 - Updated: 2026-10-28
-- Current milestone: **M4 – Import** (plan not written yet)
+- Current milestone: **M4 – Import**
 
 Each milestone ends in a usable build. Scope can move between milestones; the order should not.
 
@@ -29,6 +29,22 @@ Each milestone ends in a usable build. Scope can move between milestones; the or
 - Data safety: atomic, coordinated writes with conflict checks; iCloud conflict versions and same-id copies resolved without losing text; trash; history snapshots with retention and a history view to read, restore or copy versions; relative links kept working when notes move (ADR-0016).
 - Format spec at draft revision 0.8; ADR-0016 and ADR-0017 added. Tested on macOS and on the iPhone (iOS 27).
 - Moved to later milestones: loading the editor on demand (bundle ~530 kB), inline formatting inside table cells, a settings view.
+
+## M4 backlog
+
+Goal: bring notes over from Apple Notes and Simplenote (F-03, F-04), plus HTML files and Markdown folders (F-05), without losing text and repeatably. Decisions: ADR-0012, ADR-0019 (notes in `notes/<Source>/` with the source's folders, folders as `#<Folder>` tags, re-import updates only notes unchanged since, undo trashes only unedited notes, desktop only, built-in HTML converter). Order: spec and fixtures, pipeline, Apple Notes, import UI, Simplenote, HTML, Markdown folders, undo.
+
+- [ ] Spec and test data: format.md section for `.notesapp/import-log/` (one file per run: source, time, and per note `source_id`, path, hash written, the snapshot it replaced), the use of `source`/`source_id` (§4), and the folder-to-tag rule; revision 0.10; fixtures in `tests/fixtures/import/<source>/`. **Needs your Apple Notes (macOS 26 Markdown) and Simplenote exports**; anonymized samples go into the fixtures, and the full sets are only used for dry runs
+- [ ] Pipeline in `schnipsle-import` (ADR-0012): `Importer` trait and `ImportedNote`; placement and names (§3); Markdown clean-up; attachments hashed into `attachments/` with links rewritten (§6); folder tags and source tags on a final line; `id`, `created`, `modified` from the source, plus `source`/`source_id`; duplicate and re-import check against the logs; a dry-run report (new, updated, skipped with reason, problems) before anything is written; atomic, coordinated writes; history snapshot before an update; one index update for the run; the import log. Golden-file tests per step
+- [ ] Apple Notes adapter: read the macOS 26 Markdown export as it really is (folder layout, images, dates, attachments other than images, checklists, tables); folders become `#<Folder>`; what the export loses is listed in the report
+- [ ] Import UI (desktop): File › Import… with the source, a file or folder picker, the dry-run report, then Import with progress and a result summary listing new, updated and skipped notes, each one openable
+- [ ] Simplenote adapter: the JSON export (also inside its zip); tags as hashtags on a final line unless already in the text; `creationDate`/`lastModified` kept; trashed notes go to the trash (§8)
+- [ ] HTML adapter: a built-in, permissively licensed converter (licence checked by cargo-deny); single files and folders; embedded (`data:`) and linked local images into `attachments/`; the title from `<title>` or the first heading
+- [ ] Markdown folders adapter: `.md` files with their folders, front matter of other tools kept (§4), relative links to images and files moved into `attachments/` and rewritten; ChordPro files (`.cho`, `.crd`, `.chopro`, `.chordpro`) as notes with one `chordpro` block and their `title` (§5.7 rule 9)
+- [ ] Undo import (ADR-0019): from the log, unchanged notes go to the trash, edited ones are kept and listed, replaced ones get their previous version back from the history; an Imports list with Undo per run
+- [ ] Check with your full exports: dry run, import, re-import of a newer export, undo; then a look on the iPhone after sync
+
+Not in M4: import on the iPhone; Pandoc for HTML; Evernote, Google Keep, Obsidian and Bear (F-13).
 
 ## M3 results
 
