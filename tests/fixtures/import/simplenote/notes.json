@@ -1,0 +1,71 @@
+{
+  "activeNotes": [
+    {
+      "id": "0a1b2c3d4e5f40718293a4b5c6d7e8f9",
+      "content": "Lake trip\r\n\r\nBring the canoe and two paddles.\r\nCamp site 14 is booked.\r\n",
+      "creationDate": "2016-07-11T17:52:48.499Z",
+      "lastModified": "2026-08-05T06:46:58.085Z",
+      "pinned": true
+    },
+    {
+      "id": "1b2c3d4e5f6071829304a5b6c7d8e9f0",
+      "content": "Club song\r\n\r\n*Verse 1*\r\n\r\nWe meet on Monday, **every** week,\r\nthe kettle hums, the speakers squeak.\r\n",
+      "creationDate": "2019-03-03T19:00:00.000Z",
+      "lastModified": "2019-03-04T08:15:30.250Z",
+      "markdown": true
+    },
+    {
+      "id": "2c3d4e5f60718293a4b5c6d7e8f90a1b",
+      "content": "Repeater list\r\n\r\nOE1XUU 438.950\r\nSee #radio for more.\r\n",
+      "creationDate": "2020-01-20T10:00:00.000Z",
+      "lastModified": "2024-05-05T05:05:05.005Z",
+      "tags": [
+        "radio",
+        "Ö-Club"
+      ]
+    },
+    {
+      "id": "3d4e5f60718293a4b5c6d7e8f90a1b2c",
+      "content": "Pizza dough\r\n\r\n500 g flour, 320 g water, 10 g salt, 2 g yeast.\r\n",
+      "creationDate": "2021-08-08T17:00:00.000Z",
+      "lastModified": "2021-08-09T09:00:00.000Z",
+      "tags": [
+        ""
+      ]
+    },
+    {
+      "id": "4e5f60718293a4b5c6d7e8f90a1b2c3d",
+      "content": "Keyer sketch\r\n\r\n#define WPM 20\r\n#include <Keyer.h>\r\nvoid setup() {}\r\n",
+      "creationDate": "2022-11-11T11:11:11.111Z",
+      "lastModified": "2022-11-12T12:12:12.121Z"
+    },
+    {
+      "id": "5f60718293a4b5c6d7e8f90a1b2c3d4e",
+      "content": "Café list\r\n\r\nThe café by the river opens at 7.\r\n",
+      "creationDate": "2016-09-03T06:35:59.247Z",
+      "lastModified": "2016-09-04T06:17:42.866Z",
+      "publicURL": "http://simp.ly/p/AbCdEf"
+    },
+    {
+      "id": "60718293a4b5c6d7e8f90a1b2c3d4e5f",
+      "content": "",
+      "creationDate": "2026-09-27T07:46:00.000Z",
+      "lastModified": "2026-09-27T07:46:00.000Z"
+    },
+    {
+      "id": "718293a4b5c6d7e8f90a1b2c3d4e5f60",
+      "content": "No line break at the end",
+      "creationDate": "2018-02-02T02:02:02.000Z",
+      "lastModified": "2018-02-02T02:02:02.000Z"
+    }
+  ],
+  "trashedNotes": [
+    {
+      "id": "8293a4b5c6d7e8f90a1b2c3d4e5f6071",
+      "content": "Old idea\r\n\r\nA note that was deleted in Simplenote.\r\n",
+      "creationDate": "2026-06-02T07:22:44.053Z",
+      "lastModified": "2026-06-02T07:25:18.835Z",
+      "markdown": true
+    }
+  ]
+}
