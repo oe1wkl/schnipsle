@@ -14,7 +14,7 @@ Several sources must be imported now (Apple Notes, Simplenote, HTML, Markdown fo
 - Each source is an **adapter** implementing `Importer`, producing a stream of `ImportedNote { title, body_markdown, created, modified, tags, attachments, source_ref }`.
 - A shared **pipeline** does: Markdown clean-up → attachment hashing and link rewriting → tag mapping → duplicate detection → **dry-run report** → atomic write → index → import log (enables undo of a whole import).
 - Mapping decisions:
-  - Apple Notes (macOS 26+ Markdown export): folder names become tags with a configurable prefix, default `#notes/<Folder>` (now `#<Folder>`, ADR-0019); dates kept where the export provides them. To be verified against a real export in M4.
+  - Apple Notes (macOS 26+ Markdown export): folder names become tags with a configurable prefix, default `#notes/<Folder>` (now `#<Folder>`, ADR-0019); dates kept where the export provides them. To be verified against a real export in M4. (The export has no IDs or dates; a metadata file from a script fills them in, ADR-0019.)
   - Simplenote: JSON tags become hashtags appended at the end of the note if not already in the body; `creationDate`/`lastModified` kept; trashed notes go to the trash.
   - HTML: converted to Markdown by the built-in converter (all platforms) or Pandoc when available.
 - Tags added by import are appended on a final line, so the original text stays untouched.

@@ -7,7 +7,7 @@ All notable changes to this project are documented here. The format follows [Kee
 ### Added
 
 - Repository foundation: Cargo workspace (`schnipsle-core`, `-import`, `-export`, Tauri 2 shell), TypeScript UI, CI, dependency licence checks, macOS bootstrap script.
-- Architecture decision records ADR-0001 to ADR-0017.
+- Architecture decision records ADR-0001 to ADR-0019.
 - Vault format specification, draft revision 0.9 (notes, front matter, tags, links, attachments, music in ABC, song sheets in ChordPro, history, trash, smart folders).
 - Hashtag extraction in `schnipsle-core` following format.md §5.3, with the specification examples as tests.
 - Vault access in `schnipsle-core`: list notes (with iCloud placeholders), read, atomic write with conflict detection, create (spike, see docs/spikes/ios-vault.md).
@@ -37,6 +37,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - Song sheets (` ```chordpro ` blocks, format.md §5.7) are searchable by their lyrics without the chord brackets and by title, subtitle, artist, composer and lyricist; ChordPro comments and tablature are left out. `has:chord` finds notes with chords, `chord:Am` notes with that chord. The index rebuilds itself once more.
 - Smart folders in the core (format.md 0.9 §9, ADR-0018): saved searches in `.notesapp/smart-folders.yaml` can be added, renamed, changed, removed, reordered and nested; keys and entries other tools wrote are kept, and a change made on another device at the same moment is not lost. Results follow each folder's sort order.
 - Smart folders in the app: a "Smart folders" section above Tags (on the phone in the Tags view) lists the saved searches, nested. "Save" next to the search field keeps the current search as a folder; the ✎ button edits name, search, parent folder and order, or deletes the folder after asking (its subfolders move up, no notes are touched). Drag a folder by its ≡ handle to reorder it or drop it onto another folder to nest it; with the keyboard, the arrow keys on the handle do the same. Changes made on another device show up by themselves.
+- `scripts/apple-notes-metadata.js` prepares an Apple Notes import (ADR-0019): run with `osascript -l JavaScript`, it writes `apple-notes-metadata.json` with each note's ID, folder and dates into the folder of a Markdown export, which leaves these out. It only reads Notes.
 - Pinning: the Pin button next to History pins the open note, and pinned notes are listed first in the note list, tag folders and search results (marked 📌). It sets `pinned: true` in the front matter (format.md §4); unpinning removes the key. Nothing else in the note changes, not even `modified`, so pinning does not count as an edit.
 - Test UI: open a vault folder, edit notes with autosave, reload external changes, resolve conflicts (spike).
 
