@@ -1,0 +1,21 @@
+format: 1
+id: 01M66410800000000000000008
+source: simplenote
+input: second.zip
+started: "2026-10-30T10:00:00Z"
+finished: "2026-10-30T10:00:00Z"
+undone: null
+notes:
+  - source_id: a
+    id: 01M63HM9800000000000000001
+    path: notes/Simplenote/note-a.md
+    action: updated
+    source_modified: "2021-01-01T00:00:00Z"
+    hash: 37c8ea3bae33af42fd42ae0b15cfe02c782c556fdced9b34d0f7b4698df85e92
+    replaced: <snapshot>
+  - source_id: e
+    id: 01M66410800000000000000007
+    path: notes/Simplenote/note-e.md
+    action: added
+    source_modified: "2021-01-01T00:00:00Z"
+    hash: 912adfcbc656814b71aacdf6124d9e60d707fec264f151b24dd82e6d51674f94

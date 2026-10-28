@@ -1,0 +1,40 @@
+{
+  "source": "simplenote",
+  "input": "first.zip",
+  "notes": [
+    {
+      "sourceId": "a",
+      "title": "",
+      "body": "Note A\n\nFirst version.\n",
+      "created": "2019-01-01T00:00:00Z",
+      "modified": "2020-01-01T00:00:00Z"
+    },
+    {
+      "sourceId": "b",
+      "title": "",
+      "body": "Note B\n\nFirst version.\n",
+      "created": "2019-01-01T00:00:00Z",
+      "modified": "2020-01-01T00:00:00Z"
+    },
+    {
+      "sourceId": "c",
+      "title": "",
+      "body": "Note C\n\nFirst version.\n",
+      "created": "2019-01-01T00:00:00Z",
+      "modified": "2020-01-01T00:00:00Z"
+    },
+    {
+      "sourceId": "d",
+      "title": "",
+      "body": "Note D\n\nNo modification time.\n",
+      "created": "2019-01-01T00:00:00Z"
+    },
+    {
+      "sourceId": "f",
+      "title": "",
+      "body": "Note F\n\nDeleted here later.\n",
+      "created": "2019-01-01T00:00:00Z",
+      "modified": "2020-01-01T00:00:00Z"
+    }
+  ]
+}

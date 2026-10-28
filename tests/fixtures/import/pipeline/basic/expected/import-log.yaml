@@ -1,0 +1,55 @@
+format: 1
+id: 01M63HM9800000000000000009
+source: apple-notes
+input: Pipeline sample
+started: "2026-10-29T10:00:00Z"
+finished: "2026-10-29T10:00:00Z"
+undone: null
+notes:
+  - source_id: p101
+    id: 01M63HM9800000000000000001
+    path: notes/Apple Notes/Amateurfunk & Radio/QRP Kits/antenna-tuner.md
+    action: added
+    source_modified: "2025-11-20T18:40:12.000Z"
+    hash: 82fc6b6413a14f748bd1d65fae1414363a51525bf0cd827a09448bafe8378572
+  - source_id: p102
+    id: 01M63HM9800000000000000002
+    path: notes/Apple Notes/Amateurfunk & Radio/QRP Kits/antenna-tuner-2.md
+    action: added
+    source_modified: "2024-03-03T09:00:00Z"
+    hash: a776034f8613112ddebd6f5124f5e7cabb9ffa0906b7bb92061ce37ce3569c69
+  - source_id: s3
+    id: 01M63HM9800000000000000003
+    path: notes/Apple Notes/Musik & Lieder/café-song.md
+    action: added
+    source_modified: "2026-01-02T10:00:00+01:00"
+    hash: 0f6eb1e9aeded4672fc6d2ed4d88963e5d4b2197cba076a27f8175eaa4b50bcc
+  - source_id: s4
+    id: 01M63HM9800000000000000004
+    path: notes/Apple Notes/2024/undated.md
+    action: added
+    hash: d8dc9c074eccc3286afc798d0ec7d32596c140bf9bc9762feacb438e09e480d3
+  - source_id: s5
+    id: 01M63HM9800000000000000005
+    path: notes/Apple Notes/broken-attachments.md
+    action: added
+    source_modified: "2020-01-01T00:00:00Z"
+    hash: fbf2eef2108f0ee02038181df118e30426bc4603819280d68206064f0789093f
+  - source_id: s7
+    id: 01M63HM9800000000000000006
+    path: notes/Apple Notes/hidden/a-b- c/odd-folders.md
+    action: added
+    source_modified: "2020-01-01T00:00:00Z"
+    hash: 6a4e988c7b442f3aeb7fb408766968d6fba6e500e0862874c20812d09a81eaa5
+  - source_id: projects/tool.md
+    id: 01M63HM9800000000000000007
+    path: notes/Apple Notes/from-another-tool.md
+    action: added
+    source_modified: "2003-03-03T00:00:00Z"
+    hash: adb31053b76b111442807018583b2f920d196ca9f9f43fbca24bf0647e1d4497
+  - source_id: p403
+    id: 01M63HM9800000000000000008
+    path: notes/Apple Notes/Notes/empty-note.md
+    action: added
+    source_modified: "2026-07-07T07:07:07Z"
+    hash: 2a4622ab80ec584b8bf3ffdbfa92ec804f89285ebd9feb984c8cc75225fa2f4e

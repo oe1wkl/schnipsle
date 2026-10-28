@@ -2,6 +2,20 @@
 
 Sample exports for the importers (format.md §12, ADR-0012, ADR-0019). All text, names, IDs and attachments are invented. Only the structure follows real exports: Apple Notes on macOS 27.0.1 in German, 137 notes in 3 folders, plus `apple-notes-metadata.json` for 679 notes; Simplenote, 463 notes plus 166 in its trash. The expected notes for each sample come with the adapters.
 
+## `pipeline/`
+
+Golden files for the pipeline itself (`crates/import/tests/pipeline.rs`). Each case gives a batch as JSON, the form an adapter hands over. `expected/` holds:
+
+- `plan.json`: the report after the import;
+- `notes/`: the notes written;
+- `attachments.txt`: the attachments stored;
+- `import-log.yaml`: the log, with snapshot names, which carry the real time, replaced by `<snapshot>`.
+
+The test clock is 2026-10-29T10:00:00Z, and ids count up. Run the tests with `SCHNIPSLE_BLESS=1` to rewrite `expected/` after a deliberate change, then review the diff.
+
+- `basic/`: placement, collisions, folder and source tags, NFC and line endings, one attachment shared by two notes, unreadable attachments, dates missing or not understood, a duplicate `source_id`, front matter of another tool, an empty note.
+- `reimport/`: a second import after one note was edited here and another deleted. One note is updated, one added, and four are skipped (changed here, not newer, no modification time, missing).
+
 ## `apple-notes/export/`
 
 What Notes writes with Ablage › Exportieren als › Markdown for notes selected in one folder, saved into a Finder folder per Notes folder, plus `apple-notes-metadata.json` from `scripts/apple-notes-metadata.js`.

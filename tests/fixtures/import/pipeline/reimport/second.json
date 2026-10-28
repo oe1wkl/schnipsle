@@ -1,0 +1,48 @@
+{
+  "source": "simplenote",
+  "input": "second.zip",
+  "notes": [
+    {
+      "sourceId": "a",
+      "title": "",
+      "body": "Note A\n\nSecond version from the source.\n",
+      "created": "2019-01-01T00:00:00Z",
+      "modified": "2021-01-01T00:00:00Z"
+    },
+    {
+      "sourceId": "b",
+      "title": "",
+      "body": "Note B\n\nSecond version from the source.\n",
+      "created": "2019-01-01T00:00:00Z",
+      "modified": "2021-01-01T00:00:00Z"
+    },
+    {
+      "sourceId": "c",
+      "title": "",
+      "body": "Note C\n\nFirst version.\n",
+      "created": "2019-01-01T00:00:00Z",
+      "modified": "2020-01-01T00:00:00.000Z"
+    },
+    {
+      "sourceId": "d",
+      "title": "",
+      "body": "Note D\n\nNow with a time.\n",
+      "created": "2019-01-01T00:00:00Z",
+      "modified": "2021-01-01T00:00:00Z"
+    },
+    {
+      "sourceId": "e",
+      "title": "",
+      "body": "Note E\n\nNew in the second export.\n",
+      "created": "2019-01-01T00:00:00Z",
+      "modified": "2021-01-01T00:00:00Z"
+    },
+    {
+      "sourceId": "f",
+      "title": "",
+      "body": "Note F\n\nSecond version.\n",
+      "created": "2019-01-01T00:00:00Z",
+      "modified": "2021-01-01T00:00:00Z"
+    }
+  ]
+}

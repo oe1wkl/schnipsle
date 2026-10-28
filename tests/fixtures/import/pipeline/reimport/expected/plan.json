@@ -1,0 +1,55 @@
+{
+  "source": "simplenote",
+  "input": "second.zip",
+  "items": [
+    {
+      "sourceId": "a",
+      "title": "Note A",
+      "action": "update",
+      "reason": null,
+      "path": "Simplenote/note-a.md",
+      "problems": []
+    },
+    {
+      "sourceId": "b",
+      "title": "Note B",
+      "action": "skip",
+      "reason": "changedHere",
+      "path": "Simplenote/note-b.md",
+      "problems": []
+    },
+    {
+      "sourceId": "c",
+      "title": "Note C",
+      "action": "skip",
+      "reason": "notNewer",
+      "path": "Simplenote/note-c.md",
+      "problems": []
+    },
+    {
+      "sourceId": "d",
+      "title": "Note D",
+      "action": "skip",
+      "reason": "noModifiedTime",
+      "path": "Simplenote/note-d.md",
+      "problems": []
+    },
+    {
+      "sourceId": "e",
+      "title": "Note E",
+      "action": "add",
+      "reason": null,
+      "path": "Simplenote/note-e.md",
+      "problems": []
+    },
+    {
+      "sourceId": "f",
+      "title": "Note F",
+      "action": "skip",
+      "reason": "missing",
+      "path": null,
+      "problems": []
+    }
+  ],
+  "notices": []
+}

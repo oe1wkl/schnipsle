@@ -1,0 +1,138 @@
+{
+  "source": "apple-notes",
+  "input": "Pipeline sample",
+  "notices": [
+    {
+      "message": "A notice from the adapter."
+    }
+  ],
+  "notes": [
+    {
+      "sourceId": "p101",
+      "title": "Antenna tuner",
+      "folders": [
+        "Amateurfunk & Radio",
+        "QRP Kits"
+      ],
+      "body": "# Antenna tuner\n#radio #qrp\n\n![Schematic](Attachments/A1.png)\n",
+      "created": "2024-03-02T09:14:00.000Z",
+      "modified": "2025-11-20T18:40:12.000Z",
+      "pinned": true,
+      "attachments": [
+        {
+          "link": "Attachments/A1.png",
+          "fileName": "schematic.png",
+          "data": {
+            "file": "files/tuner.png"
+          }
+        }
+      ]
+    },
+    {
+      "sourceId": "p102",
+      "title": "Antenna tuner",
+      "folders": [
+        "Amateurfunk & Radio",
+        "QRP Kits"
+      ],
+      "body": "# Antenna tuner\nSecond note with the same title.\n\n![Same picture](<Attachments/A1 copy.png>)\n",
+      "created": "2024-03-03T09:00:00Z",
+      "modified": "2024-03-03T09:00:00Z",
+      "attachments": [
+        {
+          "link": "Attachments/A1 copy.png",
+          "fileName": "schematic copy.png",
+          "data": {
+            "file": "files/tuner.png"
+          }
+        }
+      ]
+    },
+    {
+      "sourceId": "s3",
+      "title": "",
+      "folders": [
+        "Musik & Lieder"
+      ],
+      "body": "﻿Café song\r\nla la la\r\n",
+      "tags": [
+        "radio",
+        "Ö Club",
+        "",
+        "musik-lieder"
+      ],
+      "created": "2019-05-05T06:00:00Z",
+      "modified": "2026-01-02T10:00:00+01:00"
+    },
+    {
+      "sourceId": "s4",
+      "title": "Undated",
+      "folders": [
+        "2024"
+      ],
+      "body": "No dates in the source.\n",
+      "created": "yesterday"
+    },
+    {
+      "sourceId": "s5",
+      "title": "Broken attachments",
+      "folders": [],
+      "body": "![gone](Attachments/gone.png)\n[readme](Attachments/README)\n",
+      "attachments": [
+        {
+          "link": "Attachments/gone.png",
+          "fileName": "gone.png",
+          "data": {
+            "file": "files/gone.png"
+          }
+        },
+        {
+          "link": "Attachments/README",
+          "fileName": "README",
+          "data": {
+            "file": "files/README"
+          }
+        }
+      ],
+      "created": "2020-01-01T00:00:00Z",
+      "modified": "2020-01-01T00:00:00Z"
+    },
+    {
+      "sourceId": "p101",
+      "title": "Antenna tuner",
+      "folders": [
+        "Elsewhere"
+      ],
+      "body": "Same source id again.\n"
+    },
+    {
+      "sourceId": "s7",
+      "title": "Odd folders",
+      "folders": [
+        ".hidden",
+        "a/b: c"
+      ],
+      "body": "Folder names that need care.\n",
+      "created": "2020-01-01T00:00:00Z",
+      "modified": "2020-01-01T00:00:00Z"
+    },
+    {
+      "sourceId": "projects/tool.md",
+      "title": "From another tool",
+      "folders": [],
+      "body": "---\ntitle: From another tool\ncreated: 2001-01-01T00:00:00Z\naliases: [tool]\n---\nText written elsewhere.\n",
+      "created": "2002-02-02T00:00:00Z",
+      "modified": "2003-03-03T00:00:00Z"
+    },
+    {
+      "sourceId": "p403",
+      "title": "Empty note",
+      "folders": [
+        "Notes"
+      ],
+      "body": "",
+      "created": "2026-07-07T07:07:07Z",
+      "modified": "2026-07-07T07:07:07Z"
+    }
+  ]
+}
