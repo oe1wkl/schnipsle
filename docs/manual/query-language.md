@@ -14,11 +14,19 @@ The search field and smart folders (format.md §9) use the same language. A quer
 | `has:image`         | with an image                                                            |                                                            |
 | `has:task`          | with a task (`- [ ]` or `- [x]`)                                         |                                                            |
 | `has:link`          | with a link to a note, a file or the web                                 |                                                            |
+| `has:chord`         | with a chord in a song sheet (` ```chordpro ` block)                     |                                                            |
+| `chord:…`           | with this chord in a song sheet                                          | `chord:Am`, `chord:F#m7`, `chord:D/F#`                     |
 | `is:pinned`         | pinned (front matter `pinned: true`)                                     |                                                            |
 | `is:untagged`       | without any tag                                                          |                                                            |
 | `in:trash`          | in the trash; without it the trash is not searched                       | `#radio in:trash`                                          |
 
 Operators and their values ignore case: `Has:Task` works too. An operator with a value it does not know (`has:music`, `created:soon`) is searched as a word.
+
+## Song sheets
+
+Words and phrases find song sheets (format.md §5.7) by their lyrics, read without the chord brackets (`aufgegangen` finds `aufge[D]gangen`), and by the `title`, `subtitle`, `artist`, `composer` and `lyricist` directives. ChordPro comments (`# …`), tablature and other directives are not searched.
+
+`chord:` compares the whole chord as written in the song: `chord:Am` does not find `Am7` or `A`. The root letter may be lower case (`chord:am`), and `♯`/`♭` count as `#`/`b`. Songs with German note names are searched as written, so `chord:H7` finds a German `[H7]`.
 
 ## Combining
 

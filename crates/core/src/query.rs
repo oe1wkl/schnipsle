@@ -3,8 +3,8 @@
 //!
 //! Terms: words (matched as prefixes), `"phrases"`, `#tags` or `tag:x` (a tag
 //! also matches its subtags), `created:` and `modified:` with a date, period
-//! or range (see [`DateSpec`]), `has:image|task|link`, `is:pinned|untagged`
-//! and `in:trash`. `-term` excludes, `OR` and parentheses combine; terms next
+//! or range (see [`DateSpec`]), `has:image|task|link|chord`, `chord:Am`,
+//! `is:pinned|untagged` and `in:trash`. `-term` excludes, `OR` and parentheses combine; terms next
 //! to each other must all match. The reference for users is
 //! `docs/manual/query-language.md`.
 //!
@@ -12,6 +12,7 @@
 //! lone `-` is ignored, an operator with a value it does not know (`has:x`,
 //! `created:soon`) is searched as a word, and an empty query gives `None`.
 
+use crate::chordpro::normalize_chord;
 use crate::dates::DateSpec;
 use crate::tags::normalize;
 
@@ -47,6 +48,8 @@ pub enum Feature {
     Task,
     /// A link to a note, a file or the web.
     Link,
+    /// A chord in a `chordpro` block.
+    Chord,
 }
 
 /// What `is:` asks for.
@@ -67,6 +70,9 @@ pub enum Query {
     Phrase(String),
     /// A tag key (normalized, format.md §5.3); matches its subtags too.
     Tag(String),
+    /// A chord name (normalized, see [`normalize_chord`]) in a `chordpro`
+    /// block.
+    Chord(String),
     /// A date of the note in a period.
     Date(DateField, DateBound),
     /// The note has this.
@@ -120,6 +126,7 @@ impl Query {
                 }
             }
             Self::Tag(_)
+            | Self::Chord(_)
             | Self::Not(_)
             | Self::Date(..)
             | Self::Has(_)
@@ -154,12 +161,14 @@ fn operator(word: &str) -> Option<Query> {
                 .any(char::is_alphabetic)
                 .then(|| Query::Tag(normalize(tag)))
         }
+        "chord" => normalize_chord(value).map(Query::Chord),
         "created" => date_bound(value).map(|b| Query::Date(DateField::Created, b)),
         "modified" => date_bound(value).map(|b| Query::Date(DateField::Modified, b)),
         "has" => match value.to_ascii_lowercase().as_str() {
             "image" => Some(Query::Has(Feature::Image)),
             "task" => Some(Query::Has(Feature::Task)),
             "link" => Some(Query::Has(Feature::Link)),
+            "chord" => Some(Query::Has(Feature::Chord)),
             _ => None,
         },
         "is" => match value.to_ascii_lowercase().as_str() {
@@ -476,6 +485,14 @@ mod tests {
                 Query::InTrash
             ]))
         );
+        assert_eq!(
+            Query::parse("has:Chord chord:f#m7 chord:D/F#"),
+            Some(Query::And(vec![
+                Query::Has(Feature::Chord),
+                Query::Chord("F#m7".into()),
+                Query::Chord("D/F#".into()),
+            ]))
+        );
         // Unknown operators or values are words.
         for text in [
             "has:music",
@@ -484,6 +501,7 @@ mod tests {
             "foo:bar",
             "is:",
             "in:archive",
+            "chord:N.C.",
         ] {
             assert_eq!(Query::parse(text), Some(w(text)), "{text}");
         }

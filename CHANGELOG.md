@@ -34,6 +34,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - Full-text search in a search field above the note list: words match as prefixes ignoring case and diacritics, `"phrases"`, `#tags` (with their subtags), `-` to exclude, `OR` and parentheses; best matches first (titles count more), each with a snippet that marks the hits. Escape returns to what the list showed before. The trash is not searched.
 - Performance test with 20,000 generated notes (N-03), run in CI in release mode: every search and tag-folder query must stay under 200 ms; on a Mac they take 2–48 ms.
 - The search understands the full query language (`docs/manual/query-language.md`): `created:` and `modified:` with years, months, days, `today`, `yesterday`, `7d`/`2w`/`3m`/`1y`, comparisons and ranges, in your local time zone; `has:image|task|link`, `is:pinned|untagged`, `in:trash` (trash hits are marked and can be restored from the Trash view) and `tag:x`. The index rebuilds itself once for the new fields.
+- Song sheets (` ```chordpro ` blocks, format.md §5.7) are searchable by their lyrics without the chord brackets and by title, subtitle, artist, composer and lyricist; ChordPro comments and tablature are left out. `has:chord` finds notes with chords, `chord:Am` notes with that chord. The index rebuilds itself once more.
 - Test UI: open a vault folder, edit notes with autosave, reload external changes, resolve conflicts (spike).
 
 ### Changed

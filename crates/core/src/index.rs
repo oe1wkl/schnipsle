@@ -5,7 +5,9 @@
 //! [`analyze`] turns a note into what the index stores: title, `id` and dates
 //! from the front matter (format.md §4), plain text without Markdown syntax for
 //! full-text search, tags (§5.3, with their hierarchy ancestors), note links
-//! (`[[Title]]` and relative `.md` links) and linked files (attachments, §5.5).
+//! (`[[Title]]` and relative `.md` links), linked files (attachments, §5.5)
+//! and chord names; `chordpro` blocks contribute their lyrics and song
+//! details instead of their source (§5.7 rule 8).
 //! [`Index`] keeps that per note, keyed by its path below the vault root
 //! (`notes/…` or `.notesapp/trash/…`).
 //!
@@ -24,6 +26,7 @@ use comrak::{Arena, parse_document};
 use rusqlite::{Connection, OptionalExtension as _, params};
 
 use crate::attachments::percent_decode;
+use crate::chordpro::Song;
 use crate::dates::parse_rfc3339;
 use crate::front_matter;
 use crate::links::resolve_from;
@@ -32,7 +35,7 @@ use crate::tags::{Tag, extract_tags, parse_options};
 use crate::vault::title_of;
 
 /// Version of the tables below; a file with another version is rebuilt.
-pub const SCHEMA_VERSION: i64 = 2;
+pub const SCHEMA_VERSION: i64 = 3;
 
 const SCHEMA: &str = "
 CREATE TABLE notes (
@@ -76,6 +79,12 @@ CREATE TABLE note_files (
     path TEXT NOT NULL              -- linked file below the vault root, e.g. attachments/…
 );
 CREATE INDEX note_files_path ON note_files(path);
+CREATE TABLE note_chords (
+    note INTEGER NOT NULL REFERENCES notes(rowid) ON DELETE CASCADE,
+    chord TEXT NOT NULL,            -- normalized: chordpro::normalize_chord
+    PRIMARY KEY (note, chord)
+) WITHOUT ROWID;
+CREATE INDEX note_chords_chord ON note_chords(chord);
 ";
 
 /// Errors of the index. All of them can be cured by rebuilding it.
@@ -165,7 +174,8 @@ pub struct NoteFacts {
     /// Front matter `modified`, as written.
     pub modified: Option<String>,
     /// The visible text, without Markdown syntax, front matter or link
-    /// destinations; code is included.
+    /// destinations; code is included, `chordpro` blocks as their
+    /// [`Song::index_text`].
     pub body: String,
     /// Tags in order of first appearance (format.md §5.3).
     pub tags: Vec<Tag>,
@@ -173,6 +183,8 @@ pub struct NoteFacts {
     pub links: Vec<NoteLink>,
     /// Other linked files below the vault root (attachments, images).
     pub files: Vec<String>,
+    /// Chord names in `chordpro` blocks, each once ([`Song::chords`]).
+    pub chords: Vec<String>,
     /// The note has a task list item.
     pub has_task: bool,
     /// The note has an image.
@@ -198,6 +210,7 @@ pub fn analyze(path: &str, text: &str) -> NoteFacts {
         body: String::new(),
         links: Vec::new(),
         files: Vec::new(),
+        chords: Vec::new(),
         has_task: false,
         has_image: false,
         has_link: false,
@@ -216,6 +229,7 @@ pub fn analyze(path: &str, text: &str) -> NoteFacts {
         tags: extract_tags(text),
         links: walk.links,
         files: walk.files,
+        chords: walk.chords,
         has_task: walk.has_task,
         has_image: walk.has_image,
         has_link: walk.has_link,
@@ -228,6 +242,7 @@ struct Walk<'d> {
     body: String,
     links: Vec<NoteLink>,
     files: Vec<String>,
+    chords: Vec<String>,
     has_task: bool,
     has_image: bool,
     has_link: bool,
@@ -242,8 +257,19 @@ impl Walk<'_> {
             NodeValue::Code(code) => self.body.push_str(&code.literal),
             NodeValue::Math(math) => self.body.push_str(&math.literal),
             NodeValue::CodeBlock(block) => {
-                self.body.push_str(&block.literal);
-                self.body.push('\n');
+                let lang = block.info.split_whitespace().next().unwrap_or_default();
+                if lang.eq_ignore_ascii_case("chordpro") {
+                    let song = Song::parse(&block.literal);
+                    self.body.push_str(&song.index_text());
+                    for chord in song.chords() {
+                        if !self.chords.contains(&chord) {
+                            self.chords.push(chord);
+                        }
+                    }
+                } else {
+                    self.body.push_str(&block.literal);
+                    self.body.push('\n');
+                }
             }
             NodeValue::SoftBreak | NodeValue::LineBreak => self.body.push('\n'),
             NodeValue::Link(link) | NodeValue::Image(link) => {
@@ -450,6 +476,10 @@ impl Index {
             for f in &facts.files {
                 file.execute(params![rowid, f])?;
             }
+            let mut chord = tx.prepare("INSERT INTO note_chords (note, chord) VALUES (?1, ?2)")?;
+            for c in &facts.chords {
+                chord.execute(params![rowid, c])?;
+            }
         }
         tx.commit()?;
         Ok(())
@@ -634,6 +664,31 @@ mod tests {
         let plain = analyze("notes/b.md", "just text");
         assert_eq!((plain.id, plain.title.as_str()), (None, "just text"));
         assert!(!plain.has_task && !plain.has_image);
+    }
+
+    #[test]
+    fn chordpro_blocks_give_lyrics_and_chords() {
+        let text = "# Lieder\n\n```chordpro notation=german\n{title: Abendlied}\n\
+                    {key: G}\n# geheim\nDer [G]Mond ist aufge[D]gangen\n```\n\n\
+                    ```ChordPro\n[Em]Zwei[G]tes\n```\n\n```text\n[Am]bleibt\n```\n";
+        let facts = analyze("notes/a.md", text);
+        assert_eq!(
+            facts.body,
+            "Lieder\nAbendlied\nDer Mond ist aufgegangen\nZweites\n[Am]bleibt"
+        );
+        assert_eq!(facts.chords, ["G", "D", "Em"]);
+
+        let mut index = Index::in_memory().unwrap();
+        index
+            .put("notes/a.md", NoteState::Active, &stamp("h"), &facts)
+            .unwrap();
+        assert_eq!(matches(&index, "aufgegangen"), ["notes/a.md"]);
+        assert!(matches(&index, "geheim").is_empty(), "no ChordPro comments");
+        let chords: i64 = index
+            .db()
+            .query_row("SELECT count(*) FROM note_chords", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(chords, 3);
     }
 
     #[test]

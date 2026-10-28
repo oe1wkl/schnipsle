@@ -5,6 +5,7 @@
 //! This crate must build and test on every platform without a `WebView`.
 
 pub mod attachments;
+pub mod chordpro;
 pub mod conflicts;
 pub mod coordination;
 pub mod dates;

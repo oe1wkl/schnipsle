@@ -6,9 +6,9 @@
 //! phrase, always quoted, so FTS5 syntax in the query has no effect), tags
 //! become lookups in `note_tags` (which holds the ancestors, so `#a` finds
 //! `#a/b`), dates become ranges on `created_ms` or `modified_ms` (days begin
-//! at local midnight, from the UTC offset the app passes), `has:` and `is:`
-//! become flags, and `-`, `OR` and parentheses become `NOT`, `OR` and
-//! parentheses in SQL. The trash is searched only by a query that mentions
+//! at local midnight, from the UTC offset the app passes), `chord:` becomes
+//! a lookup in `note_chords`, `has:` and `is:` become flags, and `-`, `OR`
+//! and parentheses become `NOT`, `OR` and parentheses in SQL. The trash is searched only by a query that mentions
 //! `in:trash`.
 //!
 //! Results are ranked with `bm25` over the words and phrases that must match,
@@ -134,7 +134,12 @@ fn compile(query: &Query, clock: Clock, sql: &mut String, params: &mut Vec<Value
             Feature::Image => "n.has_image = 1",
             Feature::Task => "n.has_task = 1",
             Feature::Link => "n.has_link = 1",
+            Feature::Chord => "EXISTS (SELECT 1 FROM note_chords c WHERE c.note = n.rowid)",
         }),
+        Query::Chord(name) => {
+            sql.push_str("n.rowid IN (SELECT note FROM note_chords WHERE chord = ?)");
+            params.push(Value::Text(name.clone()));
+        }
         Query::Is(Flag::Pinned) => sql.push_str("n.pinned = 1"),
         Query::Is(Flag::Untagged) => {
             sql.push_str("NOT EXISTS (SELECT 1 FROM note_tags t WHERE t.note = n.rowid)");
@@ -435,6 +440,28 @@ mod tests {
         assert!(all.contains("Dipol auf dem Dach"), "{all}");
         assert!(index.search("#chor", 0).unwrap()[0].snippet.is_empty());
         assert!(index.search("", 0).unwrap().is_empty());
+    }
+
+    #[test]
+    fn song_sheets_by_lyrics_and_chords() {
+        let index = index(&[
+            (
+                "notes/lied.md",
+                "# Lied\n```chordpro\n{artist: Burns}\n[Am]Should [F]auld ac[C/E]quaintance\n```\n",
+                1,
+            ),
+            (
+                "notes/text.md",
+                "# Text\n[Am] is no chord outside a song",
+                2,
+            ),
+        ]);
+        assert_eq!(paths(&index, "has:chord"), ["lied.md"]);
+        assert_eq!(paths(&index, "chord:am"), ["lied.md"]);
+        assert_eq!(paths(&index, "chord:C/E"), ["lied.md"]);
+        assert!(paths(&index, "chord:A").is_empty(), "whole chords only");
+        assert_eq!(paths(&index, "-has:chord"), ["text.md"]);
+        assert_eq!(paths(&index, "acquaintance burns"), ["lied.md"]);
     }
 
     fn found(index: &Index, query: &str, now: i64, offset: i32) -> Vec<String> {
