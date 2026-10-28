@@ -23,7 +23,7 @@ A real Apple Notes export (macOS 27, 137 notes in 3 folders) showed what the Mar
 - **Apple Notes = Markdown export plus a metadata file.** `scripts/apple-notes-metadata.js` (JavaScript for Automation, reads Notes only) writes `apple-notes-metadata.json` into the export folder: `format` (1), `exported`, and per note `id`, `account`, `folder` (path from the top level), `smartFolders`, `name`, `created`, `modified` (ISO 8601, UTC), `locked`, `shared` and `snippet` (the first 200 characters of its text, white space collapsed). Notes shown by a smart folder are listed once, in their real folder.
   - Matching: an exported file belongs to the note whose `name` equals its first line, or its file name, after removing Markdown marks and the characters a file name drops (`:`, `/`), ignoring case and runs of white space; a file name ending in `…` matches the start of the name. If several notes match, the one whose snippet continues like the file's text wins.
   - A matched note gets `source_id` = the note's `id` and its `created`/`modified`. A file without a clear match keeps the export time, gets its path in the export as `source_id` and is listed in the report; so is a note the metadata names twice in one folder (the export holds only one of them).
-  - Placement and folder tags follow the folders of the export, which the user names when exporting; the metadata's folders only help matching.
+  - Placement and folder tags follow the note's real folder in Notes (`folder` in the metadata), not the names the user gave the export folders, so it does not matter how the export was split up or named; `notes/Apple Notes/Brot und Germgebäck/Pizzateig.md` with `#Brot-und-Germgebäck`. Smart folders give no tags (the tags they select are already in the text). A file without a match falls back to the folder it has in the export.
   - Without the metadata file the import still runs, as for unmatched files, and the report says what is missing.
 - **Desktop only in M4.** The Apple Notes export exists only on the Mac anyway, and the iPhone gets imported notes through sync.
 - **HTML** is converted by a built-in, permissively licensed Rust converter on every platform. Pandoc (ADR-0005, external program only) may follow later.
@@ -42,6 +42,8 @@ A real Apple Notes export (macOS 27, 137 notes in 3 folders) showed what the Mar
 | Apple Notes: Markdown export plus metadata file (chosen) | Dates and stable IDs back; attachments from the export | A second step when exporting; matching by title can fail |
 | Apple Notes: Markdown export only | One step | All notes dated by the export; re-import only by file path |
 | Apple Notes: script only (HTML text) | One step, IDs and dates | No attachment files; HTML to convert |
+| Apple Notes folders from the metadata (chosen) | The folders the user really keeps in Notes, however the export was made | Export folders named otherwise are ignored |
+| Apple Notes folders from the export | What the user sees in Finder | Depends on how each export was named; an export of a smart folder mixes real folders |
 
 ## Consequences
 
