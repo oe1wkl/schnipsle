@@ -8,7 +8,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 - Repository foundation: Cargo workspace (`schnipsle-core`, `-import`, `-export`, Tauri 2 shell), TypeScript UI, CI, dependency licence checks, macOS bootstrap script.
 - Architecture decision records ADR-0001 to ADR-0017.
-- Vault format specification, draft revision 0.8 (notes, front matter, tags, links, attachments, music in ABC, song sheets in ChordPro, history, trash, smart folders).
+- Vault format specification, draft revision 0.9 (notes, front matter, tags, links, attachments, music in ABC, song sheets in ChordPro, history, trash, smart folders).
 - Hashtag extraction in `schnipsle-core` following format.md §5.3, with the specification examples as tests.
 - Vault access in `schnipsle-core`: list notes (with iCloud placeholders), read, atomic write with conflict detection, create (spike, see docs/spikes/ios-vault.md).
 - `tauri-plugin-vault-access`: iOS folder picker with security-scoped bookmarks and iCloud download requests (spike).
@@ -35,6 +35,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - Performance test with 20,000 generated notes (N-03), run in CI in release mode: every search and tag-folder query must stay under 200 ms; on a Mac they take 2–48 ms.
 - The search understands the full query language (`docs/manual/query-language.md`): `created:` and `modified:` with years, months, days, `today`, `yesterday`, `7d`/`2w`/`3m`/`1y`, comparisons and ranges, in your local time zone; `has:image|task|link`, `is:pinned|untagged`, `in:trash` (trash hits are marked and can be restored from the Trash view) and `tag:x`. The index rebuilds itself once for the new fields.
 - Song sheets (` ```chordpro ` blocks, format.md §5.7) are searchable by their lyrics without the chord brackets and by title, subtitle, artist, composer and lyricist; ChordPro comments and tablature are left out. `has:chord` finds notes with chords, `chord:Am` notes with that chord. The index rebuilds itself once more.
+- Smart folders in the core (format.md 0.9 §9, ADR-0018): saved searches in `.notesapp/smart-folders.yaml` can be added, renamed, changed, removed, reordered and nested; keys and entries other tools wrote are kept, and a change made on another device at the same moment is not lost. Results follow each folder's sort order. The app does not show them yet.
 - Test UI: open a vault folder, edit notes with autosave, reload external changes, resolve conflicts (spike).
 
 ### Changed

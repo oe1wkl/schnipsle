@@ -1,0 +1,30 @@
+# Written by hand and by another tool; comments are not kept on save.
+format: 1
+color_scheme: dark          # unknown top-level key, kept
+folders:
+  - id: 01JA7R0B2C3D4E5F6G7H8J9K0L
+    name: Open radio tasks
+    query: '#radio has:task -#done'
+    parent: null
+    sort: modified-desc
+    icon: antenna           # unknown key, kept
+  - id: 01JA7R0B2C3D4E5F6G7H8J9K0M
+    name: QRP
+    query: '#radio/qrp'
+    parent: 01JA7R0B2C3D4E5F6G7H8J9K0L
+    sort: title-asc
+  - id: 01JA7R0B2C3D4E5F6G7H8J9K0N
+    name: Lost parent
+    query: 'created:2026'
+    parent: 01JA7R0B2C3D4E5F6G7H8J9K0Z   # no such folder: shown at the top level
+    sort: created-desc
+  - id: 01JA7R0B2C3D4E5F6G7H8J9K0P
+    name: Songs
+    query: 'has:chord'
+    sort: by-mood           # unknown value: modified-desc, kept
+  - id: 01JA7R0B2C3D4E5F6G7H8J9K0Q
+    name: No query, not shown, kept
+  - id: 01JA7R0B2C3D4E5F6G7H8J9K0L
+    name: Repeated id, not shown, kept
+    query: x
+  - just a string, kept

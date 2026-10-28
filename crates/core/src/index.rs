@@ -32,10 +32,10 @@ use crate::front_matter;
 use crate::links::resolve_from;
 use crate::stamp::is_ulid;
 use crate::tags::{Tag, extract_tags, parse_options};
-use crate::vault::title_of;
+use crate::vault::{title_of, title_sort_key};
 
 /// Version of the tables below; a file with another version is rebuilt.
-pub const SCHEMA_VERSION: i64 = 3;
+pub const SCHEMA_VERSION: i64 = 4;
 
 const SCHEMA: &str = "
 CREATE TABLE notes (
@@ -44,6 +44,7 @@ CREATE TABLE notes (
     state TEXT NOT NULL,            -- 'active' or 'trash'
     id TEXT,                        -- front matter id (format.md §4), upper case
     title TEXT NOT NULL,
+    title_key TEXT NOT NULL,        -- the title without case and accents, for sorting
     created TEXT,
     modified TEXT,
     mtime_ms INTEGER NOT NULL,      -- file modification time, for the sync
@@ -426,14 +427,16 @@ impl Index {
         let time_of =
             |field: &Option<String>| field.as_deref().and_then(parse_rfc3339).unwrap_or(mtime);
         tx.execute(
-            "INSERT INTO notes (path, state, id, title, created, modified, mtime_ms, size, hash,
-                                created_ms, modified_ms, pinned, has_task, has_image, has_link)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
+            "INSERT INTO notes (path, state, id, title, title_key, created, modified, mtime_ms,
+                                size, hash, created_ms, modified_ms, pinned, has_task,
+                                has_image, has_link)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
             params![
                 path,
                 state.as_str(),
                 facts.id,
                 facts.title,
+                title_sort_key(&facts.title),
                 facts.created,
                 facts.modified,
                 i64::try_from(stamp.mtime_ms).unwrap_or(i64::MAX),

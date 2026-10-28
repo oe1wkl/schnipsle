@@ -14,6 +14,7 @@
 //! Results are ranked with `bm25` over the words and phrases that must match,
 //! the title counting five times the body, and carry a snippet with the hits
 //! marked. A query with only tags or exclusions sorts by modification time.
+//! [`Index::search_sorted`] orders by a smart folder's `sort` instead.
 
 use rusqlite::params_from_iter;
 use rusqlite::types::Value;
@@ -22,6 +23,7 @@ use serde::Serialize;
 use crate::index::{Index, Result};
 use crate::layout::NOTES_DIR;
 use crate::query::{DateBound, DateField, Feature, Flag, Query};
+use crate::smart_folders::FolderSort;
 use crate::stamp::now_ms;
 
 /// Most results returned.
@@ -213,6 +215,31 @@ impl Index {
         now_ms: i64,
         offset_minutes: i32,
     ) -> Result<Vec<SearchHit>> {
+        self.run(query, None, now_ms, offset_minutes)
+    }
+
+    /// The notes matching `query` in the order `sort` (a smart folder,
+    /// format.md §9), at most [`MAX_HITS`].
+    ///
+    /// # Errors
+    /// SQLite errors.
+    pub fn search_sorted(
+        &self,
+        query: &str,
+        sort: FolderSort,
+        offset_minutes: i32,
+    ) -> Result<Vec<SearchHit>> {
+        let now = i64::try_from(now_ms()).unwrap_or(i64::MAX);
+        self.run(query, Some(sort), now, offset_minutes)
+    }
+
+    fn run(
+        &self,
+        query: &str,
+        sort: Option<FolderSort>,
+        now_ms: i64,
+        offset_minutes: i32,
+    ) -> Result<Vec<SearchHit>> {
         let Some(query) = Query::parse(query) else {
             return Ok(Vec::new());
         };
@@ -236,6 +263,13 @@ impl Index {
             .filter_map(fts_term)
             .collect();
         let rank_query = (!rank_terms.is_empty()).then(|| rank_terms.join(" OR "));
+        let order = match sort {
+            None => None,
+            Some(FolderSort::ModifiedDesc) => Some("n.modified_ms DESC"),
+            Some(FolderSort::ModifiedAsc) => Some("n.modified_ms ASC"),
+            Some(FolderSort::CreatedDesc) => Some("n.created_ms DESC"),
+            Some(FolderSort::TitleAsc) => Some("n.title_key, n.title"),
+        };
         // The ranking is computed once (MATERIALIZED), not per note; snippets
         // only for the hits returned, in a second query that goes through the
         // matches once: `+rowid` keeps the rowid list away from FTS5, which
@@ -249,13 +283,15 @@ impl Index {
                  SELECT n.rowid, n.path, n.title, n.mtime_ms, n.state FROM notes n
                  LEFT JOIN r ON r.rowid = n.rowid
                  WHERE {scope}{condition}
-                 ORDER BY r.rank IS NULL, r.rank, n.mtime_ms DESC LIMIT {MAX_HITS}"
+                 ORDER BY {}, n.path LIMIT {MAX_HITS}",
+                order.unwrap_or("r.rank IS NULL, r.rank, n.mtime_ms DESC")
             )
         } else {
             format!(
                 "SELECT n.rowid, n.path, n.title, n.mtime_ms, n.state FROM notes n
                  WHERE {scope}{condition}
-                 ORDER BY n.mtime_ms DESC LIMIT {MAX_HITS}"
+                 ORDER BY {}, n.path LIMIT {MAX_HITS}",
+                order.unwrap_or("n.mtime_ms DESC")
             )
         };
         let mut statement = self.db().prepare(&sql)?;
@@ -462,6 +498,51 @@ mod tests {
         assert!(paths(&index, "chord:A").is_empty(), "whole chords only");
         assert_eq!(paths(&index, "-has:chord"), ["text.md"]);
         assert_eq!(paths(&index, "acquaintance burns"), ["lied.md"]);
+    }
+
+    #[test]
+    fn smart_folder_order() {
+        let index = index(&[
+            (
+                "notes/b.md",
+                "---\ncreated: 2026-01-02T00:00:00Z\n---\n# Äpfel #obst",
+                3,
+            ),
+            (
+                "notes/a.md",
+                "---\ncreated: 2026-01-03T00:00:00Z\n---\n# birnen #obst",
+                1,
+            ),
+            (
+                "notes/c.md",
+                "---\ncreated: 2026-01-01T00:00:00Z\n---\n# Apfel #obst",
+                2,
+            ),
+        ]);
+        let order = |sort| -> Vec<String> {
+            index
+                .search_sorted("#obst", sort, 0)
+                .unwrap()
+                .into_iter()
+                .map(|h| h.title)
+                .collect()
+        };
+        assert_eq!(
+            order(FolderSort::ModifiedDesc),
+            ["Äpfel #obst", "Apfel #obst", "birnen #obst"]
+        );
+        assert_eq!(
+            order(FolderSort::ModifiedAsc),
+            ["birnen #obst", "Apfel #obst", "Äpfel #obst"]
+        );
+        assert_eq!(
+            order(FolderSort::CreatedDesc),
+            ["birnen #obst", "Äpfel #obst", "Apfel #obst"]
+        );
+        assert_eq!(
+            order(FolderSort::TitleAsc),
+            ["Apfel #obst", "Äpfel #obst", "birnen #obst"]
+        );
     }
 
     fn found(index: &Index, query: &str, now: i64, offset: i32) -> Vec<String> {

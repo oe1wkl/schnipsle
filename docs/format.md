@@ -1,9 +1,9 @@
 # Vault File Format Specification
 
 - Format version: **1** (draft)
-- Spec revision: 0.8, 2026-10-21 (§7 retention settings; 0.7: §5.5 relative links are kept working when a note moves; 0.6: §8 `original_path` is relative to the vault root; 0.5: §8 trash names for notes without `id` and for collisions; 0.4: §5.3 refined by the first implementation, §5.6 music notation, §5.7 lyrics with chords)
+- Spec revision: 0.9, 2026-10-28 (§9 reading and writing smart folders; 0.8: §7 retention settings; 0.7: §5.5 relative links are kept working when a note moves; 0.6: §8 `original_path` is relative to the vault root; 0.5: §8 trash names for notes without `id` and for collisions; 0.4: §5.3 refined by the first implementation, §5.6 music notation, §5.7 lyrics with chords)
 - Status: Draft — becomes normative when M1 ships
-- Related: ADR-0004, ADR-0008, ADR-0009, ADR-0011, ADR-0013, ADR-0014, ADR-0016, ADR-0017
+- Related: ADR-0004, ADR-0008, ADR-0009, ADR-0011, ADR-0013, ADR-0014, ADR-0016, ADR-0017, ADR-0018
 
 The key words MUST, MUST NOT, SHOULD, SHOULD NOT and MAY are used as described in RFC 2119.
 
@@ -250,7 +250,15 @@ folders:
     sort: modified-desc       # modified-desc | modified-asc | created-desc | title-asc
 ```
 
-The query syntax is defined in the user manual: [Query language](manual/query-language.md). Unknown keys MUST be preserved.
+The query syntax is defined in the user manual: [Query language](manual/query-language.md).
+
+1. `id` (a ULID for new folders), `name` and `query` are REQUIRED, non-empty strings. A missing `parent` means `null`; a missing `sort` means `modified-desc`.
+2. The order of `folders` is the display order among folders with the same parent.
+3. A `parent` that names no folder, or that leads back to the folder itself through other parents, MUST be shown as the top level. A `sort` value a reader does not know MUST be shown as `modified-desc`. Both values MUST be kept as written until the user changes them.
+4. Entries without the required keys, entries that are not maps, and entries repeating an earlier `id` MUST NOT be shown, and MUST be kept unchanged in their place.
+5. Unknown keys, at the top level and in entries, MUST be preserved. Comments and formatting MAY be lost when a writer rewrites the file.
+6. A file with `format` greater than the reader supports MUST be shown but MUST NOT be changed. A file that is not YAML, or whose `folders` is not a list, MUST NOT be overwritten.
+7. A writer changes the file by reading it, applying the user's change and writing the result under §10. If the file changed since it was read, the writer MUST apply the change again to the new content instead of replacing it (ADR-0018).
 
 ## 10. Writing rules
 

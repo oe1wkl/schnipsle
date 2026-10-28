@@ -34,6 +34,9 @@ pub const NOTES_DIR: &str = "notes";
 /// User settings shared across devices, relative to the vault root (format.md §1).
 pub const SETTINGS_FILE: &str = ".notesapp/settings.yaml";
 
+/// Saved searches (§9), relative to the vault root.
+pub const SMART_FOLDERS_FILE: &str = ".notesapp/smart-folders.yaml";
+
 /// The folder of attachments, relative to the vault root (format.md §1, §6).
 pub const ATTACHMENTS_DIR: &str = "attachments";
 

@@ -1,0 +1,33 @@
+format: 1
+color_scheme: dark
+folders:
+  - id: 01JA7R0B2C3D4E5F6G7H8J9K0L
+    name: Radio tasks
+    query: "#radio has:task -#done"
+    parent: null
+    sort: modified-desc
+    icon: antenna
+  - id: 01JA7R0B2C3D4E5F6G7H8J9K0M
+    name: QRP
+    query: "#radio/qrp"
+    parent: 01JA7R0B2C3D4E5F6G7H8J9K0L
+    sort: title-asc
+  - id: 01JA7R0B2C3D4E5F6G7H8J9K0N
+    name: Lost parent
+    query: "created:2026"
+    parent: 01JA7R0B2C3D4E5F6G7H8J9K0Z
+    sort: created-desc
+  - id: 01JA7R0B2C3D4E5F6G7H8J9K0P
+    name: Songs
+    query: "has:chord"
+    sort: by-mood
+  - id: 01JA7R0B2C3D4E5F6G7H8J9K0Q
+    name: "No query, not shown, kept"
+  - id: 01JA7R0B2C3D4E5F6G7H8J9K0L
+    name: "Repeated id, not shown, kept"
+    query: x
+  - "just a string, kept"
+  - id: 01JA7R0B2C3D4E5F6G7H8J9K0A
+    name: Neu
+    query: "\"40 m\" -#done"
+    sort: modified-asc

@@ -31,3 +31,4 @@ This folder records every significant architectural decision of the project, one
 | [0015](0015-apple-file-coordination-objc2.md) | Apple file coordination in a Rust crate using objc2 | Accepted | 2026-10-15 |
 | [0016](0016-rewrite-relative-links-when-notes-move.md) | Rewrite relative links when a note moves to another folder | Accepted | 2026-10-17 |
 | [0017](0017-history-retention-settings.md) | History retention settings in `settings.yaml` | Accepted | 2026-10-21 |
+| [0018](0018-smart-folders-file.md) | Reading and writing `smart-folders.yaml` | Accepted | 2026-10-28 |
