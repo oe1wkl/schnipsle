@@ -1,7 +1,7 @@
 # Roadmap and status
 
 - Updated: 2026-10-28
-- Current milestone: **M3 – Smart folders** (M2 complete once its last PR is merged)
+- Current milestone: **M4 – Import**
 
 Each milestone ends in a usable build. Scope can move between milestones; the order should not.
 
@@ -10,7 +10,7 @@ Each milestone ends in a usable build. Scope can move between milestones; the or
 | M0 – Foundations | Decisions (ADR-0001…0014), format spec, repository and CI, iOS feasibility spike | Done 2026-10-14 |
 | M1 – Core editor | Open a vault, CodeMirror editor with live preview, images, autosave, safe writes, change detection | Done 2026-10-21 |
 | M2 – Index and organization | SQLite/FTS5 index, tag folders with combination subfolders, full-text search | Done 2026-10-27 |
-| M3 – Smart folders | Query language, saved searches | |
+| M3 – Smart folders | Query language, saved searches | Done 2026-10-28 |
 | M4 – Import | Apple Notes (macOS 26 Markdown export), Simplenote, HTML, Markdown folders | |
 | M5 – Export | HTML, PDF, ODT built in; Pandoc formats on desktop | |
 | M6 – Release 1.0 | Manual, packaging and signing, performance and data-safety tests | |
@@ -30,6 +30,34 @@ Each milestone ends in a usable build. Scope can move between milestones; the or
 - Format spec at draft revision 0.8; ADR-0016 and ADR-0017 added. Tested on macOS and on the iPhone (iOS 27).
 - Moved to later milestones: loading the editor on demand (bundle ~530 kB), inline formatting inside table cells, a settings view.
 
+## M4 backlog
+
+Goal: bring notes over from Apple Notes and Simplenote (F-03, F-04), plus HTML files and Markdown folders (F-05), without losing text and repeatably. Decisions: ADR-0012, ADR-0019 (notes in `notes/<Source>/` with the source's folders, folders as `#<Folder>` tags, re-import updates only notes unchanged since, undo trashes only unedited notes, desktop only, built-in HTML converter). Order: spec and fixtures, pipeline, Apple Notes, import UI, Simplenote, HTML, Markdown folders, undo.
+
+- [ ] Spec and test data: format.md section for `.notesapp/import-log/` (one file per run: source, time, and per note `source_id`, path, hash written, the snapshot it replaced), the use of `source`/`source_id` (§4), and the folder-to-tag rule; revision 0.10; fixtures in `tests/fixtures/import/<source>/`. anonymized samples of your exports (in `~/Schnipsle-Import`: Apple Notes Markdown export of 3 folders plus `apple-notes-metadata.json`, Simplenote zip) go into the fixtures; the full sets are only used for dry runs
+- [ ] Pipeline in `schnipsle-import` (ADR-0012): `Importer` trait and `ImportedNote`; placement and names (§3); Markdown clean-up; attachments hashed into `attachments/` with links rewritten (§6); folder tags and source tags on a final line; `id`, `created`, `modified` from the source, plus `source`/`source_id`; duplicate and re-import check against the logs; a dry-run report (new, updated, skipped with reason, problems) before anything is written; atomic, coordinated writes; history snapshot before an update; one index update for the run; the import log. Golden-file tests per step
+- [x] Apple Notes metadata script: `scripts/apple-notes-metadata.js` writes `apple-notes-metadata.json` (id, folder, smart folders, dates, snippet) into the export folder (ADR-0019); tested on your Notes (679 notes, 17 s); a prototype matched 132 of 137 exported files without doubt
+- [ ] Apple Notes adapter: the Markdown export as it really is (title in the first line, with or without `#`; line breaks as two trailing spaces or `\`; stray U+2028; `Attachments/<UUID>.<ext>` linked as images, PDFs too, with recognized text as alt text; tables; checklists) matched to `apple-notes-metadata.json` (ADR-0019) for `source_id` and dates; the note's real Notes folder (from the metadata) gives placement and `#<Folder>`, the export folder only for unmatched files; unmatched files, notes the export dropped (same title in one folder) and missing metadata are listed in the report
+- [ ] Import UI (desktop): File › Import… with the source, a file or folder picker (for Apple Notes with the two export steps explained, and the metadata script run on request), the dry-run report, then Import with progress and a result summary listing new, updated and skipped notes, each one openable
+- [ ] Simplenote adapter: `source/notes.json` (also inside its zip, whose other file names are not UTF-8); title from the first line; CRLF to LF; tags as hashtags on a final line unless already in the text; `id`, `creationDate`, `lastModified`, `pinned` kept; trashed notes go to the trash (§8)
+- [ ] HTML adapter: a built-in, permissively licensed converter (licence checked by cargo-deny); single files and folders; embedded (`data:`) and linked local images into `attachments/`; the title from `<title>` or the first heading
+- [ ] Markdown folders adapter: `.md` files with their folders, front matter of other tools kept (§4), relative links to images and files moved into `attachments/` and rewritten; ChordPro files (`.cho`, `.crd`, `.chopro`, `.chordpro`) as notes with one `chordpro` block and their `title` (§5.7 rule 9)
+- [ ] Undo import (ADR-0019): from the log, unchanged notes go to the trash, edited ones are kept and listed, replaced ones get their previous version back from the history; an Imports list with Undo per run
+- [ ] Check with your full exports: dry run, import, re-import of a newer export, undo; then a look on the iPhone after sync
+
+Not in M4: import on the iPhone; Pandoc for HTML; Evernote, Google Keep, Obsidian and Bear (F-13).
+
+## M3 results
+
+- Query language complete (`docs/manual/query-language.md`): dates absolute and relative in local time, `has:`, `is:`, `in:trash`, `tag:`, `chord:`; one parser for the search field and smart folders.
+- ChordPro song sheets searchable by lyrics, title and people, and by chord (`has:chord`, `chord:Am`); the parser is ready for rendering in the music milestone.
+- Smart folders (F-10; format.md 0.9 §9, ADR-0018): saved, nested searches in `.notesapp/smart-folders.yaml`, edited as operations so changes from two devices both survive; four sort orders.
+- Pinning: `pinned` in the front matter without touching `modified`; pinned notes first in every list.
+- UI: smart folder tree above Tags (in the Tags view on the phone), "Save" for a search, a form to edit and delete, reorder and nest by drag and drop or keyboard. Tested on macOS and on the iPhone (iOS 27).
+- Index schema 4 (rebuilds itself once).
+- Known: "Recently changed" in the note list uses file times, so unpinning moves a note up there; smart folders sorted by `modified` use the front matter and are not affected.
+- Moved on: ChordPro rendering and transposition (music milestone), renaming and merging tags (F-11), a setting for the combination depth, loading the editor on demand.
+
 ## M3 backlog
 
 Goal: saved searches (F-10) on a full query language. Order: query language, ChordPro indexing, smart folders in the core, pinning, UI.
@@ -38,7 +66,7 @@ Goal: saved searches (F-10) on a full query language. Order: query language, Cho
 - [x] ChordPro indexing (format.md §5.7 rule 8; `chordpro.rs`, golden files in `tests/fixtures/format/5.7-index/`): lyrics without chord brackets and the `title`, `subtitle`, `artist`, `composer`, `lyricist` directives in the full text, chord names in `note_chords` for `has:chord` and `chord:Am`; index schema 3; the parser is meant to carry rendering and transposition in the music milestone
 - [x] Smart folders in `schnipsle-core` (format.md 0.9 §9, ADR-0018; `smart_folders.rs`, golden files in `tests/fixtures/format/9-smart-folders/`): read and write `.notesapp/smart-folders.yaml` atomically and coordinated, an edit applied again if the file changed meanwhile; unknown keys, values and entries kept (`yaml-rust2`); add, change, remove (subfolders move up), move and nest with cycle check; `Index::search_sorted` for the four `sort` orders (index schema 4)
 - [x] Pinning (format.md §4): `Vault::set_pinned` changes only the `pinned` key (unpinning removes it) and keeps `modified`, with the usual conflict check; pinned notes first in the note list, tag folders, search and smart folders (`pinned` on `NoteEntry` and `SearchHit`); a Pin button next to History and a 📌 in the lists
-- [x] UI (`ui/src/smart-folders.ts`, `src-tauri/src/smart_folders.rs`): "Smart folders" above Tags, nested; "Save" next to the search field; name, query, parent and order in a form, delete with confirmation; reorder and nest by dragging the ≡ handle (pointer events, so also by touch) or with the arrow keys on it; on the phone inside the Tags view. A change to `smart-folders.yaml` from elsewhere refreshes the tree (`VaultChanges.smartFolders`). Drag by touch still to be tried on the iPhone
+- [x] UI (`ui/src/smart-folders.ts`, `src-tauri/src/smart_folders.rs`): "Smart folders" above Tags, nested; "Save" next to the search field; name, query, parent and order in a form, delete with confirmation; reorder and nest by dragging the ≡ handle (pointer events, so also by touch) or with the arrow keys on it; on the phone inside the Tags view. A change to `smart-folders.yaml` from elsewhere refreshes the tree (`VaultChanges.smartFolders`).
 
 ## M2 results
 

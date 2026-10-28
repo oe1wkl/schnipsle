@@ -116,7 +116,7 @@ The UI never touches files. Platform specifics (folder access, file coordination
 
 ## 6. Import and export
 
-Importers are adapters producing one intermediate form; a shared pipeline cleans up, hashes attachments, maps tags, detects duplicates, shows a dry-run report, writes atomically and keeps an undo log (ADR-0012). Apple Notes uses the built-in Markdown export of macOS 26; folders become tags with a configurable prefix (`#notes/<Folder>`).
+Importers are adapters producing one intermediate form; a shared pipeline cleans up, hashes attachments, maps tags, detects duplicates, shows a dry-run report, writes atomically and keeps an undo log (ADR-0012). Apple Notes uses the built-in Markdown export of macOS 26 plus a metadata file (IDs, dates) written by a script (ADR-0019). Imported notes go to `notes/<Source>/` with the source's folders, which also become tags (`#<Folder>`); a re-import updates only notes unchanged since, and undo trashes only unedited ones (ADR-0019). Import runs on the desktop.
 
 Export: one `Exporter` interface; built-in HTML (with CSS theme), PDF (via the system WebView) and ODT (own writer) everywhere; Pandoc adds DOCX/EPUB on desktop when installed (ADR-0010).
 
