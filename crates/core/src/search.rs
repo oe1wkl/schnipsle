@@ -59,6 +59,8 @@ pub struct SearchHit {
     /// In the trash: `path` is then below the vault root
     /// (`.notesapp/trash/…`) and the note must be restored to be opened.
     pub in_trash: bool,
+    /// Front matter `pinned: true` (format.md §4): listed first.
+    pub pinned: bool,
 }
 
 /// What dates mean: now, and local time minus UTC in minutes.
@@ -195,8 +197,8 @@ fn snippet_parts(snippet: &str) -> Vec<SnippetPart> {
 }
 
 impl Index {
-    /// The notes matching `query` (see [`Query::parse`]), best first, at most
-    /// [`MAX_HITS`]; none for an empty query.
+    /// The notes matching `query` (see [`Query::parse`]), pinned ones first,
+    /// then best first, at most [`MAX_HITS`]; none for an empty query.
     ///
     /// # Errors
     /// SQLite errors.
@@ -218,8 +220,8 @@ impl Index {
         self.run(query, None, now_ms, offset_minutes)
     }
 
-    /// The notes matching `query` in the order `sort` (a smart folder,
-    /// format.md §9), at most [`MAX_HITS`].
+    /// The notes matching `query`, pinned ones first, then in the order
+    /// `sort` (a smart folder, format.md §9), at most [`MAX_HITS`].
     ///
     /// # Errors
     /// SQLite errors.
@@ -280,17 +282,17 @@ impl Index {
                 "WITH r AS MATERIALIZED (
                      SELECT rowid, bm25(notes_fts, 5.0, 1.0) AS rank
                      FROM notes_fts WHERE notes_fts MATCH ?)
-                 SELECT n.rowid, n.path, n.title, n.mtime_ms, n.state FROM notes n
+                 SELECT n.rowid, n.path, n.title, n.mtime_ms, n.state, n.pinned FROM notes n
                  LEFT JOIN r ON r.rowid = n.rowid
                  WHERE {scope}{condition}
-                 ORDER BY {}, n.path LIMIT {MAX_HITS}",
+                 ORDER BY n.pinned DESC, {}, n.path LIMIT {MAX_HITS}",
                 order.unwrap_or("r.rank IS NULL, r.rank, n.mtime_ms DESC")
             )
         } else {
             format!(
-                "SELECT n.rowid, n.path, n.title, n.mtime_ms, n.state FROM notes n
+                "SELECT n.rowid, n.path, n.title, n.mtime_ms, n.state, n.pinned FROM notes n
                  WHERE {scope}{condition}
-                 ORDER BY {}, n.path LIMIT {MAX_HITS}",
+                 ORDER BY n.pinned DESC, {}, n.path LIMIT {MAX_HITS}",
                 order.unwrap_or("n.mtime_ms DESC")
             )
         };
@@ -307,6 +309,7 @@ impl Index {
                     modified_ms: u64::try_from(row.get::<_, i64>(3)?).unwrap_or(0),
                     snippet: Vec::new(),
                     in_trash,
+                    pinned: row.get(5)?,
                 },
             ))
         })?;
@@ -542,6 +545,48 @@ mod tests {
         assert_eq!(
             order(FolderSort::TitleAsc),
             ["Apfel #obst", "Äpfel #obst", "birnen #obst"]
+        );
+    }
+
+    #[test]
+    fn pinned_notes_come_first() {
+        let index = index(&[
+            ("notes/a.md", "# Apfel\nobst obst obst", 3),
+            ("notes/b.md", "---\npinned: true\n---\n# Birne\nobst", 1),
+            ("notes/c.md", "# Clementine\nobst", 2),
+        ]);
+        let titles = |hits: Vec<SearchHit>| -> Vec<(String, bool)> {
+            hits.into_iter().map(|h| (h.title, h.pinned)).collect()
+        };
+        let expected = |rest: [&str; 2]| {
+            let mut out = vec![("Birne".to_owned(), true)];
+            out.extend(rest.map(|t| (t.to_owned(), false)));
+            out
+        };
+        // Best match first among the others, by rank and by modification.
+        assert_eq!(
+            titles(index.search_at("obst", 10, 0).unwrap()),
+            expected(["Apfel", "Clementine"])
+        );
+        assert_eq!(
+            titles(index.search_at("-xyz", 10, 0).unwrap()),
+            expected(["Apfel", "Clementine"])
+        );
+        assert_eq!(
+            titles(
+                index
+                    .search_sorted("obst", FolderSort::TitleAsc, 0)
+                    .unwrap()
+            ),
+            expected(["Apfel", "Clementine"])
+        );
+        assert_eq!(
+            titles(
+                index
+                    .search_sorted("obst", FolderSort::ModifiedAsc, 0)
+                    .unwrap()
+            ),
+            expected(["Clementine", "Apfel"])
         );
     }
 

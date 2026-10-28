@@ -65,4 +65,4 @@ Days begin at midnight in your time zone. For the relative forms, `>` and `<` co
 
 ## Results
 
-Words and phrases rank the results: notes where they occur in the title come first, then by how well the text matches. A query without words (only tags, dates or flags) lists the most recently changed notes first. At most 200 notes are shown.
+Pinned notes come first, then the rest. Words and phrases rank the results: notes where they occur in the title come first, then by how well the text matches. A query without words (only tags, dates or flags) lists the most recently changed notes first. At most 200 notes are shown.

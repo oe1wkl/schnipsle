@@ -142,12 +142,12 @@ impl Index {
     /// SQLite errors.
     pub fn notes_in(&self, keys: &[String], order: SortOrder) -> Result<Vec<NoteEntry>> {
         let sql = if keys.is_empty() {
-            "SELECT n.path, n.title, n.mtime_ms FROM notes n WHERE n.state = 'active'
+            "SELECT n.path, n.title, n.mtime_ms, n.pinned FROM notes n WHERE n.state = 'active'
              AND NOT EXISTS (SELECT 1 FROM note_tags t WHERE t.note = n.rowid)"
                 .to_owned()
         } else {
             format!(
-                "WITH {} SELECT n.path, n.title, n.mtime_ms FROM m JOIN notes n ON n.rowid = m.note",
+                "WITH {} SELECT n.path, n.title, n.mtime_ms, n.pinned FROM m JOIN notes n ON n.rowid = m.note",
                 matching(keys)
             )
         };
@@ -160,6 +160,7 @@ impl Index {
                 title: row.get(1)?,
                 modified_ms: u64::try_from(row.get::<_, i64>(2)?).unwrap_or(0),
                 available: true,
+                pinned: row.get(3)?,
             })
         })?;
         let mut notes: Vec<NoteEntry> = rows.collect::<rusqlite::Result<_>>()?;
@@ -385,5 +386,31 @@ mod tests {
         );
         let untagged = index.notes_in(&[], SortOrder::Title).unwrap();
         assert!(untagged.is_empty());
+    }
+
+    #[test]
+    fn pinned_notes_come_first_in_a_folder() {
+        let index = index(&[
+            ("notes/a.md", "# Apfel #obst"),
+            ("notes/b.md", "---\npinned: true\n---\n# Birne #obst"),
+            ("notes/c.md", "# Clementine"),
+            ("notes/d.md", "---\npinned: true\n---\n# Dattel"),
+        ]);
+        let titles = |keys: &[String]| -> Vec<(String, bool)> {
+            index
+                .notes_in(keys, SortOrder::Title)
+                .unwrap()
+                .into_iter()
+                .map(|n| (n.title, n.pinned))
+                .collect()
+        };
+        assert_eq!(
+            titles(&keys(&["obst"])),
+            [("Birne #obst".into(), true), ("Apfel #obst".into(), false)]
+        );
+        assert_eq!(
+            titles(&[]),
+            [("Dattel".into(), true), ("Clementine".into(), false)]
+        );
     }
 }

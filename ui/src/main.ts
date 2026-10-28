@@ -6,7 +6,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
 import { asError, setStatus, ui } from "./dom";
-import { createEditor, type EditorMode, frontMatterLength } from "./editor";
+import { createEditor, type EditorMode, frontMatterLength, isPinned } from "./editor";
 import { createImageCache, fileName } from "./images";
 import { createSidebar, type ListFilter } from "./sidebar";
 import type {
@@ -59,6 +59,7 @@ const editor = createEditor(ui.editorHost, {
     setStatus("Editing…");
     scheduleSave();
     scheduleSnapshot();
+    showPinned();
     void showTags();
   },
   onBlur: () => void flushSave(),
@@ -230,6 +231,7 @@ async function refreshList(): Promise<void> {
       const button = document.createElement("button");
       button.type = "button";
       button.textContent = note.title;
+      if (note.pinned) button.classList.add("pinned");
       if (!note.available) {
         button.classList.add("cloud");
         button.title = "Stored in iCloud only – tap to download";
@@ -418,6 +420,8 @@ function closeEditor(): void {
   editor.load("");
   editor.setEnabled(false);
   ui.deleteNote.disabled = true;
+  ui.pin.disabled = true;
+  showPinned();
   ui.addImage.disabled = true;
   hideConflict();
   showSyncConflicts([]);
@@ -479,7 +483,9 @@ function load(content: NoteContent): void {
   editor.load(content.text);
   editor.setEnabled(readOnly === null);
   ui.deleteNote.disabled = readOnly !== null;
+  ui.pin.disabled = readOnly !== null;
   ui.addImage.disabled = readOnly !== null;
+  showPinned();
   hideConflict();
   showSyncConflicts(content.conflicts);
   setStatus(
@@ -510,6 +516,42 @@ function applySaved(
   const newBlock = saved.text.slice(0, frontMatterLength(saved.text));
   if (saved.text.slice(newBlock.length) !== sent.slice(oldBlock.length)) return;
   editor.replaceFrontMatter(oldBlock, newBlock);
+  showPinned();
+}
+
+/** The Pin button shows whether the open note is pinned, as its text says. */
+function showPinned(): void {
+  const pinned = current !== null && isPinned(editor.text());
+  ui.pin.setAttribute("aria-pressed", String(pinned));
+  ui.pin.textContent = pinned ? "Unpin" : "Pin";
+}
+
+/**
+ * Pins or unpins the open note after saving it. The core changes only the
+ * front matter, which the editor takes in like after a save.
+ */
+async function togglePin(): Promise<void> {
+  const note = current;
+  if (!note || readOnly !== null || conflictHash !== undefined || isDirty()) return;
+  const sent = note.savedText;
+  const pinned = !isPinned(sent);
+  try {
+    const saved = await invoke<SavedNote>("set_pinned", {
+      path: note.path,
+      pinned,
+      expectedHash: note.hash,
+    });
+    applySaved(note, sent, saved);
+    setStatus(pinned ? "Pinned – listed first." : "Unpinned.");
+    void refreshList();
+  } catch (e) {
+    const err = asError(e);
+    if (err.kind === "conflict") {
+      showConflict(err.currentHash);
+    } else {
+      setStatus(`Not ${pinned ? "pinned" : "unpinned"}: ${err.message}`);
+    }
+  }
 }
 
 async function save(): Promise<void> {
@@ -761,6 +803,11 @@ ui.sort.value = sortOrder;
 
 ui.showTrash.addEventListener("click", () => {
   setListMode(listMode === "trash" ? "notes" : "trash");
+});
+
+ui.pin.addEventListener("click", () => {
+  window.clearTimeout(saveTimer);
+  saving = saving.then(save).then(togglePin);
 });
 
 ui.deleteNote.addEventListener("click", () => {

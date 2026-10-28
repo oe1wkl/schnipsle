@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
-//! The front matter keys the app owns: `id`, `created`, `modified` (format.md §4).
+//! The front matter keys the app owns: `id`, `created`, `modified` and
+//! `pinned` (format.md §4).
 //!
 //! The block is read and edited line by line instead of being parsed and
 //! re-serialized, so unknown keys, comments, quoting and order survive exactly
@@ -113,6 +114,50 @@ pub fn set(text: &str, key: &str, value: &str) -> String {
         *line = format!("{key}: {value}");
     } else {
         lines.insert(0, format!("{key}: {value}"));
+    }
+    join(parts.bom, &lines, nl, parts.body)
+}
+
+/// `true` if the front matter says `pinned: true` (format.md §4).
+#[must_use]
+pub fn is_pinned(text: &str) -> bool {
+    get(text, "pinned").is_some_and(|v| v.eq_ignore_ascii_case("true"))
+}
+
+/// Returns `text` pinned or not (format.md §4): pinning sets `pinned: true`,
+/// replacing an existing `pinned` line or adding one at the end of the block
+/// (created if needed); unpinning removes the key, with any lines indented
+/// below it. Nothing else changes; a note already in that state is returned
+/// as is.
+#[must_use]
+pub fn with_pinned(text: &str, pinned: bool) -> String {
+    let unchanged = if pinned {
+        is_pinned(text)
+    } else {
+        get(text, "pinned").is_none()
+    };
+    if unchanged {
+        return text.to_owned();
+    }
+    let parts = split(text);
+    let nl = parts.newline;
+    let mut lines: Vec<String> = Vec::new();
+    let mut in_pinned = false;
+    let mut placed = false;
+    for line in parts.lines.unwrap_or_default() {
+        if in_pinned && line.starts_with([' ', '\t']) {
+            continue; // a value continued below the key
+        }
+        in_pinned = value_of(line, "pinned").is_some();
+        if !in_pinned {
+            lines.push(line.to_owned());
+        } else if pinned && !placed {
+            lines.push("pinned: true".to_owned());
+            placed = true;
+        }
+    }
+    if pinned && !placed {
+        lines.push("pinned: true".to_owned());
     }
     join(parts.bom, &lines, nl, parts.body)
 }
@@ -240,6 +285,36 @@ mod tests {
         assert_eq!(
             twice,
             once.replace(&format!("modified: {T1}"), &format!("modified: {T2}"))
+        );
+    }
+
+    #[test]
+    fn pinning_touches_only_the_pinned_key() {
+        let note = "---\nid: X\n# keep\nmodified: M\n---\nBody\n";
+        let pinned = with_pinned(note, true);
+        assert_eq!(
+            pinned,
+            "---\nid: X\n# keep\nmodified: M\npinned: true\n---\nBody\n"
+        );
+        assert!(is_pinned(&pinned));
+        assert_eq!(with_pinned(&pinned, true), pinned);
+        assert_eq!(with_pinned(&pinned, false), note);
+        assert_eq!(with_pinned(note, false), note);
+
+        // An existing line keeps its place; an indented value goes with it.
+        let odd = "---\npinned: no\nid: X\n---\nB";
+        assert_eq!(with_pinned(odd, true), "---\npinned: true\nid: X\n---\nB");
+        let nested = "---\npinned:\n  true\nid: X\n---\nB";
+        assert_eq!(with_pinned(nested, false), "---\nid: X\n---\nB");
+        assert!(is_pinned("---\npinned: True\n---\n"));
+
+        // No block: pinning adds one, unpinning leaves the note alone.
+        assert_eq!(with_pinned("Body", true), "---\npinned: true\n---\nBody");
+        assert_eq!(with_pinned("Body", false), "Body");
+        // Line endings and byte order mark are kept.
+        assert_eq!(
+            with_pinned("\u{feff}---\r\nid: X\r\n---\r\nB", true),
+            "\u{feff}---\r\nid: X\r\npinned: true\r\n---\r\nB"
         );
     }
 }

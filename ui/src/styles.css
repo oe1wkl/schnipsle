@@ -166,6 +166,9 @@ button.icon {
 .list li button.trashed::after {
   content: " 🗑";
 }
+.list li button.pinned::before {
+  content: "📌 ";
+}
 .list li button.cloud::after {
   content: " ☁︎";
   color: var(--muted);

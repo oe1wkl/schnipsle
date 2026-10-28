@@ -38,6 +38,8 @@ export interface NoteEntry {
   title: string;
   modifiedMs: number;
   available: boolean;
+  /** Front matter `pinned: true` (format.md §4); listed first. */
+  pinned: boolean;
 }
 /** A version a sync service kept because it conflicts (schnipsle-core `ConflictVersion`). */
 export interface ConflictVersion {
@@ -113,4 +115,5 @@ export interface SearchHit {
   snippet: SnippetPart[];
   /** In the trash: `path` is below the vault root and the note must be restored first. */
   inTrash: boolean;
+  pinned: boolean;
 }

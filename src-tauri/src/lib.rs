@@ -567,6 +567,22 @@ async fn save_note(
     })
 }
 
+/// Pins or unpins a note if it still has the content with `expected_hash`;
+/// returns the text now on disk and its hash.
+#[tauri::command]
+async fn set_pinned(
+    state: State<'_, AppState>,
+    path: String,
+    pinned: bool,
+    expected_hash: String,
+) -> CmdResult<SavedNote> {
+    with_vault(&state, |v| {
+        let saved = v.set_pinned(&path, pinned, &expected_hash)?;
+        reindex(&state, v, &[indexing::note_key(&path)]);
+        Ok(saved)
+    })
+}
+
 #[tauri::command]
 async fn create_note(
     state: State<'_, AppState>,
@@ -774,6 +790,7 @@ pub fn run() {
             restore_note,
             read_note,
             save_note,
+            set_pinned,
             create_note,
             resolve_conflict,
             keep_both,
