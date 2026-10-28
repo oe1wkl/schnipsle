@@ -66,3 +66,11 @@ Days begin at midnight in your time zone. For the relative forms, `>` and `<` co
 ## Results
 
 Pinned notes come first, then the rest. Words and phrases rank the results: notes where they occur in the title come first, then by how well the text matches. A query without words (only tags, dates or flags) lists the most recently changed notes first. At most 200 notes are shown.
+
+## Smart folders
+
+A smart folder is a saved query. Search for something, then tap **Save** next to the search field and give the folder a name; or tap **New smart folder**. The ✎ button next to a folder changes its name, its query, the folder it sits in and the order of its notes (recently changed, least recently changed, recently created, or by title); pinned notes still come first. Deleting a folder never deletes notes, and its subfolders move up a level.
+
+Drag a folder by its ≡ handle to move it: onto the upper or lower edge of another folder to place it before or after that one, onto the middle of a folder to put it inside. With the keyboard, focus the handle and use ↑ and ↓ to reorder, → to move the folder into the one above it, ← to move it out of its parent.
+
+The folders are stored in `.notesapp/smart-folders.yaml` (format.md §9), so they sync with the vault.

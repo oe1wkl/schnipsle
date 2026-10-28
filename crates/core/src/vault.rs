@@ -196,6 +196,8 @@ pub enum PathKind {
     /// The root, `notes/` or a folder in it: any notes below it may have
     /// changed. Also a change that may add or remove a note outside `notes/`.
     Folder,
+    /// `.notesapp/smart-folders.yaml` (format.md §9).
+    SmartFolders,
     /// Outside `notes/`, hidden, or not a note.
     Ignored,
 }
@@ -627,6 +629,9 @@ impl Vault {
                 Component::Normal(part) => parts.push(part.to_string_lossy().into_owned()),
                 _ => return PathKind::Ignored,
             }
+        }
+        if parts.join("/") == crate::layout::SMART_FOLDERS_FILE {
+            return PathKind::SmartFolders;
         }
         match parts.first() {
             None => return PathKind::Folder, // the vault root itself

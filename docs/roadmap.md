@@ -1,6 +1,6 @@
 # Roadmap and status
 
-- Updated: 2026-10-27
+- Updated: 2026-10-28
 - Current milestone: **M3 – Smart folders** (M2 complete once its last PR is merged)
 
 Each milestone ends in a usable build. Scope can move between milestones; the order should not.
@@ -38,7 +38,7 @@ Goal: saved searches (F-10) on a full query language. Order: query language, Cho
 - [x] ChordPro indexing (format.md §5.7 rule 8; `chordpro.rs`, golden files in `tests/fixtures/format/5.7-index/`): lyrics without chord brackets and the `title`, `subtitle`, `artist`, `composer`, `lyricist` directives in the full text, chord names in `note_chords` for `has:chord` and `chord:Am`; index schema 3; the parser is meant to carry rendering and transposition in the music milestone
 - [x] Smart folders in `schnipsle-core` (format.md 0.9 §9, ADR-0018; `smart_folders.rs`, golden files in `tests/fixtures/format/9-smart-folders/`): read and write `.notesapp/smart-folders.yaml` atomically and coordinated, an edit applied again if the file changed meanwhile; unknown keys, values and entries kept (`yaml-rust2`); add, change, remove (subfolders move up), move and nest with cycle check; `Index::search_sorted` for the four `sort` orders (index schema 4)
 - [x] Pinning (format.md §4): `Vault::set_pinned` changes only the `pinned` key (unpinning removes it) and keeps `modified`, with the usual conflict check; pinned notes first in the note list, tag folders, search and smart folders (`pinned` on `NoteEntry` and `SearchHit`); a Pin button next to History and a 📌 in the lists
-- [ ] UI: "Smart folders" above Tags, nested; "Save search" next to the search field; edit name, query, parent and sort in a form, delete with confirmation; reorder and nest by drag and drop (also on the phone); on the phone inside the Tags view
+- [x] UI (`ui/src/smart-folders.ts`, `src-tauri/src/smart_folders.rs`): "Smart folders" above Tags, nested; "Save" next to the search field; name, query, parent and order in a form, delete with confirmation; reorder and nest by dragging the ≡ handle (pointer events, so also by touch) or with the arrow keys on it; on the phone inside the Tags view. A change to `smart-folders.yaml` from elsewhere refreshes the tree (`VaultChanges.smartFolders`). Drag by touch still to be tried on the iPhone
 
 ## M2 results
 

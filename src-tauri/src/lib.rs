@@ -6,6 +6,7 @@
 //! so they run off the main thread.
 
 mod indexing;
+mod smart_folders;
 mod vault_location;
 mod watching;
 
@@ -791,6 +792,12 @@ pub fn run() {
             read_note,
             save_note,
             set_pinned,
+            smart_folders::list_smart_folders,
+            smart_folders::add_smart_folder,
+            smart_folders::update_smart_folder,
+            smart_folders::remove_smart_folder,
+            smart_folders::move_smart_folder,
+            smart_folders::smart_folder_notes,
             create_note,
             resolve_conflict,
             keep_both,

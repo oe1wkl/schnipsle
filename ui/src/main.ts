@@ -113,12 +113,17 @@ function showView(view: "list" | "editor" | "tags"): void {
   ui.back.hidden = view === "list";
 }
 
-/** Search and tags above the note list; picking one filters the list. */
-const sidebar = createSidebar(() => {
-  if (ui.layout.dataset["view"] === "tags") showView("list");
-  if (listMode === "trash") setListMode("notes");
-  else void refreshList();
-});
+/** Search, smart folders and tags above the note list; picking one filters the list. */
+const sidebar = createSidebar(
+  () => {
+    if (ui.layout.dataset["view"] === "tags") showView("list");
+    if (listMode === "trash") setListMode("notes");
+    else void refreshList();
+  },
+  (message) => {
+    setStatus(`Smart folders not changed: ${message}`);
+  },
+);
 
 function vaultOpened(info: VaultInfo): void {
   ui.setup.hidden = true;
@@ -204,12 +209,18 @@ async function refreshList(): Promise<void> {
           sort: sortOrder,
         });
         break;
+      case "smart":
       case "search": {
-        const hits = await invoke<SearchHit[]>("search_notes", {
-          query: filter.query,
-          // Local days for created:/modified: (getTimezoneOffset is UTC minus local).
-          utcOffsetMinutes: -new Date().getTimezoneOffset(),
-        });
+        // Local days for created:/modified: (getTimezoneOffset is UTC minus local).
+        const utcOffsetMinutes = -new Date().getTimezoneOffset();
+        const hits =
+          filter.kind === "smart"
+            ? await invoke<SearchHit[]>("smart_folder_notes", {
+                query: filter.folder.query,
+                sort: filter.folder.sort,
+                utcOffsetMinutes,
+              })
+            : await invoke<SearchHit[]>("search_notes", { query: filter.query, utcOffsetMinutes });
         entries = hits.map((h) => ({ ...h, available: true }));
         snippets = new Map(hits.map((h) => [h.path, h.snippet]));
         inTrash = new Set(hits.filter((h) => h.inTrash).map((h) => h.path));
@@ -272,7 +283,8 @@ async function refreshList(): Promise<void> {
 
 /** The line above the list saying what it shows, with "Show all". */
 function showFilter(filter: ListFilter): void {
-  ui.sort.hidden = filter.kind === "search"; // results come best first
+  // Search results come best first, a smart folder has its own order.
+  ui.sort.hidden = filter.kind === "search" || filter.kind === "smart";
   ui.listFilter.hidden = filter.kind === "all";
   ui.listFilterText.textContent =
     filter.kind === "tag"
@@ -281,7 +293,9 @@ function showFilter(filter: ListFilter): void {
         ? "Untagged notes"
         : filter.kind === "search"
           ? `Search: ${filter.query}`
-          : "";
+          : filter.kind === "smart"
+            ? filter.folder.name
+            : "";
 }
 
 /** A search snippet with the matching words emphasized. */
@@ -380,7 +394,8 @@ function setListMode(mode: "notes" | "trash"): void {
   listMode = mode;
   ui.showTrash.textContent = mode === "trash" ? "Notes" : "Trash";
   ui.showTrash.setAttribute("aria-pressed", String(mode === "trash"));
-  ui.sort.hidden = mode === "trash" || sidebar.filter().kind === "search";
+  const kind = sidebar.filter().kind;
+  ui.sort.hidden = mode === "trash" || kind === "search" || kind === "smart";
   void refreshList();
 }
 
@@ -740,7 +755,9 @@ async function checkForChanges(changes?: VaultChanges): Promise<void> {
   if (ui.newNote.disabled) return; // no vault open
   try {
     await refreshList();
-    if (!changes || changes.rescan || changes.paths.length > 0) void sidebar.refresh();
+    if (!changes || changes.rescan || changes.paths.length > 0 || changes.smartFolders) {
+      void sidebar.refresh();
+    }
     if (!current || conflictHash !== undefined) return;
     const path = current.path;
     if (changes && !changes.rescan && !changes.paths.includes(path)) return;

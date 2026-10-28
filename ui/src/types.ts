@@ -66,6 +66,8 @@ export interface Tag {
 export interface VaultChanges {
   paths: string[];
   rescan: boolean;
+  /** The smart folders may have changed (`.notesapp/smart-folders.yaml`). */
+  smartFolders: boolean;
 }
 /** What a save wrote: the text on disk, with the front matter the core maintains. */
 export interface SavedNote {
