@@ -1,0 +1,195 @@
+{
+  "format": 1,
+  "exported": "2026-10-28T22:18:42.112Z",
+  "notes": [
+    {
+      "id": "x-coredata://00000000-0000-4000-8000-0000000000A1/ICNote/p101",
+      "account": "iCloud",
+      "folder": [
+        "Amateurfunk & Radio",
+        "QRP Kits"
+      ],
+      "name": "Antenna tuner",
+      "created": "2024-03-02T09:14:00.000Z",
+      "modified": "2025-11-20T18:40:12.000Z",
+      "locked": false,
+      "shared": false,
+      "snippet": "Antenna tuner #radio #qrp Parts Part Value C1 470 pF L1 12 µH ￼ Tested on 40 m, match below 1.5",
+      "smartFolders": []
+    },
+    {
+      "id": "x-coredata://00000000-0000-4000-8000-0000000000A1/ICNote/p102",
+      "account": "iCloud",
+      "folder": [
+        "Amateurfunk & Radio"
+      ],
+      "name": "Field day checklist",
+      "created": "2025-06-01T07:00:00.000Z",
+      "modified": "2025-06-20T05:30:00.000Z",
+      "locked": false,
+      "shared": false,
+      "snippet": "Field day checklist Pack the keyer Charge the batteries Print the log sheets",
+      "smartFolders": []
+    },
+    {
+      "id": "x-coredata://00000000-0000-4000-8000-0000000000A1/ICNote/p103",
+      "account": "iCloud",
+      "folder": [
+        "Amateurfunk & Radio"
+      ],
+      "name": "Keyer firmware: changes for version 2.1 and the build setup on the bench …",
+      "created": "2023-01-15T20:00:00.000Z",
+      "modified": "2023-02-01T21:10:00.000Z",
+      "locked": false,
+      "shared": false,
+      "snippet": "Keyer firmware: changes for version 2.1 and the build setup on the \"bench\" machine #define KEYER_WPM 20 #include <Keyer.h>",
+      "smartFolders": []
+    },
+    {
+      "id": "x-coredata://00000000-0000-4000-8000-0000000000A1/ICNote/p201",
+      "account": "iCloud",
+      "folder": [
+        "Musik & Lieder"
+      ],
+      "name": "Morning song",
+      "created": "2019-05-05T06:00:00.000Z",
+      "modified": "2026-01-02T10:00:00.000Z",
+      "locked": false,
+      "shared": false,
+      "snippet": "Morning song C#m A E B7 The sun comes up behind the hill, we sing it twice and then we're still. Repeat the last line softly.",
+      "smartFolders": []
+    },
+    {
+      "id": "x-coredata://00000000-0000-4000-8000-0000000000A1/ICNote/p202",
+      "account": "iCloud",
+      "folder": [
+        "Recently Deleted"
+      ],
+      "name": "Morning song",
+      "created": "2018-04-04T06:00:00.000Z",
+      "modified": "2018-04-04T06:05:00.000Z",
+      "locked": false,
+      "shared": false,
+      "snippet": "Morning song first draft, do not use",
+      "smartFolders": []
+    },
+    {
+      "id": "x-coredata://00000000-0000-4000-8000-0000000000A1/ICNote/p301",
+      "account": "iCloud",
+      "folder": [
+        "Kochen & Backen"
+      ],
+      "name": "Pizza dough",
+      "created": "2021-08-08T17:00:00.000Z",
+      "modified": "2024-09-09T17:30:00.000Z",
+      "locked": false,
+      "shared": false,
+      "snippet": "Pizza dough #recipe 500 g flour, 320 g water, 10 g salt, 2 g yeast. Mix and rest for 30 minutes.",
+      "smartFolders": [
+        "✱ Recipes"
+      ]
+    },
+    {
+      "id": "x-coredata://00000000-0000-4000-8000-0000000000A1/ICNote/p302",
+      "account": "iCloud",
+      "folder": [
+        "Kochen & Backen"
+      ],
+      "name": "Pizza dough",
+      "created": "2022-02-02T12:00:00.000Z",
+      "modified": "2022-02-03T12:00:00.000Z",
+      "locked": false,
+      "shared": false,
+      "snippet": "Pizza dough #recipe Ingredients: 1000 g flour type 00, 650 g water",
+      "smartFolders": [
+        "✱ Recipes"
+      ]
+    },
+    {
+      "id": "x-coredata://00000000-0000-4000-8000-0000000000A1/ICNote/p303",
+      "account": "iCloud",
+      "folder": [
+        "Notes"
+      ],
+      "name": "Bread rolls",
+      "created": "2025-09-15T07:54:30.000Z",
+      "modified": "2025-09-15T07:55:31.000Z",
+      "locked": false,
+      "shared": false,
+      "snippet": "Bread rolls #recipe #baking ￼ ￼ Dissolve the yeast in the water Knead for 8 minutes",
+      "smartFolders": [
+        "✱ Recipes"
+      ]
+    },
+    {
+      "id": "x-coredata://00000000-0000-4000-8000-0000000000A1/ICNote/p401",
+      "account": "iCloud",
+      "folder": [
+        "Notes"
+      ],
+      "name": "Club history: the first ten years",
+      "created": "2020-10-10T10:10:10.000Z",
+      "modified": "2020-10-11T08:00:00.000Z",
+      "locked": false,
+      "shared": false,
+      "snippet": "Club history: the first ten years The club was founded by six friends who met at a radio fair.",
+      "smartFolders": []
+    },
+    {
+      "id": "x-coredata://00000000-0000-4000-8000-0000000000A1/ICNote/p402",
+      "account": "iCloud",
+      "folder": [
+        "Notes"
+      ],
+      "name": "Trip planning 2026-03-14 09:30",
+      "created": "2026-03-01T12:00:00.000Z",
+      "modified": "2026-03-14T08:30:00.000Z",
+      "locked": false,
+      "shared": false,
+      "snippet": "￼ Lake trip",
+      "smartFolders": []
+    },
+    {
+      "id": "x-coredata://00000000-0000-4000-8000-0000000000A1/ICNote/p403",
+      "account": "iCloud",
+      "folder": [
+        "Notes"
+      ],
+      "name": "Empty note",
+      "created": "2026-07-07T07:07:07.000Z",
+      "modified": "2026-07-07T07:07:07.000Z",
+      "locked": false,
+      "shared": false,
+      "snippet": "",
+      "smartFolders": []
+    },
+    {
+      "id": "x-coredata://00000000-0000-4000-8000-0000000000A1/ICNote/p404",
+      "account": "iCloud",
+      "folder": [
+        "Notes"
+      ],
+      "name": "Packing list",
+      "created": "2017-07-01T08:00:00.000Z",
+      "modified": "2017-07-02T08:00:00.000Z",
+      "locked": false,
+      "shared": false,
+      "snippet": "Packing list Tent, stove",
+      "smartFolders": []
+    },
+    {
+      "id": "x-coredata://00000000-0000-4000-8000-0000000000A1/ICNote/p405",
+      "account": "iCloud",
+      "folder": [
+        "Notes"
+      ],
+      "name": "Bank details",
+      "created": "2016-01-01T08:00:00.000Z",
+      "modified": "2016-01-01T08:00:00.000Z",
+      "locked": true,
+      "shared": false,
+      "snippet": "",
+      "smartFolders": []
+    }
+  ]
+}

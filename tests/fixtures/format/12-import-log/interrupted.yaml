@@ -1,0 +1,17 @@
+format: 1
+id: 01JBC0D1E2F3G4H5J6K7M8N9P0
+source: markdown
+input: Old notes
+started: 2026-10-31T12:00:00+01:00
+undone: null
+notes:
+  - source_id: projects/tuner.md
+    id: 01JBC0D2A3B4C5D6E7F8G9H0J1
+    path: notes/Markdown/projects/tuner.md
+    action: added
+    hash: fc7a2965fb8ca464e96c1816374803096712abaec3f948e00fdef748d81c5b3d
+  - source_id: projects/never-written.md   # logged ahead of writing; the note does not exist
+    id: 01JBC0D2K3K4M5N6P7Q8R9S0T1
+    path: notes/Markdown/projects/never-written.md
+    action: added
+    hash: 65e70a65a308f450460ec469d1f3a42c79612283a1886f6a7f18f56941c221c2

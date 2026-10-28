@@ -1,9 +1,9 @@
 # Vault File Format Specification
 
 - Format version: **1** (draft)
-- Spec revision: 0.9, 2026-10-28 (§9 reading and writing smart folders; 0.8: §7 retention settings; 0.7: §5.5 relative links are kept working when a note moves; 0.6: §8 `original_path` is relative to the vault root; 0.5: §8 trash names for notes without `id` and for collisions; 0.4: §5.3 refined by the first implementation, §5.6 music notation, §5.7 lyrics with chords)
+- Spec revision: 0.10, 2026-10-28 (§12 imported notes, import log, re-import and undo; 0.9: §9 reading and writing smart folders; 0.8: §7 retention settings; 0.7: §5.5 relative links are kept working when a note moves; 0.6: §8 `original_path` is relative to the vault root; 0.5: §8 trash names for notes without `id` and for collisions; 0.4: §5.3 refined by the first implementation, §5.6 music notation, §5.7 lyrics with chords)
 - Status: Draft — becomes normative when M1 ships
-- Related: ADR-0004, ADR-0008, ADR-0009, ADR-0011, ADR-0013, ADR-0014, ADR-0016, ADR-0017, ADR-0018
+- Related: ADR-0004, ADR-0008, ADR-0009, ADR-0011, ADR-0013, ADR-0014, ADR-0012, ADR-0016, ADR-0017, ADR-0018, ADR-0019
 
 The key words MUST, MUST NOT, SHOULD, SHOULD NOT and MAY are used as described in RFC 2119.
 
@@ -23,7 +23,7 @@ A vault is a directory containing a `.notesapp/vault.yaml` file. Its layout:
     smart-folders.yaml           saved searches (§9)
     history/<note-id>/           version snapshots (§7)
     trash/                       deleted notes (§8)
-    import-log/                  one file per import run
+    import-log/                  one file per import run (§12)
 ```
 
 - Implementations MUST ignore unknown files and directories, and MUST NOT delete them.
@@ -60,8 +60,8 @@ YAML 1.2, between a first line `---` and the next line `---`.
 | `created` | RFC 3339 timestamp with offset | yes | Creation time |
 | `modified` | RFC 3339 timestamp with offset | yes | Last content change |
 | `pinned` | boolean | no | Pinned in lists |
-| `source` | string | no | Import origin: `apple-notes`, `simplenote`, `html`, `markdown`, … |
-| `source_id` | string | no | Identifier in the source system, for duplicate detection |
+| `source` | string | no | Import origin: `apple-notes`, `simplenote`, `html`, `markdown`, … (§12.1) |
+| `source_id` | string | no | Identifier in the source system, for re-import and duplicate detection (§12.1) |
 
 - Unknown keys MUST be preserved unchanged (other tools may add their own).
 - `tags` MUST NOT be interpreted by format version 1 (tags are inline only, ADR-0008); if present it is preserved as an unknown key.
@@ -268,4 +268,76 @@ The query syntax is defined in the user manual: [Query language](manual/query-la
 
 ## 11. Conformance tests
 
-Fixtures in `tests/fixtures/format/` cover every MUST rule in this document, in particular all tag examples in §5.3 and the music rules in §5.6 (fragment without `X:`, multi-voice score, lyrics indexing, `#` inside an `abc` block) and §5.7 (chord placement, every directive, transposition in both note namings, unknown directives preserved). A change to this spec without matching fixtures is incomplete.
+Fixtures in `tests/fixtures/format/` cover every MUST rule in this document, in particular all tag examples in §5.3 and the music rules in §5.6 (fragment without `X:`, multi-voice score, lyrics indexing, `#` inside an `abc` block) and §5.7 (chord placement, every directive, transposition in both note namings, unknown directives preserved). The import log rules of §12.2–§12.4 are covered by `tests/fixtures/format/12-import-log/` (a finished run, a re-import, an undone run with a kept note, an interrupted run, a newer format); sample exports for §12.1 are in `tests/fixtures/import/<source>/`. A change to this spec without matching fixtures is incomplete.
+
+## 12. Imports
+
+How notes from other apps are written into the vault, and the log that makes an import repeatable and undoable (ADR-0012, ADR-0019).
+
+### 12.1 Imported notes
+
+1. An imported note is an ordinary note (§3–§5). Its front matter gets `id` (new), `created` and `modified` (from the source where it has them, otherwise the time of the import), `source` and `source_id`:
+
+   | `source` | Folder | `source_id` |
+   | --- | --- | --- |
+   | `apple-notes` | `Apple Notes` | the note's `id` from `apple-notes-metadata.json` (ADR-0019), e.g. `x-coredata://…/ICNote/p1356`; for a file without a match `export:` followed by its path in the export, e.g. `export:Baking/Pizzateig.md` |
+   | `simplenote` | `Simplenote` | the note's `id` in `notes.json` |
+   | `html` | `HTML` | the file's path relative to the folder chosen for the import |
+   | `markdown` | `Markdown` | the file's path relative to the folder chosen for the import |
+
+   Paths in `source_id` use `/` and are NFC-normalized.
+2. The note is written to `notes/<Folder>/` followed by the source's folders (for Apple Notes the note's folder in Notes), with a file name as in §3. Example: `notes/Apple Notes/Brot und Germgebäck/pizzateig.md`.
+3. The text of the note is the source's text converted to Markdown. Changes beyond the conversion are limited to: line endings to LF, NFC normalization, attachments stored under §6 with their links rewritten (§5.5), and a final tag line (rule 5).
+4. **Folder tags.** Each folder level of the source gives one tag level: its name, NFC-normalized, with every character that §5.3 does not allow in a tag name replaced by `-`, runs of `-` collapsed to one and `-` at either end removed. Levels that end up empty are left out. Nested folders give one tag with `/` between the levels: `Radio` › `QRP Kits` → `#Radio/QRP-Kits`. If the result is not recognized as a tag by §5.3 (e.g. `#2024` or `#a0b1c2`), the folder gives no tag.
+5. Tags the source keeps outside the text (Simplenote `tags`) and folder tags are written on one final line, separated by spaces, after an empty line: `#Radio/QRP-Kits #ÖVSV`. A tag the text already carries (§5.3, compared after normalization) is not repeated. A source tag is normalized like a folder level (rule 4) and left out if the result is not a tag. A note that gets no such tags gets no final line.
+
+### 12.2 Import log
+
+Each import run that writes notes has one file `.notesapp/import-log/<run-id>.yaml`, where `<run-id>` is a ULID created when the run starts:
+
+```yaml
+format: 1
+id: 01JB2C3D4E5F6G7H8J9K0K1M2N   # equals the file name
+source: apple-notes              # as in §12.1
+input: Schnipsle-Import          # name of the chosen file or folder, for display
+started: 2026-10-29T10:15:00+01:00
+finished: 2026-10-29T10:15:42+01:00   # missing while the run is still writing
+undone: null                     # time of the undo, or null
+notes:
+  - source_id: x-coredata://1377F3B4-5733-4698-AF6B-FB430E3F3051/ICNote/p1356
+    id: 01JB2C3E0F1G2H3J4K5K6M7N8P   # the note's id (§4)
+    path: notes/Apple Notes/Brot und Germgebäck/bierkruste.md
+    action: added                # added | updated
+    source_modified: 2025-09-15T07:55:31Z   # the source's modification time, if it has one
+    hash: 5f0c…e2                # SHA-256 (lowercase hex) of the file as written
+  - source_id: '4f7a54ed11e9425db36b31f42f83db46'
+    id: 01JB2C3E7Q8R9S0T1V2W3X4Y5Z
+    path: notes/Simplenote/kein-netz-songtext.md
+    action: updated
+    source_modified: 2026-06-18T21:09:29.104Z
+    hash: 9a41…07
+    replaced: 20261029T091500Z   # the snapshot (§7) of the version this run replaced
+```
+
+1. `format`, `id`, `source`, `started` and `notes` are REQUIRED; in each entry `source_id`, `id`, `path`, `action` and `hash` are. Timestamps are RFC 3339 with offset; `replaced` names a snapshot in `.notesapp/history/<id>/` without its extension.
+2. `notes` lists every note the run wrote, in the order written. Notes the run skipped are not listed (the dry-run report shows them).
+3. A writer MUST create the log before writing the first note and MUST add each entry no later than the note is written; it MAY add entries in batches ahead of writing their notes. It sets `finished` when the run ends. A reader MUST therefore accept entries whose note does not exist or differs from `hash`, and MUST treat a log without `finished` like a finished one.
+4. `path` is where the note was written, relative to the vault root. Notes are found by `id` (§3); the path is only a hint.
+5. Unknown keys, at the top level and in entries, MUST be preserved. A log with `format` greater than the reader supports MUST NOT be changed or undone, and its entries MUST NOT be used for re-import. A log that is not YAML MUST NOT be overwritten.
+6. Logs are kept until the user removes them. Removing a log only removes the ability to undo that run and to update its notes by re-import.
+
+### 12.3 Re-import
+
+1. A note from the source matches the latest entry with the same `source` and `source_id` in a log that is not undone (entries with `kept: true` in undone logs count, §12.4). Without a match the note is added.
+2. With a match, the note in the vault (found by the entry's `id`) is replaced only if its current content hash equals the entry's `hash` **and** the source's modification time is later than the entry's `source_modified`. The replaced version MUST first be stored as a snapshot (§7), and the write MUST follow §10. The note keeps its `id`, `created` and file name; the run logs it as `updated` with `replaced`.
+3. In every other case (changed in the vault, no newer source, note missing, or no modification time in the source) the note is skipped, and the report says why.
+
+### 12.4 Undo
+
+Undoing a run goes through its log in reverse order. For each entry, with the note found by `id`:
+
+1. If the note's content hash differs from `hash`, the note is kept, and the entry gets `kept: true`.
+2. Otherwise, an `added` note is moved to the trash (§8); an `updated` note gets the version in snapshot `replaced` back, after its current version is stored as a snapshot.
+3. A missing note is left as it is.
+
+Then `undone` is set to the time of the undo. An undone run cannot be undone again. Undo never deletes text: every version it removes is in the trash or the history.

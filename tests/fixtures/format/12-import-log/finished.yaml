@@ -1,0 +1,20 @@
+format: 1
+id: 01JB2C3D4E5F6G7H8J9K0K1M2N
+source: apple-notes
+input: Schnipsle-Import
+started: 2026-10-29T10:15:00+01:00
+finished: 2026-10-29T10:15:42+01:00
+undone: null
+written_by: another-tool 1.0   # unknown key, MUST be preserved
+notes:
+  - source_id: x-coredata://00000000-0000-4000-8000-0000000000A1/ICNote/p101
+    id: 01JB2C3E0F1G2H3J4K5K6M7N8P
+    path: notes/Apple Notes/Amateurfunk & Radio/QRP Kits/antenna-tuner.md
+    action: added
+    source_modified: 2025-11-20T18:40:12Z
+    hash: 5a86238ce7575020879c4ef5f2f20df1ee7bd460e0b3ec790bbcd99bb3a47071
+  - source_id: export:Mixed/Old shopping list.md
+    id: 01JB2C3E1A2B3C4D5E6F7G8H9J
+    path: notes/Apple Notes/Mixed/old-shopping-list.md
+    action: added
+    hash: 44c3183f79c430d23fd8972f08a270404690154a8b2547460e21eb6d1bca953c

@@ -1,0 +1,15 @@
+format: 1
+id: 01JB9Z8Y7X6W5V4T3S2R1Q0P9N
+source: simplenote
+input: simplenote-export.zip
+started: 2026-11-02T08:00:00+01:00
+finished: 2026-11-02T08:00:05+01:00
+undone: null
+notes:
+  - source_id: '0a1b2c3d4e5f40718293a4b5c6d7e8f9'
+    id: 01JB2C3E7Q8R9S0T1V2W3X4Y5Z
+    path: notes/Simplenote/lake-trip.md
+    action: updated
+    source_modified: 2026-08-05T06:46:58.085Z
+    hash: 8e9ed5aeba9aca209b64f3d9686641b3a4f5385852d8cc9ed6da996ce40bdf0a
+    replaced: 20261102T070001Z

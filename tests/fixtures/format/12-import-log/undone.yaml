@@ -1,0 +1,21 @@
+format: 1
+id: 01JB5K6K7M8N9P0Q1R2S3T4V5W
+source: simplenote
+input: simplenote-export.zip
+started: 2026-10-30T21:00:00+01:00
+finished: 2026-10-30T21:00:03+01:00
+undone: 2026-10-30T21:30:00+01:00
+notes:
+  - source_id: '1b2c3d4e5f6071829304a5b6c7d8e9f0'
+    id: 01JB5K6M0A1B2C3D4E5F6G7H8J
+    path: notes/Simplenote/club-song.md
+    action: added
+    source_modified: 2019-03-04T08:15:30.250Z
+    hash: e8f2b333ef3a1a5f0d0cb7aadb7b2eea4144362d2dc6f3bd5a8f125bc86f5f19
+    kept: true                   # edited after the import, so the undo kept it
+  - source_id: '2c3d4e5f60718293a4b5c6d7e8f90a1b'
+    id: 01JB5K6M1K2K3M4N5P6Q7R8S9T
+    path: notes/Simplenote/repeater-list.md
+    action: added
+    source_modified: 2024-05-05T05:05:05.005Z
+    hash: 614db36b9fcc82ac1a4f8020e0942a6136f073a52708cf405f9b7cfdd9ce59ed
