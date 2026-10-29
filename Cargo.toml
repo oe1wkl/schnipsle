@@ -33,6 +33,8 @@ sha2 = "0.11"
 # Search index (ADR-0009): bundled SQLite, the same version with FTS5 on every platform.
 rusqlite = { version = "0.40", features = ["bundled"] }
 tempfile = "3"
+# Simplenote export (zip): reading only, deflate via zlib-rs (pure Rust); MIT, zlib-rs Zlib.
+zip = { version = "9", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 # Smart folders file (format.md §9): YAML 1.2, keeps key order, MIT OR Apache-2.0.
 yaml-rust2 = { version = "0.13", default-features = false }
 

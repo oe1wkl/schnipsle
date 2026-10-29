@@ -72,6 +72,8 @@ The cases:
 
 The adapter reads only `source/notes.json`, also given unpacked as `notes.json`.
 
+`simplenote/expected/` is what the adapter and the pipeline make of the zip (`crates/import/tests/simplenote.rs`), in the layout of `pipeline/` above, plus `trash/`: the trashed note and its record, with the time of deletion replaced by `<deleted>`. Line endings become LF and the text NFC; otherwise it stays as Simplenote has it, a missing final line break too. The empty note is named `note`, the pipeline's name for a note without a title.
+
 | Note (first line) | What it tests |
 | --- | --- |
 | `Lake trip` | `pinned: true`, CRLF |

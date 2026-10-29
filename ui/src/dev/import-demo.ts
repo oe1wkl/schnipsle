@@ -2,7 +2,8 @@
 // Development playground for the import dialog (ui/dev/import.html), without
 // Tauri: the app's page is loaded for its elements, and a stand-in for
 // Tauri's IPC answers the import commands with a sample report shaped like
-// the golden files in tests/fixtures/import/apple-notes/expected/.
+// the golden files in tests/fixtures/import/apple-notes/expected/; a smaller
+// one for Simplenote, with a note from its trash.
 import type { ImportOutcome, ImportPlan, ImportPreview, PlanItem } from "../types";
 
 const ID = "x-coredata://00000000-0000-4000-8000-0000000000A1/ICNote/";
@@ -73,6 +74,32 @@ const plan: ImportPlan = {
   ],
 };
 
+const simplenotePlan: ImportPlan = {
+  source: "simplenote",
+  input: "notes.zip",
+  items: [
+    {
+      sourceId: "0a1b2c3d4e5f40718293a4b5c6d7e8f9",
+      title: "Lake trip",
+      action: "add",
+      reason: null,
+      path: "Simplenote/lake-trip.md",
+      problems: [],
+    },
+    {
+      sourceId: "8293a4b5c6d7e8f90a1b2c3d4e5f6071",
+      title: "Old idea",
+      action: "add",
+      reason: null,
+      path: "Simplenote/old-idea.md",
+      problems: [],
+      trashed: true,
+    },
+  ],
+  notices: [],
+};
+let current = plan;
+
 /** `?metadata=no` starts without the metadata file. */
 let hasMetadata = new URLSearchParams(location.search).get("metadata") !== "no";
 const callbacks = new Map<number, (message: unknown) => void>();
@@ -82,19 +109,28 @@ function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function answer(cmd: string): Promise<unknown> {
+async function answer(cmd: string, args: Record<string, unknown> = {}): Promise<unknown> {
   switch (cmd) {
-    case "pick_import_folder":
-      return "/Users/me/Schnipsle-Import";
-    case "plan_import":
+    case "pick_import":
+      return args.source === "simplenote"
+        ? "/Users/me/Downloads/notes.zip"
+        : "/Users/me/Schnipsle-Import";
+    case "plan_import": {
       await wait(300);
-      return { plan, path: "/Users/me/Schnipsle-Import", hasMetadata } satisfies ImportPreview;
+      const simple = args.source === "simplenote";
+      current = simple ? simplenotePlan : plan;
+      return {
+        plan: current,
+        path: String(args.path),
+        hasMetadata: !simple && hasMetadata,
+      } satisfies ImportPreview;
+    }
     case "read_apple_notes_metadata":
       await wait(1500);
       hasMetadata = true;
       return "679 notes";
     case "apply_import": {
-      const total = plan.items.filter((i) => i.action !== "skip").length;
+      const total = current.items.filter((i) => i.action !== "skip").length;
       for (let done = 1; done <= total; done++) {
         await wait(250);
         for (const callback of callbacks.values()) {
@@ -103,7 +139,7 @@ async function answer(cmd: string): Promise<unknown> {
       }
       return {
         runId: "01M63HM980000000000000000B",
-        plan,
+        plan: current,
         written: [],
       } satisfies ImportOutcome;
     }
@@ -116,7 +152,7 @@ async function answer(cmd: string): Promise<unknown> {
 
 Object.assign(window, {
   __TAURI_INTERNALS__: {
-    invoke: (cmd: string) => answer(cmd),
+    invoke: (cmd: string, args?: Record<string, unknown>) => answer(cmd, args),
     transformCallback: (callback: (message: unknown) => void) => {
       const id = nextCallback++;
       callbacks.set(id, callback);

@@ -142,6 +142,8 @@ export interface PlanItem {
   /** Relative to notes/: where it goes, or the note it updates or that blocks it. */
   path: string | null;
   problems: string[];
+  /** A new note that goes to the trash, as it is in the source's trash; absent otherwise. */
+  trashed?: boolean;
 }
 /** A report line about the import as a whole or a note (schnipsle-import `Notice`). */
 export interface ImportNotice {
@@ -160,7 +162,7 @@ export interface ImportPlan {
 export interface ImportPreview {
   plan: ImportPlan;
   path: string;
-  /** Apple Notes: whether the export has `apple-notes-metadata.json`. */
+  /** Apple Notes: whether the export has `apple-notes-metadata.json`; false for other sources. */
   hasMetadata: boolean;
 }
 /** What `apply_import` returns (schnipsle-import `Outcome`). */

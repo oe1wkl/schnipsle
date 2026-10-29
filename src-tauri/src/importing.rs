@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use schnipsle_core::ImportLogError;
-use schnipsle_import::{ImportError, Outcome, Plan, Source, SystemEnv, apple_notes};
+use schnipsle_import::{ImportError, Outcome, Plan, Source, SystemEnv, apple_notes, simplenote};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter as _, State};
 
@@ -42,7 +42,8 @@ pub struct ImportPreview {
     plan: Plan,
     /// The folder or file read.
     path: String,
-    /// Apple Notes: whether the export has the metadata file.
+    /// Apple Notes: whether the export has the metadata file; false for
+    /// other sources.
     has_metadata: bool,
 }
 
@@ -53,13 +54,22 @@ struct Progress {
     total: usize,
 }
 
-/// Lets the user pick the export folder; `None` if cancelled.
+/// Lets the user pick the export of `source`: the folder of an Apple Notes
+/// export, the zip (or `notes.json`) of a Simplenote export. `None` if
+/// cancelled.
 #[tauri::command]
-pub async fn pick_import_folder(app: AppHandle) -> CmdResult<Option<String>> {
+pub async fn pick_import(app: AppHandle, source: Source) -> CmdResult<Option<String>> {
     #[cfg(desktop)]
     {
         use tauri_plugin_dialog::DialogExt as _;
-        let Some(picked) = app.dialog().file().blocking_pick_folder() else {
+        let dialog = app.dialog().file();
+        let picked = match source {
+            Source::Simplenote => dialog
+                .add_filter("Simplenote export", &["zip", "json"])
+                .blocking_pick_file(),
+            _ => dialog.blocking_pick_folder(),
+        };
+        let Some(picked) = picked else {
             return Ok(None);
         };
         let path = picked.into_path().map_err(CommandError::other)?;
@@ -67,7 +77,7 @@ pub async fn pick_import_folder(app: AppHandle) -> CmdResult<Option<String>> {
     }
     #[cfg(mobile)]
     {
-        let _ = app;
+        let _ = (app, source);
         Err(desktop_only())
     }
 }
@@ -85,9 +95,10 @@ pub async fn plan_import(
     source: Source,
     path: String,
 ) -> CmdResult<ImportPreview> {
-    let dir = PathBuf::from(&path);
+    let input = PathBuf::from(&path);
     let batch = match source {
-        Source::AppleNotes => apple_notes::read(&dir)?,
+        Source::AppleNotes => apple_notes::read(&input)?,
+        Source::Simplenote => simplenote::read(&input)?,
         other => {
             return Err(CommandError::other(format!(
                 "Import from {} is not available yet",
@@ -95,7 +106,8 @@ pub async fn plan_import(
             )));
         }
     };
-    let has_metadata = dir.join(apple_notes::METADATA_FILE).is_file();
+    let has_metadata =
+        source == Source::AppleNotes && input.join(apple_notes::METADATA_FILE).is_file();
     with_vault(&state, |v| {
         let plan = schnipsle_import::plan(v, &batch, &SystemEnv)?;
         *state.import.0.lock().map_err(CommandError::other)? =

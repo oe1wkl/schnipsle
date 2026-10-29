@@ -6,7 +6,8 @@
 // result, each imported note openable from it.
 //
 // For Apple Notes the dates and folders come from apple-notes-metadata.json,
-// which the app writes by running the metadata script on request.
+// which the app writes by running the metadata script on request. Simplenote
+// is one zip file; notes from its trash go to the trash.
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
@@ -26,6 +27,14 @@ const ACTION_LABELS: Record<PlannedAction, string> = {
   add: "New",
   update: "Update",
   skip: "Skipped",
+};
+
+/** What the source's export is, for the pick button. */
+const PICK_LABELS: Record<ImportSource, string> = {
+  "apple-notes": "Choose folder…",
+  simplenote: "Choose zip file…",
+  html: "Choose folder…",
+  markdown: "Choose folder…",
 };
 
 const REASON_LABELS: Record<SkipReason, string> = {
@@ -107,6 +116,7 @@ export function createImport(hooks: ImportHooks): { open(): void } {
     path = null;
     planned = false;
     pathText.textContent = "";
+    pickButton.textContent = PICK_LABELS[source()];
     showHelp(true);
     choose.hidden = false;
     metadataBox.hidden = true;
@@ -146,14 +156,14 @@ export function createImport(hooks: ImportHooks): { open(): void } {
   async function pick(): Promise<void> {
     showError(null);
     try {
-      const picked = await invoke<string | null>("pick_import_folder");
+      const picked = await invoke<string | null>("pick_import", { source: source() });
       if (picked !== null) await dryRun(picked);
     } catch (e) {
       showError(asError(e).message);
     }
   }
 
-  /** Reads the export at `folder` and shows what an import would do. */
+  /** Reads the export at `folder` (a file for Simplenote) and shows what an import would do. */
   async function dryRun(folder: string): Promise<void> {
     path = folder;
     pathText.textContent = folder;
@@ -258,8 +268,10 @@ export function createImport(hooks: ImportHooks): { open(): void } {
     const added = count(plan, "add");
     const updated = count(plan, "update");
     const skipped = count(plan, "skip");
+    const trashed = plan.items.filter((i) => i.trashed === true).length;
     const parts = [
       ...(added > 0 || updated === 0 ? [`${String(added)} new`] : []),
+      ...(trashed > 0 ? [`${String(trashed)} of them into the trash`] : []),
       ...(updated > 0 ? [`${String(updated)} updated`] : []),
       ...(skipped > 0 ? [`${String(skipped)} skipped`] : []),
     ].join(", ");
@@ -296,7 +308,8 @@ export function createImport(hooks: ImportHooks): { open(): void } {
     const title = document.createElement("td");
     const name = item.title || "(untitled)";
     const notePath = item.path;
-    if (done && item.action !== "skip" && notePath !== null) {
+    const trashed = item.trashed === true;
+    if (done && item.action !== "skip" && !trashed && notePath !== null) {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "link";
@@ -311,7 +324,7 @@ export function createImport(hooks: ImportHooks): { open(): void } {
       title.textContent = name;
     }
     const action = document.createElement("td");
-    action.textContent = ACTION_LABELS[item.action];
+    action.textContent = trashed ? "New, into the trash" : ACTION_LABELS[item.action];
     const detail = document.createElement("td");
     if (item.action === "skip") {
       detail.textContent = item.reason === null ? "" : REASON_LABELS[item.reason];

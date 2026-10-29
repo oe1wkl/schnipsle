@@ -1,0 +1,82 @@
+{
+  "source": "simplenote",
+  "input": "simplenote-export.zip",
+  "items": [
+    {
+      "sourceId": "0a1b2c3d4e5f40718293a4b5c6d7e8f9",
+      "title": "Lake trip",
+      "action": "add",
+      "reason": null,
+      "path": "Simplenote/lake-trip.md",
+      "problems": []
+    },
+    {
+      "sourceId": "1b2c3d4e5f6071829304a5b6c7d8e9f0",
+      "title": "Club song",
+      "action": "add",
+      "reason": null,
+      "path": "Simplenote/club-song.md",
+      "problems": []
+    },
+    {
+      "sourceId": "2c3d4e5f60718293a4b5c6d7e8f90a1b",
+      "title": "Repeater list",
+      "action": "add",
+      "reason": null,
+      "path": "Simplenote/repeater-list.md",
+      "problems": []
+    },
+    {
+      "sourceId": "3d4e5f60718293a4b5c6d7e8f90a1b2c",
+      "title": "Pizza dough",
+      "action": "add",
+      "reason": null,
+      "path": "Simplenote/pizza-dough.md",
+      "problems": []
+    },
+    {
+      "sourceId": "4e5f60718293a4b5c6d7e8f90a1b2c3d",
+      "title": "Keyer sketch",
+      "action": "add",
+      "reason": null,
+      "path": "Simplenote/keyer-sketch.md",
+      "problems": [
+        "#define, #include at the start of a line become tags; change the text where they are not meant as tags."
+      ]
+    },
+    {
+      "sourceId": "5f60718293a4b5c6d7e8f90a1b2c3d4e",
+      "title": "Café list",
+      "action": "add",
+      "reason": null,
+      "path": "Simplenote/café-list.md",
+      "problems": []
+    },
+    {
+      "sourceId": "60718293a4b5c6d7e8f90a1b2c3d4e5f",
+      "title": "note",
+      "action": "add",
+      "reason": null,
+      "path": "Simplenote/note.md",
+      "problems": []
+    },
+    {
+      "sourceId": "718293a4b5c6d7e8f90a1b2c3d4e5f60",
+      "title": "No line break at the end",
+      "action": "add",
+      "reason": null,
+      "path": "Simplenote/no-line-break-at-the-end.md",
+      "problems": []
+    },
+    {
+      "sourceId": "8293a4b5c6d7e8f90a1b2c3d4e5f6071",
+      "title": "Old idea",
+      "action": "add",
+      "reason": null,
+      "path": "Simplenote/old-idea.md",
+      "problems": [],
+      "trashed": true
+    }
+  ],
+  "notices": []
+}

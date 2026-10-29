@@ -809,7 +809,7 @@ pub fn run() {
             keep_both,
             download_note,
             extract_tags,
-            importing::pick_import_folder,
+            importing::pick_import,
             importing::plan_import,
             importing::cancel_import,
             importing::apply_import,
