@@ -2991,6 +2991,10 @@ name = "schnipsle-import"
 version = "0.1.0"
 dependencies = [
  "schnipsle-core",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "unicode-normalization",
 ]
 
 [[package]]

@@ -68,7 +68,7 @@ impl Vault {
         let ext =
             extension_of(file_name).ok_or_else(|| VaultError::InvalidPath(file_name.to_owned()))?;
         let hash = sha256_hex(bytes);
-        let path = format!("{ATTACHMENTS_DIR}/{}/{hash}.{ext}", &hash[..2]);
+        let path = stored_path(&hash, &ext);
         let target = self.root().join(&path);
         if let Some(dir) = target.parent() {
             fs::create_dir_all(dir)?;
@@ -85,8 +85,7 @@ impl Vault {
                 eprintln!("no metadata for {path}: {e}");
             }
         }
-        let depth = note_path.matches('/').count() + 1; // + 1 for notes/
-        let link = format!("{}{path}", "../".repeat(depth));
+        let link = link_from(note_path, &path);
         let text = link_text(file_name);
         let markdown = if IMAGE_EXTENSIONS.contains(&ext.as_str()) {
             format!("![{text}]({link})")
@@ -167,6 +166,25 @@ impl Vault {
     }
 }
 
+/// Where [`Vault::add_attachment`] stores `bytes` named `file_name`, relative
+/// to the vault root (format.md §6); `None` without a usable extension.
+#[must_use]
+pub fn attachment_path(file_name: &str, bytes: &[u8]) -> Option<String> {
+    Some(stored_path(&sha256_hex(bytes), &extension_of(file_name)?))
+}
+
+/// The link from the note at `note_path` (relative to `notes/`) to the file
+/// at `path` (relative to the vault root), e.g. `../attachments/3f/3f9a….png`.
+#[must_use]
+pub fn link_from(note_path: &str, path: &str) -> String {
+    let depth = note_path.matches('/').count() + 1; // + 1 for notes/
+    format!("{}{path}", "../".repeat(depth))
+}
+
+fn stored_path(hash: &str, ext: &str) -> String {
+    format!("{ATTACHMENTS_DIR}/{}/{hash}.{ext}", &hash[..2])
+}
+
 /// The lowercased extension of `file_name` if it is a plausible one: ASCII
 /// letters and digits only, at most 10 characters.
 fn extension_of(file_name: &str) -> Option<String> {
@@ -242,6 +260,13 @@ mod tests {
         assert_eq!(added.link, format!("../../{}", added.path));
         assert_eq!(added.markdown, format!("![Schaltplan.PNG]({})", added.link));
         assert_eq!(fs::read(dir.path().join(&added.path)).unwrap(), PNG);
+        // Known before anything is written, e.g. for a dry run.
+        assert_eq!(
+            attachment_path("Schaltplan.PNG", PNG).as_deref(),
+            Some(added.path.as_str())
+        );
+        assert_eq!(link_from("Projekte/Antenne.md", &added.path), added.link);
+        assert_eq!(attachment_path("no-extension", PNG), None);
 
         let sidecar = fs::read_to_string(dir.path().join(format!("{}.yaml", added.path))).unwrap();
         assert_eq!(

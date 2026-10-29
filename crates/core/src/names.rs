@@ -8,7 +8,7 @@
 use serde::Serialize;
 use unicode_normalization::UnicodeNormalization;
 
-use crate::vault::{Access, Result, SavedNote, Vault, VaultError, title_of};
+use crate::vault::{Access, Result, SavedNote, Vault, VaultError, placeholder_of, title_of};
 
 /// Most characters of a file name stem.
 const MAX_STEM: usize = 80;
@@ -77,6 +77,25 @@ fn split_path(path: &str) -> (&str, &str) {
     (folder, stem)
 }
 
+/// Creates a note at the first free `folder/stem(-n).md` with `create`.
+fn create_unique(
+    folder: &str,
+    stem: &str,
+    create: impl Fn(&str) -> Result<SavedNote>,
+) -> Result<NewNote> {
+    for n in 1..=MAX_SUFFIX {
+        let path = candidate(folder, stem, n);
+        match create(&path) {
+            Ok(saved) => return Ok(NewNote { path, saved }),
+            Err(VaultError::AlreadyExists(_)) => {}
+            Err(e) => return Err(e),
+        }
+    }
+    Err(VaultError::AlreadyExists(candidate(
+        folder, stem, MAX_SUFFIX,
+    )))
+}
+
 /// A note just created, with the path chosen for it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct NewNote {
@@ -94,12 +113,40 @@ impl Vault {
     /// [`VaultError::InvalidPath`] or I/O errors.
     pub fn create_titled(&self, folder: &str, text: &str) -> Result<NewNote> {
         let stem = slug(&title_of(text, "note"));
+        create_unique(folder, &stem, |path| self.create_note(path, text))
+    }
+
+    /// Creates a note with exactly `text` (see [`Vault::create_note_as_is`])
+    /// in `folder`, named after `title` (format.md §3, §12.1).
+    ///
+    /// # Errors
+    /// [`VaultError::InvalidPath`] or I/O errors.
+    pub fn create_titled_as_is(&self, folder: &str, title: &str, text: &str) -> Result<NewNote> {
+        create_unique(folder, &slug(title), |path| {
+            self.create_note_as_is(path, text)
+        })
+    }
+
+    /// The path `folder/<slug of title>.md`, with `-2`, `-3`, … if a note of
+    /// that name exists or `reserved` says the path is spoken for (compared
+    /// in lowercase); what [`Vault::create_titled_as_is`] would pick.
+    ///
+    /// # Errors
+    /// [`VaultError::InvalidPath`] or [`VaultError::AlreadyExists`] if no
+    /// name is free.
+    pub fn free_note_path(
+        &self,
+        folder: &str,
+        title: &str,
+        reserved: impl Fn(&str) -> bool,
+    ) -> Result<String> {
+        let stem = slug(title);
         for n in 1..=MAX_SUFFIX {
             let path = candidate(folder, &stem, n);
-            match self.create_note(&path, text) {
-                Ok(saved) => return Ok(NewNote { path, saved }),
-                Err(VaultError::AlreadyExists(_)) => {}
-                Err(e) => return Err(e),
+            let full = self.resolve(&path)?;
+            if !reserved(&path.to_lowercase()) && !full.exists() && !placeholder_of(&full).exists()
+            {
+                return Ok(path);
             }
         }
         Err(VaultError::AlreadyExists(candidate(
@@ -199,6 +246,41 @@ mod tests {
         );
         let on_disk = fs::read_to_string(dir.path().join("notes/new-note.md")).unwrap();
         assert_eq!(on_disk, first.saved.text);
+    }
+
+    #[test]
+    fn imported_notes_are_written_as_given() {
+        let (_dir, vault) = vault();
+        let text = "---\nid: 01JA7R0B2C3D4E5F6G7H8J9K0A\ncreated: 2020-01-01T00:00:00Z\n\
+                    modified: 2021-02-02T00:00:00Z\n---\nBody\n";
+        vault.create_note("Import/tuner.md", "# Other\n").unwrap();
+        assert_eq!(
+            vault
+                .free_note_path("Import", "Tuner", |p| p == "import/tuner-2.md")
+                .unwrap(),
+            "Import/tuner-3.md"
+        );
+        let note = vault.create_titled_as_is("Import", "Tuner", text).unwrap();
+        assert_eq!(note.path, "Import/tuner-2.md");
+        assert_eq!(note.saved.text, text);
+        assert_eq!(vault.read_note(&note.path).unwrap().text, text);
+
+        let found = vault.find_note("01JA7R0B2C3D4E5F6G7H8J9K0A", Some(&note.path));
+        assert_eq!(found.as_deref(), Some(note.path.as_str()));
+        assert_eq!(
+            vault.find_note("01JA7R0B2C3D4E5F6G7H8J9K0A", Some("Import/tuner.md")),
+            None
+        );
+
+        let newer = text.replace("Body", "Newer body");
+        let saved = vault
+            .replace_note_as_is(&note.path, &newer, &note.saved.hash)
+            .unwrap();
+        assert_eq!(saved.text, newer);
+        assert!(matches!(
+            vault.replace_note_as_is(&note.path, text, &note.saved.hash),
+            Err(VaultError::Conflict { .. })
+        ));
     }
 
     #[test]

@@ -1,0 +1,90 @@
+{
+  "source": "apple-notes",
+  "input": "Pipeline sample",
+  "items": [
+    {
+      "sourceId": "p101",
+      "title": "Antenna tuner",
+      "action": "add",
+      "reason": null,
+      "path": "Apple Notes/Amateurfunk & Radio/QRP Kits/antenna-tuner.md",
+      "problems": []
+    },
+    {
+      "sourceId": "p102",
+      "title": "Antenna tuner",
+      "action": "add",
+      "reason": null,
+      "path": "Apple Notes/Amateurfunk & Radio/QRP Kits/antenna-tuner-2.md",
+      "problems": []
+    },
+    {
+      "sourceId": "s3",
+      "title": "Café song",
+      "action": "add",
+      "reason": null,
+      "path": "Apple Notes/Musik & Lieder/café-song.md",
+      "problems": []
+    },
+    {
+      "sourceId": "s4",
+      "title": "Undated",
+      "action": "add",
+      "reason": null,
+      "path": "Apple Notes/2024/undated.md",
+      "problems": [
+        "The creation time \"yesterday\" was not understood; the import time is used."
+      ]
+    },
+    {
+      "sourceId": "s5",
+      "title": "Broken attachments",
+      "action": "add",
+      "reason": null,
+      "path": "Apple Notes/broken-attachments.md",
+      "problems": [
+        "The attachment gone.png cannot be read; its link is left as it is.",
+        "The attachment README has no usable extension; its link is left as it is."
+      ]
+    },
+    {
+      "sourceId": "p101",
+      "title": "Antenna tuner",
+      "action": "skip",
+      "reason": "duplicate",
+      "path": null,
+      "problems": []
+    },
+    {
+      "sourceId": "s7",
+      "title": "Odd folders",
+      "action": "add",
+      "reason": null,
+      "path": "Apple Notes/hidden/a-b- c/odd-folders.md",
+      "problems": []
+    },
+    {
+      "sourceId": "projects/tool.md",
+      "title": "From another tool",
+      "action": "add",
+      "reason": null,
+      "path": "Apple Notes/from-another-tool.md",
+      "problems": []
+    },
+    {
+      "sourceId": "p403",
+      "title": "Empty note",
+      "action": "add",
+      "reason": null,
+      "path": "Apple Notes/Notes/empty-note.md",
+      "problems": []
+    }
+  ],
+  "notices": [
+    {
+      "sourceId": null,
+      "title": null,
+      "message": "A notice from the adapter."
+    }
+  ]
+}
