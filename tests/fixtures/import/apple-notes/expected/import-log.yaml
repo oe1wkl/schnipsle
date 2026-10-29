@@ -1,0 +1,68 @@
+format: 1
+id: 01M63HM980000000000000000B
+source: apple-notes
+input: Schnipsle-Import
+started: "2026-10-29T10:00:00Z"
+finished: "2026-10-29T10:00:00Z"
+undone: null
+notes:
+  - source_id: "x-coredata://00000000-0000-4000-8000-0000000000A1/ICNote/p303"
+    id: 01M63HM9800000000000000001
+    path: notes/Apple Notes/Notes/bread-rolls.md
+    action: added
+    source_modified: "2025-09-15T07:55:31Z"
+    hash: eaed859f879db2b90a8ecd2712083a9e5e5d1d05446f7a2f0bbea80506cd0f99
+  - source_id: "x-coredata://00000000-0000-4000-8000-0000000000A1/ICNote/p401"
+    id: 01M63HM9800000000000000002
+    path: notes/Apple Notes/Notes/club-history-the-first-ten-years.md
+    action: added
+    source_modified: "2020-10-11T08:00:00Z"
+    hash: fb6359b21d2b8d0121dbca6d901f296557818e9b28073c8b0d237e8554af7c0a
+  - source_id: "x-coredata://00000000-0000-4000-8000-0000000000A1/ICNote/p403"
+    id: 01M63HM9800000000000000003
+    path: notes/Apple Notes/Notes/empty-note.md
+    action: added
+    source_modified: "2026-07-07T07:07:07Z"
+    hash: 4795d6c9c94122857842fcb775d63118f5fe41abfd7ba2cf5c37556e1c49ca8d
+  - source_id: "export:Mixed/Old shopping list.md"
+    id: 01M63HM9800000000000000004
+    path: notes/Apple Notes/Mixed/old-shopping-list.md
+    action: added
+    source_modified: "2026-10-28T22:15:00Z"
+    hash: cb330e62553e318368ddb66c829bef9aa97208e43ca9212af74b7c4a5f66b789
+  - source_id: "x-coredata://00000000-0000-4000-8000-0000000000A1/ICNote/p301"
+    id: 01M63HM9800000000000000005
+    path: notes/Apple Notes/Kochen & Backen/pizza-dough.md
+    action: added
+    source_modified: "2024-09-09T17:30:00Z"
+    hash: 038619016301093d700e0a578673bb1c6795ca0db5c3a0fcdadcdd71fe7b3a8a
+  - source_id: "x-coredata://00000000-0000-4000-8000-0000000000A1/ICNote/p402"
+    id: 01M63HM9800000000000000006
+    path: notes/Apple Notes/Notes/trip-planning-2026-03-14-0930.md
+    action: added
+    source_modified: "2026-03-14T08:30:00Z"
+    hash: 9e79b1cbf3490b457882890ce8b02c3437a8588fcfff9d8da673f7c9762c7cc6
+  - source_id: "x-coredata://00000000-0000-4000-8000-0000000000A1/ICNote/p101"
+    id: 01M63HM9800000000000000007
+    path: notes/Apple Notes/Amateurfunk & Radio/QRP Kits/antenna-tuner.md
+    action: added
+    source_modified: "2025-11-20T18:40:12Z"
+    hash: 4b44b07f6d9a6ed0f8b44611314625e6ba4d9915d1491a2e5c504ad9d8078161
+  - source_id: "x-coredata://00000000-0000-4000-8000-0000000000A1/ICNote/p102"
+    id: 01M63HM9800000000000000008
+    path: notes/Apple Notes/Amateurfunk & Radio/field-day-checklist.md
+    action: added
+    source_modified: "2025-06-20T05:30:00Z"
+    hash: e2b4978968d853cffcaa2df690e6643a45fb207ec6c15b452c14f862581a13a1
+  - source_id: "x-coredata://00000000-0000-4000-8000-0000000000A1/ICNote/p103"
+    id: 01M63HM9800000000000000009
+    path: notes/Apple Notes/Amateurfunk & Radio/keyer-firmware-changes-for-version-2.1-and-the-build-setup-on-the-bench-machine.md
+    action: added
+    source_modified: "2023-02-01T21:10:00Z"
+    hash: abab8462e691bdd3f20e2ab5cc0bf312f808966775c07787a0d7c1e3c0caf716
+  - source_id: "x-coredata://00000000-0000-4000-8000-0000000000A1/ICNote/p201"
+    id: 01M63HM980000000000000000A
+    path: notes/Apple Notes/Musik & Lieder/morning-song.md
+    action: added
+    source_modified: "2026-01-02T10:00:00Z"
+    hash: 1ae3b0adb4887ec1b8a73f7788d9585bcdc6b29c92927311a7e9c6f639240906

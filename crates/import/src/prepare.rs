@@ -97,6 +97,48 @@ pub(crate) fn final_tags(body: &str, folders: &[String], tags: &[String]) -> Vec
     out
 }
 
+/// Tags at the start of a line that goes on with words that are no tags,
+/// such as `#define KEYER_WPM 20` or `#include <x.h>`: probably code, which
+/// §5.3 reads as tags all the same. Outside code blocks; each once.
+pub(crate) fn code_like_tags(body: &str) -> Vec<String> {
+    let is_tag = |word: &str| {
+        let tags = extract_tags(word);
+        tags.len() == 1 && word.strip_prefix('#') == Some(tags[0].name.as_str())
+    };
+    let mut out = Vec::new();
+    let mut fence = false;
+    for line in front_matter::body(body).lines().map(str::trim) {
+        if line.starts_with("```") || line.starts_with("~~~") {
+            fence = !fence;
+            continue;
+        }
+        let mut words = line.split_whitespace();
+        let Some(first) = words.next() else {
+            continue;
+        };
+        if fence || !is_tag(first) || words.all(is_tag) {
+            continue;
+        }
+        let tag = first.to_owned();
+        if !out.contains(&tag) {
+            out.push(tag);
+        }
+    }
+    out
+}
+
+/// The report line for [`code_like_tags`] in `body`, if there are any.
+pub(crate) fn code_like_tags_problem(body: &str) -> Option<String> {
+    let tags = code_like_tags(body);
+    (!tags.is_empty()).then(|| {
+        format!(
+            "{} at the start of a line become tags; change the text where they are not meant as \
+             tags.",
+            tags.join(", ")
+        )
+    })
+}
+
 /// `body` with `tags` on one final line after an empty line (§12.1 rule 5).
 pub(crate) fn append_tags(body: &str, tags: &[String]) -> String {
     if tags.is_empty() {
@@ -242,6 +284,13 @@ mod tests {
         assert_eq!(append_tags("Text", &tags), "Text\n\n#Funk #Ö-Club\n");
         assert_eq!(append_tags("", &tags), "#Funk #Ö-Club\n");
         assert_eq!(append_tags("Text\n", &[]), "Text\n");
+    }
+
+    #[test]
+    fn tags_that_look_like_code() {
+        let body = "#recipe #baking\n#define WPM 20\n#include <Keyer.h>\n#define X\n\
+                    Text with #tag inside\n```\n#ifdef Y\n```\n# Heading\n";
+        assert_eq!(code_like_tags(body), ["#define", "#include"]);
     }
 
     #[test]
