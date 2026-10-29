@@ -28,6 +28,6 @@ mod prepare;
 pub use note::{AttachmentData, Batch, ImportedAttachment, ImportedNote, Notice, Source};
 pub use pipeline::{
     Env, ImportError, Outcome, Plan, PlanItem, PlannedAction, SkipReason, SystemEnv, Written,
-    apply, plan,
+    apply, apply_with_progress, plan,
 };
 pub use prepare::{folder_tag, tag_from};

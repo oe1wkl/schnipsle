@@ -520,7 +520,21 @@ pub struct Outcome {
 /// # Errors
 /// [`ImportError::Log`] if the import log cannot be written; the notes
 /// written up to then are in the log.
-pub fn apply(vault: &Vault, mut plan: Plan, env: &dyn Env) -> Result<Outcome, ImportError> {
+pub fn apply(vault: &Vault, plan: Plan, env: &dyn Env) -> Result<Outcome, ImportError> {
+    apply_with_progress(vault, plan, env, &mut |_, _| ())
+}
+
+/// [`apply`], calling `progress(done, total)` after each note it wrote or
+/// skipped, for a progress bar.
+///
+/// # Errors
+/// As [`apply`].
+pub fn apply_with_progress(
+    vault: &Vault,
+    mut plan: Plan,
+    env: &dyn Env,
+    progress: &mut dyn FnMut(usize, usize),
+) -> Result<Outcome, ImportError> {
     let prepared = std::mem::take(&mut plan.prepared);
     if prepared.is_empty() {
         return Ok(Outcome {
@@ -538,6 +552,7 @@ pub fn apply(vault: &Vault, mut plan: Plan, env: &dyn Env) -> Result<Outcome, Im
     );
     vault.write_import_log(&mut log)?;
     let mut written = Vec::new();
+    let mut done = 0;
     let mut position = 0; // of the next entry in the log
     for chunk in prepared.chunks(LOG_BATCH) {
         for p in chunk {
@@ -564,6 +579,8 @@ pub fn apply(vault: &Vault, mut plan: Plan, env: &dyn Env) -> Result<Outcome, Im
                     log.remove(position);
                 }
             }
+            done += 1;
+            progress(done, prepared.len());
         }
         vault.write_import_log(&mut log)?;
     }

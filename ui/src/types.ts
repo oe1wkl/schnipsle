@@ -119,3 +119,53 @@ export interface SearchHit {
   inTrash: boolean;
   pinned: boolean;
 }
+
+/** Where an import reads from (schnipsle-import `Source`). */
+export type ImportSource = "apple-notes" | "simplenote" | "html" | "markdown";
+/** What an import does with a note (schnipsle-import `PlannedAction`). */
+export type PlannedAction = "add" | "update" | "skip";
+/** Why a note is not imported (schnipsle-import `SkipReason`, format.md §12.3). */
+export type SkipReason =
+  | "duplicate"
+  | "changedHere"
+  | "notNewer"
+  | "noModifiedTime"
+  | "missing"
+  | "changedMeanwhile"
+  | "failed";
+/** One note in an import report (schnipsle-import `PlanItem`). */
+export interface PlanItem {
+  sourceId: string;
+  title: string;
+  action: PlannedAction;
+  reason: SkipReason | null;
+  /** Relative to notes/: where it goes, or the note it updates or that blocks it. */
+  path: string | null;
+  problems: string[];
+}
+/** A report line about the import as a whole or a note (schnipsle-import `Notice`). */
+export interface ImportNotice {
+  sourceId: string | null;
+  title: string | null;
+  message: string;
+}
+/** The dry run (schnipsle-import `Plan`). */
+export interface ImportPlan {
+  source: ImportSource;
+  input: string;
+  items: PlanItem[];
+  notices: ImportNotice[];
+}
+/** What `plan_import` returns. */
+export interface ImportPreview {
+  plan: ImportPlan;
+  path: string;
+  /** Apple Notes: whether the export has `apple-notes-metadata.json`. */
+  hasMetadata: boolean;
+}
+/** What `apply_import` returns (schnipsle-import `Outcome`). */
+export interface ImportOutcome {
+  runId: string | null;
+  plan: ImportPlan;
+  written: { path: string; action: "added" | "updated" }[];
+}

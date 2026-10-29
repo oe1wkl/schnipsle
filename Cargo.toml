@@ -23,6 +23,7 @@ publish = false
 [workspace.dependencies]
 schnipsle-core = { path = "crates/core" }
 schnipsle-apple = { path = "crates/apple" }
+schnipsle-import = { path = "crates/import" }
 comrak = { version = "0.56", default-features = false }
 unicode-normalization = "0.1"
 serde = { version = "1", features = ["derive"] }
