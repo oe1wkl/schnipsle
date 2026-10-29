@@ -5,6 +5,7 @@
 //! here (ADR-0003). Commands that may show system UI or wait for iOS are `async`,
 //! so they run off the main thread.
 
+mod importing;
 mod indexing;
 mod smart_folders;
 mod vault_location;
@@ -31,6 +32,8 @@ struct AppState {
     pending: Mutex<Option<PathBuf>>,
     /// The search index of the open vault (ADR-0009).
     index: indexing::SharedIndex,
+    /// The import dry run the UI shows.
+    import: importing::PendingImport,
 }
 
 /// Error sent to the UI: a machine-readable `kind` plus a message.
@@ -652,9 +655,10 @@ fn extract_tags(markdown: &str) -> Vec<Tag> {
 }
 
 /// The app's own menu bar (desktop). Unlike Tauri's default it has "Close
-/// Window" only once, in the File menu, next to "New Note" (⌘N) and "Open
-/// Vault…" (⌘O). A click on those two is sent to the UI as a `menu` event
-/// carrying the item id; everything else is a standard system item.
+/// Window" only once, in the File menu, next to "New Note" (⌘N), "Open
+/// Vault…" (⌘O) and "Import…". A click on those three is sent to the UI as a
+/// `menu` event carrying the item id; everything else is a standard system
+/// item.
 #[cfg(desktop)]
 fn install_menu(app: &tauri::App) -> tauri::Result<()> {
     use tauri::Emitter as _;
@@ -677,6 +681,8 @@ fn install_menu(app: &tauri::App) -> tauri::Result<()> {
         &[
             &MenuItem::with_id(app, "new-note", "New Note", true, Some("CmdOrCtrl+N"))?,
             &MenuItem::with_id(app, "open-vault", "Open Vault…", true, Some("CmdOrCtrl+O"))?,
+            &separator()?,
+            &MenuItem::with_id(app, "import", "Import…", true, None::<&str>)?,
             &separator()?,
             &PredefinedMenuItem::close_window(app, None)?,
             #[cfg(not(target_os = "macos"))]
@@ -745,7 +751,7 @@ fn install_menu(app: &tauri::App) -> tauri::Result<()> {
     app.set_menu(menu)?;
     app.on_menu_event(|app, event| {
         let id = event.id().as_ref();
-        if matches!(id, "new-note" | "open-vault") {
+        if matches!(id, "new-note" | "open-vault" | "import") {
             let _ = app.emit("menu", id);
         }
     });
@@ -802,7 +808,12 @@ pub fn run() {
             resolve_conflict,
             keep_both,
             download_note,
-            extract_tags
+            extract_tags,
+            importing::pick_import_folder,
+            importing::plan_import,
+            importing::cancel_import,
+            importing::apply_import,
+            importing::read_apple_notes_metadata
         ])
         .run(tauri::generate_context!())
         .expect("error while running Schnipsle");

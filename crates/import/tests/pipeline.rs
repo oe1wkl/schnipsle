@@ -11,7 +11,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use schnipsle_core::{Vault, VaultError};
-use schnipsle_import::{AttachmentData, Batch, PlannedAction, SkipReason, apply, plan};
+use schnipsle_import::{
+    AttachmentData, Batch, PlannedAction, SkipReason, apply, apply_with_progress, plan,
+};
 use support::{TestEnv, check, empty_vault, files, output};
 
 fn case(name: &str) -> PathBuf {
@@ -46,8 +48,13 @@ fn basic() {
     assert_eq!(planned.count(PlannedAction::Add), 8);
     assert_eq!(planned.items[5].reason, Some(SkipReason::Duplicate));
 
-    let outcome = apply(&vault, planned, &env).unwrap();
+    let mut steps = Vec::new();
+    let outcome = apply_with_progress(&vault, planned, &env, &mut |done, total| {
+        steps.push((done, total));
+    })
+    .unwrap();
     assert_eq!(outcome.written.len(), 8);
+    assert_eq!(steps, (1..=8).map(|done| (done, 8)).collect::<Vec<_>>());
     check(&dir, &output(vault_dir.path(), &outcome));
 }
 

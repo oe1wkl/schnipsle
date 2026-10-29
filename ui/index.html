@@ -183,5 +183,70 @@
         </div>
       </form>
     </dialog>
+
+    <dialog id="import-dialog" class="import-dialog" aria-labelledby="import-title">
+      <div class="import">
+        <h2 id="import-title">Import notes</h2>
+        <section id="import-choose" class="import-choose">
+          <label>
+            From
+            <select id="import-source">
+              <option value="apple-notes">Apple Notes</option>
+              <option value="simplenote" disabled>Simplenote (coming)</option>
+              <option value="html" disabled>HTML files (coming)</option>
+              <option value="markdown" disabled>Markdown folder (coming)</option>
+            </select>
+          </label>
+          <div id="import-help-apple-notes" class="import-help">
+            <p>Two steps, because the export from Notes leaves out dates and folders:</p>
+            <ol>
+              <li>
+                In Notes, open a folder, select its notes (⌘A) and choose File › Export as ›
+                Markdown. Save them into a folder of their own inside one folder for the import,
+                e.g. “Schnipsle-Import”. Do this for each folder you want.
+              </li>
+              <li>
+                Choose that folder here. Schnipsle then reads the dates and folders of your notes
+                from Notes; macOS asks once whether it may. Nothing in Notes is changed.
+              </li>
+            </ol>
+          </div>
+          <div class="import-pick">
+            <button id="import-pick" type="button">Choose folder…</button>
+            <span id="import-path" class="muted"></span>
+          </div>
+        </section>
+        <div id="import-metadata" class="import-box" hidden>
+          <span id="import-metadata-text"></span>
+          <button id="import-read-metadata" type="button" class="small">
+            Read dates and folders from Notes
+          </button>
+        </div>
+        <section id="import-report" class="import-report" aria-live="polite" hidden>
+          <p id="import-summary" class="import-summary"></p>
+          <ul id="import-notices" class="import-notices"></ul>
+          <table class="import-items">
+            <thead>
+              <tr>
+                <th scope="col">Note</th>
+                <th scope="col">Import</th>
+                <th scope="col">Where, or why not</th>
+              </tr>
+            </thead>
+            <tbody id="import-items"></tbody>
+          </table>
+        </section>
+        <div id="import-progress" class="import-progress" hidden>
+          <progress id="import-bar" max="1" value="0"></progress>
+          <span id="import-progress-text" class="muted"></span>
+        </div>
+        <p id="import-error" class="folder-error" role="alert" hidden></p>
+        <div class="folder-buttons">
+          <span class="spacer"></span>
+          <button id="import-cancel" type="button">Cancel</button>
+          <button id="import-start" type="button" disabled>Import</button>
+        </div>
+      </div>
+    </dialog>
   </body>
 </html>

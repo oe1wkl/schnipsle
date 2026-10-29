@@ -19,6 +19,7 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 schnipsle-core.workspace = true
+schnipsle-import.workspace = true
 tauri = { version = "2", features = [] }
 tauri-plugin-vault-access = { path = "../crates/tauri-plugin-vault-access" }
 serde.workspace = true

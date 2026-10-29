@@ -8,6 +8,7 @@ import { listen } from "@tauri-apps/api/event";
 import { asError, setStatus, ui } from "./dom";
 import { createEditor, type EditorMode, frontMatterLength, isPinned } from "./editor";
 import { createImageCache, fileName } from "./images";
+import { createImport } from "./import";
 import { createSidebar, type ListFilter } from "./sidebar";
 import type {
   VaultInfo,
@@ -50,6 +51,7 @@ let saveTimer: number | undefined;
 let saving: Promise<void> = Promise.resolve();
 /** Why the open vault is read-only; `null` if it is writable or none is open. */
 let readOnly: string | null = null;
+let vaultIsOpen = false;
 /** The notes outside notes/ last shown, and those the user said "Not now" to. */
 let straysShown = "";
 let straysDismissed = "";
@@ -130,6 +132,7 @@ function vaultOpened(info: VaultInfo): void {
   ui.vaultName.textContent = info.name;
   ui.vaultHint.textContent = info.path;
   readOnly = info.readOnly;
+  vaultIsOpen = true;
   straysDismissed = "";
   ui.strays.hidden = true;
   ui.readOnly.hidden = readOnly === null;
@@ -1095,10 +1098,23 @@ try {
 }
 setMode(savedMode === "source" ? "source" : "live");
 
-// File menu (desktop): same actions as the buttons.
+const importer = createImport({
+  vaultState: () => (vaultIsOpen ? { open: true, readOnly } : { open: false }),
+  openNote: (path, title) => {
+    showView("list");
+    void openNote({ path, title, modifiedMs: 0, available: true, pinned: false });
+  },
+  imported: () => {
+    void refreshList();
+    void sidebar.refresh();
+  },
+});
+
+// File menu (desktop): same actions as the buttons, plus Import….
 void listen<string>("menu", (event) => {
   if (event.payload === "open-vault") ui.pick.click();
   else if (event.payload === "new-note" && !ui.newNote.disabled) ui.newNote.click();
+  else if (event.payload === "import") importer.open();
 });
 
 /** Runs a check after any save in progress, so a save's own echo is not mistaken for a change. */
