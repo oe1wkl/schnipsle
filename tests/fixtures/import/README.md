@@ -54,6 +54,14 @@ The cases:
 
 `Mixed/` stands for an export made from the smart folder `✱ Recipes`, which mixes notes from several Notes folders.
 
+`apple-notes/expected/` is what the adapter and the pipeline make of it (`crates/import/tests/apple_notes.rs`), in the layout of `pipeline/` above. The test copies the export to a folder `Schnipsle-Import` and gives its files the time 2026-10-28T22:15:00Z, the time of the export, which only the unmatched file keeps. What the adapter does to the text:
+
+- two spaces at a line end are kept only where they break a line inside a paragraph, so the note renders as before without the noise;
+- U+2028 at a line end is dropped, inside a line it becomes a line break;
+- attachments that are not pictures (the PDF) are linked, not shown as images;
+- blank lines at the end are dropped;
+- the rest stays as Notes wrote it, `++underlined++` too.
+
 ## `simplenote/`
 
 `simplenote-export.zip` is laid out like the zip Simplenote writes:

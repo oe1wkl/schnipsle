@@ -1,0 +1,105 @@
+{
+  "source": "apple-notes",
+  "input": "Schnipsle-Import",
+  "items": [
+    {
+      "sourceId": "x-coredata://00000000-0000-4000-8000-0000000000A1/ICNote/p303",
+      "title": "Bread rolls",
+      "action": "add",
+      "reason": null,
+      "path": "Apple Notes/Notes/bread-rolls.md",
+      "problems": []
+    },
+    {
+      "sourceId": "x-coredata://00000000-0000-4000-8000-0000000000A1/ICNote/p401",
+      "title": "Club history: the first ten years",
+      "action": "add",
+      "reason": null,
+      "path": "Apple Notes/Notes/club-history-the-first-ten-years.md",
+      "problems": []
+    },
+    {
+      "sourceId": "x-coredata://00000000-0000-4000-8000-0000000000A1/ICNote/p403",
+      "title": "Empty note",
+      "action": "add",
+      "reason": null,
+      "path": "Apple Notes/Notes/empty-note.md",
+      "problems": []
+    },
+    {
+      "sourceId": "export:Mixed/Old shopping list.md",
+      "title": "Old shopping list",
+      "action": "add",
+      "reason": null,
+      "path": "Apple Notes/Mixed/old-shopping-list.md",
+      "problems": []
+    },
+    {
+      "sourceId": "x-coredata://00000000-0000-4000-8000-0000000000A1/ICNote/p301",
+      "title": "Pizza dough",
+      "action": "add",
+      "reason": null,
+      "path": "Apple Notes/Kochen & Backen/pizza-dough.md",
+      "problems": []
+    },
+    {
+      "sourceId": "x-coredata://00000000-0000-4000-8000-0000000000A1/ICNote/p402",
+      "title": "Trip planning 2026-03-14 09:30",
+      "action": "add",
+      "reason": null,
+      "path": "Apple Notes/Notes/trip-planning-2026-03-14-0930.md",
+      "problems": []
+    },
+    {
+      "sourceId": "x-coredata://00000000-0000-4000-8000-0000000000A1/ICNote/p101",
+      "title": "Antenna tuner",
+      "action": "add",
+      "reason": null,
+      "path": "Apple Notes/Amateurfunk & Radio/QRP Kits/antenna-tuner.md",
+      "problems": []
+    },
+    {
+      "sourceId": "x-coredata://00000000-0000-4000-8000-0000000000A1/ICNote/p102",
+      "title": "Field day checklist",
+      "action": "add",
+      "reason": null,
+      "path": "Apple Notes/Amateurfunk & Radio/field-day-checklist.md",
+      "problems": []
+    },
+    {
+      "sourceId": "x-coredata://00000000-0000-4000-8000-0000000000A1/ICNote/p103",
+      "title": "Keyer firmware: changes for version 2.1 and the build setup on the \"bench\" machine",
+      "action": "add",
+      "reason": null,
+      "path": "Apple Notes/Amateurfunk & Radio/keyer-firmware-changes-for-version-2.1-and-the-build-setup-on-the-bench-machine.md",
+      "problems": [
+        "#define, #include at the start of a line become tags; change the text where they are not meant as tags."
+      ]
+    },
+    {
+      "sourceId": "x-coredata://00000000-0000-4000-8000-0000000000A1/ICNote/p201",
+      "title": "Morning song",
+      "action": "add",
+      "reason": null,
+      "path": "Apple Notes/Musik & Lieder/morning-song.md",
+      "problems": []
+    }
+  ],
+  "notices": [
+    {
+      "sourceId": "export:Mixed/Old shopping list.md",
+      "title": "Old shopping list",
+      "message": "No note in the metadata has this title; it keeps the time of the export and its folder in the export."
+    },
+    {
+      "sourceId": "x-coredata://00000000-0000-4000-8000-0000000000A1/ICNote/p302",
+      "title": "Pizza dough",
+      "message": "Not in the export: Notes exports only one of several notes with the same title in a folder. Give it another title in Notes and export it again."
+    },
+    {
+      "sourceId": "x-coredata://00000000-0000-4000-8000-0000000000A1/ICNote/p405",
+      "title": "Bank details",
+      "message": "This note is locked, so Notes does not export it. Unlock it in Notes and export it again to import it."
+    }
+  ]
+}

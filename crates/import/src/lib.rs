@@ -17,7 +17,10 @@
 //!
 //! The caller updates the search index for the paths in the [`Outcome`] in
 //! one go.
+//!
+//! Adapters: [`apple_notes`].
 
+pub mod apple_notes;
 mod note;
 mod pipeline;
 mod prepare;

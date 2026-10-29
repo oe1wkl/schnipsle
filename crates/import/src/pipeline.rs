@@ -412,6 +412,7 @@ impl Planner<'_> {
             &self.now,
             problems,
         );
+        problems.extend(prepare::code_like_tags_problem(&body));
         let source_modified = note
             .modified
             .as_deref()
