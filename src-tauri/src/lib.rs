@@ -536,6 +536,12 @@ async fn list_trash(state: State<'_, AppState>) -> CmdResult<Vec<TrashedNote>> {
     with_vault(&state, |v| Ok(v.list_trash()?))
 }
 
+/// The text of a note in the trash, to read before restoring it.
+#[tauri::command]
+async fn read_trashed_note(state: State<'_, AppState>, key: String) -> CmdResult<String> {
+    with_vault(&state, |v| Ok(v.read_trashed(&key)?))
+}
+
 /// Moves a note out of the trash; returns where it is now.
 #[tauri::command]
 async fn restore_note(state: State<'_, AppState>, key: String) -> CmdResult<String> {
@@ -794,6 +800,7 @@ pub fn run() {
             rename_after_edit,
             trash_note,
             list_trash,
+            read_trashed_note,
             restore_note,
             read_note,
             save_note,
