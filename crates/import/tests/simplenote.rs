@@ -23,8 +23,9 @@ fn sample_export() {
     let env = TestEnv::new();
     let batch = simplenote::read(&sample().join("simplenote-export.zip")).unwrap();
     let outcome = apply(&vault, plan(&vault, &batch, &env).unwrap(), &env).unwrap();
-    // The trashed note is not in the list for the index.
+    // The trashed note is listed apart for the index.
     assert_eq!(outcome.written.len(), 8);
+    assert_eq!(outcome.trashed, ["01M63HM9800000000000000009"]);
     check(&sample(), &output(vault_dir.path(), &outcome));
 }
 

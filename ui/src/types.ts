@@ -170,4 +170,6 @@ export interface ImportOutcome {
   runId: string | null;
   plan: ImportPlan;
   written: { path: string; action: "added" | "updated" }[];
+  /** Names in the trash of the notes moved there. */
+  trashed: string[];
 }

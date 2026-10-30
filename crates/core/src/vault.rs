@@ -375,19 +375,41 @@ impl Vault {
         Ok(notes)
     }
 
-    /// Reads a note.
+    /// Reads a note, with its sync conflicts and copies (format.md §4).
     ///
     /// # Errors
     /// [`VaultError::NotDownloaded`] for iCloud placeholders, [`VaultError::InvalidPath`],
     /// or I/O errors (e.g. the note does not exist).
     pub fn read_note(&self, path: &str) -> Result<NoteContent> {
+        let mut note = self.read_note_text(path)?;
+        let full = self.resolve(path)?;
+        // Conflict versions stay with the sync service until resolved, so a
+        // failure to list them loses nothing; it must not make the note
+        // unreadable, but it is reported rather than hidden.
+        match self.conflicts_at(path, &full, &note.text) {
+            Ok(conflicts) => note.conflicts = conflicts,
+            Err(e) => {
+                eprintln!("conflict versions of {path} unavailable: {e}");
+                note.conflicts_error = Some(e.to_string());
+            }
+        }
+        Ok(note)
+    }
+
+    /// Reads a note without looking for sync conflicts and copies, which
+    /// reads every note in its folder: for work on many notes, such as an
+    /// import. `conflicts` is empty.
+    ///
+    /// # Errors
+    /// As [`Vault::read_note`].
+    pub fn read_note_text(&self, path: &str) -> Result<NoteContent> {
         let full = self.resolve(path)?;
         // Checked before coordinating: a coordinated read of a placeholder waits
         // for the download, which can take forever when offline.
         if !full.exists() && placeholder_of(&full).exists() {
             return Err(VaultError::NotDownloaded(path.to_owned()));
         }
-        let mut note = self.coordinated(Access::Read, &full, |file| match fs::read(file) {
+        self.coordinated(Access::Read, &full, |file| match fs::read(file) {
             Ok(bytes) => {
                 let text = String::from_utf8_lossy(&bytes).into_owned();
                 Ok(NoteContent {
@@ -403,18 +425,7 @@ impl Vault {
                 Err(VaultError::NotDownloaded(path.to_owned()))
             }
             Err(e) => Err(e.into()),
-        })?;
-        // Conflict versions stay with the sync service until resolved, so a
-        // failure to list them loses nothing; it must not make the note
-        // unreadable, but it is reported rather than hidden.
-        match self.conflicts_at(path, &full, &note.text) {
-            Ok(conflicts) => note.conflicts = conflicts,
-            Err(e) => {
-                eprintln!("conflict versions of {path} unavailable: {e}");
-                note.conflicts_error = Some(e.to_string());
-            }
-        }
-        Ok(note)
+        })
     }
 
     /// Writes a note atomically, but only if it still has the content that was read.
@@ -576,7 +587,7 @@ impl Vault {
     #[must_use]
     pub fn find_note(&self, id: &str, hint: Option<&str>) -> Option<String> {
         let has_id = |path: &str| {
-            self.read_note(path)
+            self.read_note_text(path)
                 .is_ok_and(|n| front_matter::get(&n.text, "id").as_deref() == Some(id))
         };
         hint.filter(|p| has_id(p))

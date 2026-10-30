@@ -141,6 +141,7 @@ async function answer(cmd: string, args: Record<string, unknown> = {}): Promise<
         runId: "01M63HM980000000000000000B",
         plan: current,
         written: [],
+        trashed: [],
       } satisfies ImportOutcome;
     }
     case "plugin:event|listen":

@@ -128,7 +128,8 @@ pub async fn cancel_import(state: State<'_, AppState>) -> CmdResult<()> {
 }
 
 /// Writes the plan of the last dry run, sending `import-progress` events,
-/// and updates the index for the notes written. Call only after the user
+/// and updates the index for the notes written and those it moved to the
+/// trash. Call only after the user
 /// chose Import.
 #[tauri::command]
 pub async fn apply_import(app: AppHandle, state: State<'_, AppState>) -> CmdResult<Outcome> {
@@ -147,6 +148,7 @@ pub async fn apply_import(app: AppHandle, state: State<'_, AppState>) -> CmdResu
             .written
             .iter()
             .map(|w| indexing::note_key(&w.path))
+            .chain(outcome.trashed.iter().map(|key| indexing::trash_key(key)))
             .collect();
         state.index.update(v, &keys);
         Ok(outcome)
