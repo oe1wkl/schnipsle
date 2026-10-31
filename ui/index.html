@@ -194,7 +194,7 @@
               <option value="apple-notes">Apple Notes</option>
               <option value="simplenote">Simplenote</option>
               <option value="html">HTML files</option>
-              <option value="markdown" disabled>Markdown folder (coming)</option>
+              <option value="markdown">Markdown files</option>
             </select>
           </label>
           <div id="import-help-apple-notes" class="import-help">
@@ -229,6 +229,18 @@
             <p>
               Pictures saved with a page and pictures embedded in it are copied into the vault, as
               are files the page links to in the folder. Pictures and links on the web stay links.
+            </p>
+          </div>
+          <div id="import-help-markdown" class="import-help">
+            <p>
+              Choose a folder of Markdown files (.md), such as notes from another editor, or a
+              single file. Each file becomes a note as it is, front matter included, and its
+              subfolders become tags. Hidden folders such as .obsidian are left out.
+            </p>
+            <p>
+              Pictures and files the notes link to in the folder are copied into the vault. Songs in
+              ChordPro (.cho, .crd, .chopro, .chordpro) become notes with their title and the song
+              as a chordpro block.
             </p>
           </div>
           <div class="import-pick">

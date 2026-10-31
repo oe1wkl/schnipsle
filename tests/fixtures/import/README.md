@@ -1,6 +1,6 @@
 # Import fixtures
 
-Sample exports for the importers (format.md §12, ADR-0012, ADR-0019). All text, names, IDs and attachments are invented. Only the structure follows real exports: Apple Notes on macOS 27.0.1 in German, 137 notes in 3 folders, plus `apple-notes-metadata.json` for 679 notes; Simplenote, 463 notes plus 166 in its trash. The HTML pages are made up, with the kinds of files browsers save. The expected notes for each sample come with the adapters.
+Sample exports for the importers (format.md §12, ADR-0012, ADR-0019). All text, names, IDs and attachments are invented. Only the structure follows real exports: Apple Notes on macOS 27.0.1 in German, 137 notes in 3 folders, plus `apple-notes-metadata.json` for 679 notes; Simplenote, 463 notes plus 166 in its trash. The HTML pages and Markdown notes are made up, with the kinds of files browsers and other editors save. The expected notes for each sample come with the adapters.
 
 ## `pipeline/`
 
@@ -102,3 +102,19 @@ The adapter reads only `source/notes.json`, also given unpacked as `notes.json`.
 | `Notes/.hidden.html`, `Notes/readme.txt` | Hidden files and files that are not HTML are left out |
 
 `html/expected/` is what the adapter and the pipeline make of it, in the layout of `pipeline/` above.
+
+## `markdown/`
+
+`notes/` is a folder chosen for a Markdown import (`crates/import/tests/markdown.rs`). The test copies it to a folder `Old notes` and gives its files the time 2026-10-28T22:15:00Z, which becomes the notes' dates.
+
+| File | What it tests |
+| --- | --- |
+| `Welcome.md` | A picture in `images/` and a PDF in `docs/` (link with a space) become attachments; a link to another note and one to the web stay as written; a missing picture is reported |
+| `Projects/Tuner.md` | Front matter of another tool kept (`title` names the note, `created` is kept, `tags`, `aliases`, `pinned`); the same picture again, stored once; `#include` in a code block is no tag; folder tag `#Projects` |
+| `Projects/Copied note.md` | Front matter with an `id`, `source` and `source_id` from elsewhere: all three are replaced, and the report says so for the id |
+| `Songs/Abendlied.cho` | ChordPro with CRLF: `{title}` becomes the heading; a ```` ``` ```` in a comment makes the fence four backticks long |
+| `Songs/campfire-round.chordpro` | ChordPro without a title: named after the file |
+| `Old/Grüße.md` | Windows-1252: read as such and reported |
+| `.obsidian/workspace.md`, `readme.txt` | Hidden folders and files that are not Markdown are left out |
+
+`markdown/expected/` is what the adapter and the pipeline make of it, in the layout of `pipeline/` above.

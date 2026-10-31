@@ -1,0 +1,68 @@
+{
+  "source": "markdown",
+  "input": "Old notes",
+  "items": [
+    {
+      "sourceId": "Old/Grüße.md",
+      "title": "Grüße",
+      "action": "add",
+      "reason": null,
+      "path": "Markdown/Old/grüße.md",
+      "problems": []
+    },
+    {
+      "sourceId": "Projects/Copied note.md",
+      "title": "Copied note",
+      "action": "add",
+      "reason": null,
+      "path": "Markdown/Projects/copied-note.md",
+      "problems": [
+        "Its front matter has the id 01AAAAAAAAAAAAAAAAAAAAAAAA; it gets 01M63HM9800000000000000002 instead, like every imported note."
+      ]
+    },
+    {
+      "sourceId": "Projects/Tuner.md",
+      "title": "Antenna tuner",
+      "action": "add",
+      "reason": null,
+      "path": "Markdown/Projects/antenna-tuner.md",
+      "problems": []
+    },
+    {
+      "sourceId": "Songs/Abendlied.cho",
+      "title": "Abendlied",
+      "action": "add",
+      "reason": null,
+      "path": "Markdown/Songs/abendlied.md",
+      "problems": []
+    },
+    {
+      "sourceId": "Songs/campfire-round.chordpro",
+      "title": "campfire-round",
+      "action": "add",
+      "reason": null,
+      "path": "Markdown/Songs/campfire-round.md",
+      "problems": []
+    },
+    {
+      "sourceId": "Welcome.md",
+      "title": "Welcome",
+      "action": "add",
+      "reason": null,
+      "path": "Markdown/welcome.md",
+      "problems": []
+    }
+  ],
+  "notices": [
+    {
+      "sourceId": null,
+      "title": null,
+      "message": "Old/Grüße.md is not UTF-8 text; it is read as Windows-1252 (Western European)."
+    },
+    {
+      "sourceId": "Welcome.md",
+      "title": "Welcome",
+      "message": "It links to images/gone.jpg, which is not there; the link is left as it is."
+    }
+  ]
+}
