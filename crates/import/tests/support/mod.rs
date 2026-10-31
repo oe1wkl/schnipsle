@@ -67,15 +67,33 @@ pub fn files(root: &Path) -> BTreeMap<String, Vec<u8>> {
     out
 }
 
-/// What a run produced, as files: `plan.json`, `notes/…`, `attachments.txt`
-/// (paths, without sidecars) and `import-log.yaml` (snapshot names, which
-/// carry the real time, replaced by `<snapshot>`).
+/// What a run produced, as files: `plan.json`, `notes/…`, `trash/…` (the
+/// time of deletion, which is the real time, replaced by `<deleted>`),
+/// `attachments.txt` (paths, without sidecars) and `import-log.yaml`
+/// (snapshot names, which carry the real time, replaced by `<snapshot>`).
 pub fn output(vault_dir: &Path, outcome: &Outcome) -> BTreeMap<String, Vec<u8>> {
     let mut out = BTreeMap::new();
     let plan = serde_json::to_string_pretty(&outcome.plan).unwrap() + "\n";
     out.insert("plan.json".to_owned(), plan.into_bytes());
     for (path, bytes) in files(&vault_dir.join("notes")) {
         out.insert(format!("notes/{path}"), bytes);
+    }
+    for (path, bytes) in files(&vault_dir.join(".notesapp/trash")) {
+        let text = String::from_utf8(bytes).unwrap();
+        let text = if Path::new(&path).extension().is_some_and(|e| e == "yaml") {
+            let mut masked = String::new();
+            for line in text.lines() {
+                match line.split_once("deleted: ") {
+                    Some((head, _)) => writeln!(masked, "{head}deleted: <deleted>"),
+                    None => writeln!(masked, "{line}"),
+                }
+                .unwrap();
+            }
+            masked
+        } else {
+            text
+        };
+        out.insert(format!("trash/{path}"), text.into_bytes());
     }
     let mut attachments = String::new();
     for path in files(&vault_dir.join("attachments")).keys() {

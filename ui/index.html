@@ -192,7 +192,7 @@
             From
             <select id="import-source">
               <option value="apple-notes">Apple Notes</option>
-              <option value="simplenote" disabled>Simplenote (coming)</option>
+              <option value="simplenote">Simplenote</option>
               <option value="html" disabled>HTML files (coming)</option>
               <option value="markdown" disabled>Markdown folder (coming)</option>
             </select>
@@ -210,6 +210,16 @@
                 from Notes; macOS asks once whether it may. Nothing in Notes is changed.
               </li>
             </ol>
+          </div>
+          <div id="import-help-simplenote" class="import-help">
+            <p>
+              In Simplenote, choose File › Export Notes (in the web app: Settings › Tools › Export
+              Notes). It saves a zip file; choose it here as it is, there is no need to unpack it.
+            </p>
+            <p>
+              Tags become hashtags at the end of each note, unless the text has them already. Notes
+              in Simplenote’s trash go to the trash here.
+            </p>
           </div>
           <div class="import-pick">
             <button id="import-pick" type="button">Choose folder…</button>

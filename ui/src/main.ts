@@ -40,7 +40,12 @@ const HISTORY_PAUSE_MS = 30_000;
  * `titleAtOpen` decides whether leaving the note renames its file.
  */
 let current: { path: string; hash: string; savedText: string; titleAtOpen: string } | null = null;
-const images = createImageCache(() => current?.path ?? null);
+/**
+ * The note from the trash shown read-only in the editor (no note is open
+ * then), with the path it had, so its images resolve as they did there.
+ */
+let trashShown: { key: string; path: string } | null = null;
+const images = createImageCache(() => current?.path ?? trashShown?.path ?? null);
 let listMode: "notes" | "trash" = "notes";
 let sortOrder: SortOrder = "modified";
 let lastTrashed: TrashedNote | null = null;
@@ -359,8 +364,12 @@ async function showTrashList(): Promise<void> {
   ui.notes.replaceChildren(
     ...trashed.map((note) => {
       const item = document.createElement("li");
-      const title = document.createElement("strong");
+      const title = document.createElement("button");
+      title.type = "button";
       title.textContent = note.title;
+      title.title = "Read it; restore it to edit it";
+      if (note.key === trashShown?.key) title.setAttribute("aria-current", "true");
+      title.addEventListener("click", () => void showTrashed(note));
       const meta = document.createElement("small");
       const when = note.deleted === "" ? "" : new Date(note.deleted).toLocaleString();
       meta.textContent = `Deleted ${when} · was ${note.originalPath || "?"}`;
@@ -378,10 +387,32 @@ async function showTrashList(): Promise<void> {
   if (trashed.length === 0) ui.empty.textContent = "The trash is empty.";
 }
 
+/** Shows a note from the trash read-only in the editor, so it can be read before restoring it. */
+async function showTrashed(note: TrashedNote): Promise<void> {
+  await leaveNote();
+  let text: string;
+  try {
+    text = await invoke<string>("read_trashed_note", { key: note.key });
+  } catch (e) {
+    setStatus(`“${note.title}” cannot be read: ${asError(e).message}`);
+    return;
+  }
+  closeEditor();
+  trashShown = { key: note.key, path: note.originalPath.replace(/^notes\//, "") };
+  editor.load(text);
+  setStatus(`“${note.title}” is in the trash. Restore it to edit it.`);
+  showView("editor");
+  void refreshList();
+}
+
 async function restoreNote(note: TrashedNote): Promise<void> {
   try {
     const path = await invoke<string>("restore_note", { key: note.key });
     setStatus(`Restored “${note.title}” to ${path}.`);
+    if (trashShown?.key === note.key) {
+      // The note being read is back: open it for editing.
+      await openNote({ path, title: note.title, modifiedMs: 0, available: true, pinned: false });
+    }
     if (lastTrashed?.key === note.key) {
       lastTrashed = null;
       ui.undoDelete.hidden = true;
@@ -395,6 +426,7 @@ async function restoreNote(note: TrashedNote): Promise<void> {
 /** Shows the notes or the trash in the list. */
 function setListMode(mode: "notes" | "trash"): void {
   listMode = mode;
+  if (mode === "notes" && trashShown !== null) closeEditor();
   ui.showTrash.textContent = mode === "trash" ? "Notes" : "Trash";
   ui.showTrash.setAttribute("aria-pressed", String(mode === "trash"));
   const kind = sidebar.filter().kind;
@@ -429,6 +461,7 @@ function leaveNote(): Promise<void> {
 
 /** Empties the editor: no note open. */
 function closeEditor(): void {
+  trashShown = null;
   closeHistory();
   ui.showHistory.disabled = true;
   window.clearTimeout(snapshotTimer);
@@ -487,6 +520,7 @@ async function openNote(note: NoteEntry): Promise<void> {
 }
 
 function load(content: NoteContent): void {
+  trashShown = null;
   closeHistory();
   ui.showHistory.disabled = false;
   window.clearTimeout(snapshotTimer);

@@ -138,6 +138,21 @@ impl Vault {
         Ok(notes)
     }
 
+    /// The text of the note in the trash under `key`, to read it before
+    /// restoring it.
+    ///
+    /// # Errors
+    /// [`VaultError::InvalidPath`] for a bad key, or I/O errors (e.g. it was
+    /// restored meanwhile).
+    pub fn read_trashed(&self, key: &str) -> Result<String> {
+        if !is_key(key) {
+            return Err(VaultError::InvalidPath(key.to_owned()));
+        }
+        let file = self.root().join(TRASH_DIR).join(format!("{key}.md"));
+        let bytes = self.coordinated(Access::Read, &file, |f| Ok(fs::read(f)?))?;
+        Ok(String::from_utf8_lossy(&bytes).into_owned())
+    }
+
     /// Moves a note out of the trash, back to its original path or, if that
     /// is taken, unknown or not inside `notes/`, into `notes/` under its file
     /// name, with a `-n` suffix on collision. If it lands in another folder,
@@ -279,6 +294,21 @@ mod tests {
             .join(TRASH_DIR)
             .join(format!("{}.md", trashed.key));
         assert_eq!(fs::read_to_string(moved).unwrap(), "no front matter");
+    }
+
+    #[test]
+    fn a_trashed_note_can_be_read() {
+        let (dir, vault) = vault();
+        let note = format!("---\nid: {ID}\n---\n# Antenna\n");
+        fs::write(dir.path().join("notes/antenna.md"), &note).unwrap();
+        let trashed = vault.trash_note("antenna.md").unwrap();
+        assert_eq!(vault.read_trashed(&trashed.key).unwrap(), note);
+        assert!(matches!(
+            vault.read_trashed("../notes/antenna"),
+            Err(VaultError::InvalidPath(_))
+        ));
+        vault.restore_note(&trashed.key).unwrap();
+        assert!(vault.read_trashed(&trashed.key).is_err());
     }
 
     #[test]

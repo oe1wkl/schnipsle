@@ -18,12 +18,13 @@
 //! The caller updates the search index for the paths in the [`Outcome`] in
 //! one go.
 //!
-//! Adapters: [`apple_notes`].
+//! Adapters: [`apple_notes`], [`simplenote`].
 
 pub mod apple_notes;
 mod note;
 mod pipeline;
 mod prepare;
+pub mod simplenote;
 
 pub use note::{AttachmentData, Batch, ImportedAttachment, ImportedNote, Notice, Source};
 pub use pipeline::{

@@ -20,6 +20,10 @@ use crate::prepare::{self, Keys};
 /// How many log entries are written ahead of their notes at a time.
 const LOG_BATCH: usize = 25;
 
+/// The problem for an update of a note the source has in its trash: an
+/// import never deletes a note it wrote before (§12.1 rule 6).
+const TRASHED_IN_SOURCE: &str = "It is in the trash in the source; here it stays where it is.";
+
 /// The clock and the id generator, replaceable for tests.
 pub trait Env {
     /// Milliseconds since the Unix epoch, now.
@@ -137,6 +141,10 @@ pub struct PlanItem {
     pub path: Option<String>,
     /// Things the user should know, e.g. a date that was not understood.
     pub problems: Vec<String>,
+    /// A new note that goes to the trash, as it is in the source's trash
+    /// (§12.1 rule 6). Serialized only when true.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub trashed: bool,
 }
 
 /// A note ready to be written.
@@ -152,6 +160,8 @@ struct Prepared {
     entry: LogEntry,
     /// For an update: the note's hash when planned.
     expected_hash: Option<String>,
+    /// Move the new note to the trash once written.
+    trash: bool,
 }
 
 /// The dry-run report, and what [`apply`] will write. Serialized with
@@ -308,7 +318,7 @@ fn update_target(
     let Some(path) = vault.find_note(&entry.id, entry.path.strip_prefix("notes/")) else {
         return Ok(Err((SkipReason::Missing, None)));
     };
-    let current = vault.read_note(&path)?;
+    let current = vault.read_note_text(&path)?;
     if current.hash != entry.hash {
         return Ok(Err((SkipReason::ChangedHere, Some(path))));
     }
@@ -384,6 +394,17 @@ struct Planner<'a> {
 }
 
 impl Planner<'_> {
+    /// A free path for a new note titled `title` in `folder`, not taken by
+    /// a note planned before.
+    fn reserve(&mut self, folder: &str, title: &str) -> Result<String, ImportError> {
+        let reserved = &self.reserved;
+        let path = self
+            .vault
+            .free_note_path(folder, title, |p| reserved.contains(p))?;
+        self.reserved.insert(path.to_lowercase());
+        Ok(path)
+    }
+
     /// The report line for `note`, and what to write unless it is skipped.
     fn note(&mut self, note: &ImportedNote) -> Result<(PlanItem, Option<Prepared>), ImportError> {
         let body = prepare::clean(&note.body);
@@ -399,6 +420,7 @@ impl Planner<'_> {
             reason: None,
             path: None,
             problems: Vec::new(),
+            trashed: false,
         };
         if !self.seen.insert(note.source_id.clone()) {
             item.reason = Some(SkipReason::Duplicate);
@@ -426,6 +448,9 @@ impl Planner<'_> {
                     Ok(target) => {
                         item.action = PlannedAction::Update;
                         item.path = Some(target.path.clone());
+                        if note.trashed {
+                            item.problems.push(TRASHED_IN_SOURCE.to_owned());
+                        }
                         let created = target.created.unwrap_or(created);
                         (target.path, entry.id.clone(), created, Some(target.hash))
                     }
@@ -437,13 +462,9 @@ impl Planner<'_> {
                 }
             } else {
                 let folder = prepare::placement(self.source, &note.folders);
-                let reserved = &self.reserved;
-                let path = self
-                    .vault
-                    .free_note_path(&folder, &title, |p| reserved.contains(p))?;
-                self.reserved.insert(path.to_lowercase());
                 item.action = PlannedAction::Add;
-                item.path = Some(path);
+                item.path = Some(self.reserve(&folder, &title)?);
+                item.trashed = note.trashed;
                 (folder, self.env.new_id()?, created, None)
             };
 
@@ -483,6 +504,7 @@ impl Planner<'_> {
             text,
             attachments,
             entry,
+            trash: item.trashed,
             expected_hash,
         };
         Ok((item, Some(ready)))
@@ -509,8 +531,12 @@ pub struct Outcome {
     /// written after all (skipped with [`SkipReason::ChangedMeanwhile`] or
     /// [`SkipReason::Failed`]).
     pub plan: Plan,
-    /// The notes written, for the index update.
+    /// The notes written into `notes/`, for the index update; not those
+    /// moved to the trash.
     pub written: Vec<Written>,
+    /// The notes moved to the trash (§12.1 rule 6), by their names in it
+    /// (format.md §8), for the index update.
+    pub trashed: Vec<String>,
 }
 
 /// Writes what `plan` says (see the crate documentation). A note that fails
@@ -541,6 +567,7 @@ pub fn apply_with_progress(
             run_id: None,
             plan,
             written: Vec::new(),
+            trashed: Vec::new(),
         });
     }
     let run_id = env.new_id()?;
@@ -552,6 +579,7 @@ pub fn apply_with_progress(
     );
     vault.write_import_log(&mut log)?;
     let mut written = Vec::new();
+    let mut trashed = Vec::new();
     let mut done = 0;
     let mut position = 0; // of the next entry in the log
     for chunk in prepared.chunks(LOG_BATCH) {
@@ -565,10 +593,31 @@ pub fn apply_with_progress(
             match result {
                 Ok(entry) => {
                     item.path = entry.path.strip_prefix("notes/").map(str::to_owned);
-                    written.push(Written {
-                        path: item.path.clone().unwrap_or_default(),
-                        action: entry.action,
-                    });
+                    let path = item.path.clone().unwrap_or_default();
+                    // Logged as added either way: undo finds it in the trash
+                    // already, and a re-import counts it as deleted here.
+                    let in_trash = if p.trash {
+                        match vault.trash_note(&path) {
+                            Ok(t) => Some(t.key),
+                            Err(e) => {
+                                item.trashed = false;
+                                item.problems.push(format!(
+                                    "It could not be moved to the trash ({e}), so it is with the \
+                                     other notes."
+                                ));
+                                None
+                            }
+                        }
+                    } else {
+                        None
+                    };
+                    match in_trash {
+                        Some(key) => trashed.push(key),
+                        None => written.push(Written {
+                            path,
+                            action: entry.action,
+                        }),
+                    }
                     log.update(position, &entry);
                     position += 1;
                 }
@@ -590,6 +639,7 @@ pub fn apply_with_progress(
         run_id: Some(run_id),
         plan,
         written,
+        trashed,
     })
 }
 
@@ -608,7 +658,7 @@ fn write_one(vault: &Vault, p: &Prepared) -> Result<LogEntry, (SkipReason, Optio
     }
     let mut entry = p.entry.clone();
     if let Some(expected) = &p.expected_hash {
-        let current = vault.read_note(&p.folder).map_err(|e| failed(&e))?;
+        let current = vault.read_note_text(&p.folder).map_err(|e| failed(&e))?;
         if &current.hash != expected {
             return Err((SkipReason::ChangedMeanwhile, None));
         }

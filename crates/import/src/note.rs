@@ -86,6 +86,10 @@ pub struct ImportedNote {
     /// Pinned in the source.
     #[serde(default)]
     pub pinned: bool,
+    /// In the source's trash: a new note goes to the trash (format.md §8,
+    /// §12.1 rule 6).
+    #[serde(default)]
+    pub trashed: bool,
     /// Files the text links to.
     #[serde(default)]
     pub attachments: Vec<ImportedAttachment>,

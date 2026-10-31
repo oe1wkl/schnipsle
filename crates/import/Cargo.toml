@@ -14,6 +14,7 @@ schnipsle-core.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 unicode-normalization.workspace = true
+zip.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
