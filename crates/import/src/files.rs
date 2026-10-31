@@ -164,6 +164,13 @@ pub(crate) fn windows_1252(bytes: &[u8]) -> String {
         .collect()
 }
 
+/// The text of the level-1 heading the Markdown starts with (format.md §5.2).
+pub(crate) fn leading_heading(markdown: &str) -> Option<&str> {
+    let first = markdown.lines().find(|l| !l.trim().is_empty())?;
+    let text = first.strip_prefix("# ")?.trim();
+    (!text.is_empty()).then_some(text)
+}
+
 /// The link destinations in `markdown` as written: `](dest)`,
 /// `](dest "title")` and `](<dest>)`, with `\(` and `\)` kept.
 pub(crate) fn destinations(markdown: &str) -> Vec<&str> {
@@ -267,6 +274,13 @@ mod tests {
     #[test]
     fn legacy_text() {
         assert_eq!(windows_1252(b"Gr\xfc\xdfe \x80 \x93x\x94"), "Grüße € “x”");
+    }
+
+    #[test]
+    fn headings() {
+        assert_eq!(leading_heading("\n# A \\*b\\*\n\ntext"), Some("A \\*b\\*"));
+        assert_eq!(leading_heading("## A"), None);
+        assert_eq!(leading_heading("#tag\n"), None);
     }
 
     #[test]

@@ -6,7 +6,9 @@
 //! - A Markdown file (`.md`, `.markdown`, `.mdown`, `.mkd`, `.mkdn`) keeps
 //!   its text, front matter of other tools included (format.md §4). Only an
 //!   `id` it brings along is replaced, as for every imported note. It is
-//!   named after the `title` in its front matter, otherwise after its file.
+//!   named after the level-1 heading it starts with; otherwise after the
+//!   `title` in its front matter, which then becomes that heading, so the
+//!   note shows it (§5.2, §12.1 rule 7); otherwise after its file.
 //! - A ChordPro file (`.cho`, `.crd`, `.chopro`, `.chordpro`) becomes a
 //!   note with its `{title}` as a level-1 heading, so the note shows it
 //!   (format.md §5.2), followed by the whole file in one `chordpro` block
@@ -125,10 +127,20 @@ fn imported(file: &Found, title: String, body: String) -> ImportedNote {
 /// The note made from the Markdown file `file`, whose text is `text`.
 fn markdown(root: &Path, file: &Found, text: String, problems: &mut Vec<String>) -> ImportedNote {
     let attachments = files::linked_files(root, &file.dir, &text, &is_note, problems);
-    let title = front_matter::get(&text, "title")
+    let named = front_matter::get(&text, "title")
         .map(|t| t.trim().to_owned())
-        .filter(|t| !t.is_empty())
-        .unwrap_or_else(|| file.stem.clone());
+        .filter(|t| !t.is_empty());
+    let body = front_matter::body(&text);
+    let (title, text) = match (files::leading_heading(body), named) {
+        (Some(heading), _) => (heading.to_owned(), text),
+        (None, Some(named)) => {
+            let head = &text[..text.len() - body.len()];
+            let rest = body.trim_start_matches(['\n', '\r']);
+            let text = format!("{head}# {named}\n\n{rest}");
+            (named, text)
+        }
+        (None, None) => (file.stem.clone(), text),
+    };
     let pinned = front_matter::is_pinned(&text);
     ImportedNote {
         pinned,
@@ -189,6 +201,36 @@ mod tests {
             Some("Morning song")
         );
         assert_eq!(chordpro_title("{subtitle: x}\n{title:}"), None);
+    }
+
+    #[test]
+    fn titles_and_headings() {
+        let file = Found {
+            path: "a/Old name.md".into(),
+            file: "/nowhere/a/Old name.md".into(),
+            dir: "/nowhere/a".into(),
+            folders: vec!["a".into()],
+            stem: "Old name".into(),
+            modified_ms: None,
+        };
+        let note =
+            |text: &str| markdown(Path::new("/nowhere"), &file, text.into(), &mut Vec::new());
+
+        let named = note("---\ntitle: \"Antenna tuner\"\n---\n\nParts list.\n");
+        assert_eq!(named.title, "Antenna tuner");
+        assert_eq!(
+            named.body,
+            "---\ntitle: \"Antenna tuner\"\n---\n# Antenna tuner\n\nParts list.\n"
+        );
+        let headed = note("---\ntitle: Other\n---\n# Tuner\n\nParts list.\n");
+        assert_eq!(headed.title, "Tuner");
+        assert_eq!(
+            headed.body,
+            "---\ntitle: Other\n---\n# Tuner\n\nParts list.\n"
+        );
+        let plain = note("Parts list.\n");
+        assert_eq!(plain.title, "Old name");
+        assert_eq!(plain.body, "Parts list.\n");
     }
 
     #[test]

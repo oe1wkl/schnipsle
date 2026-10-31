@@ -161,7 +161,7 @@ fn note(root: &Path, page: &Found, html: &str, notices: &mut Vec<Notice>) -> Imp
     ));
 
     let mut title = String::new();
-    if let Some(heading) = leading_heading(&body) {
+    if let Some(heading) = files::leading_heading(&body) {
         title = unescape(heading);
     } else if let Some(page_title) = converted.title {
         title = unescape(&page_title);
@@ -461,13 +461,6 @@ fn tidy(markdown: &str) -> String {
     out.trim_matches('\n').to_owned()
 }
 
-/// The text of the level-1 heading the Markdown starts with.
-fn leading_heading(markdown: &str) -> Option<&str> {
-    let first = markdown.lines().find(|l| !l.trim().is_empty())?;
-    let text = first.strip_prefix("# ")?.trim();
-    (!text.is_empty()).then_some(text)
-}
-
 /// Markdown text without its backslash escapes.
 fn unescape(text: &str) -> String {
     let mut out = String::new();
@@ -552,8 +545,6 @@ mod tests {
 
     #[test]
     fn headings_and_escapes() {
-        assert_eq!(leading_heading("\n# A \\*b\\*\n\ntext"), Some("A \\*b\\*"));
-        assert_eq!(leading_heading("## A"), None);
         assert_eq!(unescape("A \\*b\\* \\ c"), "A *b* \\ c");
     }
 

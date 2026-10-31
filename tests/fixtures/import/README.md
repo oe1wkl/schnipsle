@@ -110,7 +110,7 @@ The adapter reads only `source/notes.json`, also given unpacked as `notes.json`.
 | File | What it tests |
 | --- | --- |
 | `Welcome.md` | A picture in `images/` and a PDF in `docs/` (link with a space) become attachments; a link to another note and one to the web stay as written; a missing picture is reported |
-| `Projects/Tuner.md` | Front matter of another tool kept (`title` names the note, `created` is kept, `tags`, `aliases`, `pinned`); the same picture again, stored once; `#include` in a code block is no tag; folder tag `#Projects` |
+| `Projects/Tuner.md` | Front matter of another tool kept (`title` names the note and becomes its heading, `created` is kept, `tags`, `aliases`, `pinned`); the same picture again, stored once; `#include` in a code block is no tag; folder tag `#Projects` |
 | `Projects/Copied note.md` | Front matter with an `id`, `source` and `source_id` from elsewhere: all three are replaced, and the report says so for the id |
 | `Songs/Abendlied.cho` | ChordPro with CRLF: `{title}` becomes the heading; a ```` ``` ```` in a comment makes the fence four backticks long |
 | `Songs/campfire-round.chordpro` | ChordPro without a title: named after the file |
