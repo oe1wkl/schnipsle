@@ -23,7 +23,7 @@ notes:
     path: notes/Markdown/Projects/antenna-tuner.md
     action: added
     source_modified: "2026-10-28T22:15:00Z"
-    hash: 9342c8ad161bd744b36b04615f64086df0c0795b63f4eaf652e1d9251506f7e9
+    hash: f893947867472744657f8ae694dbd02d6336a928e0a0c9221e5c2c58648d3408
   - source_id: Songs/Abendlied.cho
     id: 01M63HM9800000000000000004
     path: notes/Markdown/Songs/abendlied.md
@@ -41,4 +41,4 @@ notes:
     path: notes/Markdown/welcome.md
     action: added
     source_modified: "2026-10-28T22:15:00Z"
-    hash: 5032710c6ce763655d407290cd330eec20de36a158cd3322910b2894f3a7e613
+    hash: 2a46e80f979520b74cbbef15c234d7749bdaaac64d4262404743ed64080e46f5

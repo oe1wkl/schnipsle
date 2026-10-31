@@ -9,7 +9,7 @@ tags: [radio, qrp]
 aliases: [tuner]
 pinned: true
 ---
-Parts list and the [photo](../../../attachments/6b/6b7fa434f92a8b80aab02d9bf1a12e49ffcae424e4013a1c4f68b67e3d2bbcd0.png) again, stored once.
+Parts list and the [photo](../../../attachments/bb/bb1b9c77caef6638052849663c12d4a60bba4fee3c4ce047822ba11c00cc7974.png) again, stored once.
 
 ```c
 #include <avr/io.h>
