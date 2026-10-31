@@ -9,7 +9,7 @@ Work as a professional software developer: follow the decisions below, keep docs
 | File                       | What it holds                                                                                               |
 | -------------------------- | ----------------------------------------------------------------------------------------------------------- |
 | `docs/roadmap.md`          | Current milestone, open tasks, what is next                                                                 |
-| `docs/adr/`                | Architecture decisions (ADR-0001 … 0019). Do not contradict an accepted ADR; propose a new one              |
+| `docs/adr/`                | Architecture decisions (ADR-0001 … 0020). Do not contradict an accepted ADR; propose a new one              |
 | `docs/format.md`           | Vault file format (normative): notes, tags §5.3, music §5.6, chords §5.7, history, trash, writing rules §10 |
 | `docs/design/hld.md`       | High-level design snapshot (requirements F-xx / N-xx, architecture)                                         |
 | `docs/spikes/ios-vault.md` | iOS findings, including the iOS 27 build pitfalls                                                           |

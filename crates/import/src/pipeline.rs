@@ -294,6 +294,12 @@ fn file_text(
     let (body, attachments) = with_attachments(note, body.to_owned(), folder, problems);
     let tags = prepare::final_tags(&body, &note.folders, &note.tags);
     let body = prepare::append_tags(&body, &tags);
+    if let Some(id) = front_matter::get(&body, "id").filter(|id| id != keys.id) {
+        problems.push(format!(
+            "Its front matter has the id {id}; it gets {} instead, like every imported note.",
+            keys.id
+        ));
+    }
     (prepare::with_front_matter(&body, keys), attachments)
 }
 
@@ -338,6 +344,31 @@ fn update_target(
 /// The folder of the note at `path` (relative to `notes/`).
 fn folder_of(path: &str) -> &str {
     path.rsplit_once('/').map_or("", |(folder, _)| folder)
+}
+
+/// Checks that `input`, the file or folder chosen for an import, is neither
+/// in `vault` nor contains it: importing a vault's own notes would add them
+/// a second time.
+///
+/// # Errors
+/// [`ImportError::Source`] if it is.
+pub fn check_input(vault: &Vault, input: &std::path::Path) -> Result<(), ImportError> {
+    let canonical = |p: &std::path::Path| p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
+    let root = canonical(vault.root());
+    let input = canonical(input);
+    if input.starts_with(&root) {
+        return Err(ImportError::Source(
+            "This is in the open vault. Choose files from outside it; the vault's notes are \
+             there already."
+                .to_owned(),
+        ));
+    }
+    if root.starts_with(&input) {
+        return Err(ImportError::Source(
+            "This folder contains the open vault. Choose a folder outside it.".to_owned(),
+        ));
+    }
+    Ok(())
 }
 
 /// The dry run: what importing `batch` into `vault` would do. Nothing is

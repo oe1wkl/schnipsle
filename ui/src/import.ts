@@ -7,8 +7,8 @@
 //
 // For Apple Notes the dates and folders come from apple-notes-metadata.json,
 // which the app writes by running the metadata script on request. Simplenote
-// is one zip file; notes from its trash go to the trash. HTML is a folder of
-// pages or a single page.
+// is one zip file; notes from its trash go to the trash. HTML and Markdown
+// are a folder of files or a single file.
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
@@ -126,7 +126,7 @@ export function createImport(hooks: ImportHooks): { open(): void } {
     planned = false;
     pathText.textContent = "";
     pickButton.textContent = PICK_LABELS[source()];
-    pickFileButton.hidden = source() !== "html";
+    pickFileButton.hidden = source() !== "html" && source() !== "markdown";
     showHelp(true);
     choose.hidden = false;
     metadataBox.hidden = true;

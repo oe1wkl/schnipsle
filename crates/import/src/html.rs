@@ -23,11 +23,9 @@
 //! The dates are the file's modification time, so a re-import updates a note
 //! whose file changed since (§12.3).
 
-use std::collections::HashSet;
 use std::fs;
-use std::path::{Component, Path, PathBuf};
+use std::path::Path;
 use std::sync::{Arc, Mutex, PoisonError};
-use std::time::UNIX_EPOCH;
 
 use base64::Engine as _;
 use htmd::element_handler::{HandlerResult, Handlers};
@@ -35,8 +33,8 @@ use htmd::options::{BulletListMarker, Options};
 use htmd::{Element, HtmlToMarkdown};
 use percent_encoding::percent_decode_str;
 use schnipsle_core::stamp::rfc3339_utc;
-use unicode_normalization::UnicodeNormalization;
 
+use crate::files::{self, Found};
 use crate::note::{AttachmentData, Batch, ImportedAttachment, ImportedNote, Notice, Source};
 use crate::pipeline::ImportError;
 
@@ -74,26 +72,6 @@ const WINDOWS_1252: &[&str] = &[
     "ascii",
 ];
 
-/// Windows-1252 at 0x80–0x9F; the five unassigned bytes stay C1 controls.
-const CP1252_HIGH: [char; 32] = [
-    '€', '\u{81}', '‚', 'ƒ', '„', '…', '†', '‡', 'ˆ', '‰', 'Š', '‹', 'Œ', '\u{8d}', 'Ž', '\u{8f}',
-    '\u{90}', '‘', '’', '“', '”', '•', '–', '—', '˜', '™', 'š', '›', 'œ', '\u{9d}', 'ž', 'Ÿ',
-];
-
-/// A page found in the chosen folder.
-struct Page {
-    /// Its path relative to the chosen folder, with `/`, NFC.
-    path: String,
-    /// The folder it is in on disk, for its links.
-    dir: PathBuf,
-    /// Its folders below the chosen folder.
-    folders: Vec<String>,
-    /// Its file name without the extension, NFC.
-    stem: String,
-    /// Its modification time.
-    modified_ms: Option<u64>,
-}
-
 /// Reads the HTML file at `path`, or the HTML files in the folder at `path`
 /// and its subfolders, into a batch for the pipeline.
 ///
@@ -102,33 +80,15 @@ struct Page {
 /// [`ImportError::Source`] if `path` cannot be read or is a file that is not
 /// HTML. Pages that cannot be read or decoded are notices.
 pub fn read(path: &Path) -> Result<Batch, ImportError> {
-    let mut notices = Vec::new();
-    let mut pages = Vec::new();
-    let root = if path.is_dir() {
-        let top = fs::read_dir(path)
-            .map_err(|e| ImportError::Source(format!("{} cannot be read: {e}", display(path))))?;
-        walk(path, top, &mut pages, &mut notices);
-        pages.sort_by(|a, b| a.path.cmp(&b.path));
-        path.to_path_buf()
-    } else {
-        let root = path.parent().map(Path::to_path_buf).unwrap_or_default();
-        match page(&root, path) {
-            Some(found) => pages.push(found),
-            None => {
-                return Err(ImportError::Source(format!(
-                    "{} is not an HTML file (.html or .htm).",
-                    display(path)
-                )));
-            }
-        }
-        root
-    };
+    let (root, pages, mut notices) = files::find(
+        path,
+        &is_html,
+        &is_asset_folder,
+        "an HTML file (.html or .htm)",
+    )?;
     let mut notes = Vec::new();
     for found in &pages {
-        let file = found
-            .dir
-            .join(found.path.rsplit('/').next().unwrap_or_default());
-        let bytes = match fs::read(&file) {
+        let bytes = match fs::read(&found.file) {
             Ok(bytes) => bytes,
             Err(e) => {
                 notices.push(Notice::general(format!(
@@ -160,108 +120,48 @@ pub fn read(path: &Path) -> Result<Batch, ImportError> {
     }
     Ok(Batch {
         source: Source::Html,
-        input: display(path),
+        input: files::display(path),
         notes,
         notices,
     })
 }
 
-/// Collects the pages below `root`, skipping hidden entries and the folders
-/// browsers save a page's pictures in.
-fn walk(root: &Path, entries: fs::ReadDir, out: &mut Vec<Page>, notices: &mut Vec<Notice>) {
-    let mut entries: Vec<_> = entries.filter_map(Result::ok).map(|e| e.path()).collect();
-    entries.sort();
-    let stems: HashSet<String> = entries
-        .iter()
-        .filter(|p| is_html(p) && p.is_file())
-        .filter_map(|p| p.file_stem().map(|s| s.to_string_lossy().into_owned()))
-        .collect();
-    for path in entries {
-        let Some(name) = path.file_name().map(|n| n.to_string_lossy().into_owned()) else {
-            continue;
-        };
-        if name.starts_with('.') {
-            continue;
-        }
-        if path.is_dir() {
-            let assets = ASSET_FOLDERS.iter().any(|suffix| {
-                name.strip_suffix(suffix)
-                    .is_some_and(|stem| stems.contains(stem))
-            });
-            if assets {
-                continue;
-            }
-            match fs::read_dir(&path) {
-                Ok(inner) => walk(root, inner, out, notices),
-                Err(e) => notices.push(Notice::general(format!(
-                    "{} cannot be read: {e}",
-                    relative(root, &path)
-                ))),
-            }
-        } else if let Some(found) = page(root, &path) {
-            out.push(found);
-        }
-    }
+fn is_html(path: &Path) -> bool {
+    files::has_extension(path, EXTENSIONS)
 }
 
-/// The page at `path` below `root`, or `None` if it is not an HTML file.
-fn page(root: &Path, path: &Path) -> Option<Page> {
-    if !is_html(path) || !path.is_file() {
-        return None;
-    }
-    let rel = relative(root, path);
-    let mut folders: Vec<String> = rel.split('/').map(str::to_owned).collect();
-    folders.pop();
-    let modified_ms = fs::metadata(path)
-        .and_then(|m| m.modified())
-        .ok()
-        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
-        .and_then(|d| u64::try_from(d.as_millis()).ok());
-    Some(Page {
-        path: rel,
-        dir: path.parent().map(Path::to_path_buf).unwrap_or_default(),
-        folders,
-        stem: path
-            .file_stem()
-            .map(|s| s.to_string_lossy().nfc().collect())
-            .unwrap_or_default(),
-        modified_ms,
+/// `true` for the folder a browser saved a page's pictures in: `Page_files`
+/// next to `Page.html`.
+fn is_asset_folder(dir: &Path) -> bool {
+    let (Some(parent), Some(name)) = (dir.parent(), dir.file_name()) else {
+        return false;
+    };
+    let name = name.to_string_lossy();
+    ASSET_FOLDERS.iter().any(|suffix| {
+        name.strip_suffix(suffix).is_some_and(|stem| {
+            EXTENSIONS
+                .iter()
+                .any(|ext| parent.join(format!("{stem}.{ext}")).is_file())
+        })
     })
 }
 
-fn is_html(path: &Path) -> bool {
-    path.extension()
-        .is_some_and(|e| EXTENSIONS.iter().any(|x| e.eq_ignore_ascii_case(x)))
-}
-
-/// `path` relative to `root`, with `/`, NFC.
-fn relative(root: &Path, path: &Path) -> String {
-    path.strip_prefix(root)
-        .unwrap_or(path)
-        .to_string_lossy()
-        .replace('\\', "/")
-        .nfc()
-        .collect()
-}
-
-/// The file or folder name of `path`, NFC, for the report and the log.
-fn display(path: &Path) -> String {
-    path.file_name().map_or_else(
-        || path.display().to_string(),
-        |n| n.to_string_lossy().nfc().collect(),
-    )
-}
-
 /// The note made from `page`, whose text is `html`.
-fn note(root: &Path, page: &Page, html: &str, notices: &mut Vec<Notice>) -> ImportedNote {
+fn note(root: &Path, page: &Found, html: &str, notices: &mut Vec<Notice>) -> ImportedNote {
     let converted = convert(html);
     let mut problems = converted.problems;
     let mut attachments = converted.attachments;
     let mut body = converted.markdown;
-    attachments.extend(linked_files(root, page, &body, &mut problems));
+    attachments.extend(files::linked_files(
+        root,
+        &page.dir,
+        &body,
+        &is_html,
+        &mut problems,
+    ));
 
     let mut title = String::new();
-    if let Some(heading) = leading_heading(&body) {
+    if let Some(heading) = files::leading_heading(&body) {
         title = unescape(heading);
     } else if let Some(page_title) = converted.title {
         title = unescape(&page_title);
@@ -326,15 +226,7 @@ fn decode(bytes: &[u8]) -> Decoded {
     match declared_charset(bytes) {
         Some(charset) if charset == "utf-8" || charset == "utf8" => utf8(bytes),
         Some(charset) if !WINDOWS_1252.contains(&charset.as_str()) => Decoded::Unsupported(charset),
-        _ => Decoded::Text(
-            bytes
-                .iter()
-                .map(|&b| match b {
-                    0x80..=0x9f => CP1252_HIGH[usize::from(b - 0x80)],
-                    _ => char::from(b),
-                })
-                .collect(),
-        ),
+        _ => Decoded::Text(files::windows_1252(bytes)),
     }
 }
 
@@ -569,13 +461,6 @@ fn tidy(markdown: &str) -> String {
     out.trim_matches('\n').to_owned()
 }
 
-/// The text of the level-1 heading the Markdown starts with.
-fn leading_heading(markdown: &str) -> Option<&str> {
-    let first = markdown.lines().find(|l| !l.trim().is_empty())?;
-    let text = first.strip_prefix("# ")?.trim();
-    (!text.is_empty()).then_some(text)
-}
-
 /// Markdown text without its backslash escapes.
 fn unescape(text: &str) -> String {
     let mut out = String::new();
@@ -587,101 +472,6 @@ fn unescape(text: &str) -> String {
         out.push(c);
     }
     out
-}
-
-/// The link destinations in `markdown` as written: `](dest)`,
-/// `](dest "title")` and `](<dest>)`, with `\(` and `\)` kept.
-fn destinations(markdown: &str) -> Vec<&str> {
-    let mut out = Vec::new();
-    let mut rest = markdown;
-    while let Some(at) = rest.find("](") {
-        rest = &rest[at + 2..];
-        let dest = if let Some(inner) = rest.strip_prefix('<') {
-            inner.find('>').map(|e| &inner[..e])
-        } else {
-            let mut end = None;
-            let mut escaped = false;
-            for (i, c) in rest.char_indices() {
-                match c {
-                    _ if escaped => escaped = false,
-                    '\\' => escaped = true,
-                    ')' | ' ' | '\n' => {
-                        end = Some(i);
-                        break;
-                    }
-                    _ => {}
-                }
-            }
-            end.map(|e| &rest[..e])
-        };
-        if let Some(dest) = dest.filter(|d| !d.is_empty() && !out.contains(d)) {
-            out.push(dest);
-        }
-    }
-    out
-}
-
-/// The local files `markdown`, the page `page`, links to that exist below
-/// `root` and are not pages themselves. Links to files that are missing go
-/// into `problems`.
-fn linked_files(
-    root: &Path,
-    page: &Page,
-    markdown: &str,
-    problems: &mut Vec<String>,
-) -> Vec<ImportedAttachment> {
-    let mut out = Vec::new();
-    for dest in destinations(markdown) {
-        let Some(file) = local_file(root, &page.dir, dest) else {
-            continue;
-        };
-        if is_html(&file) {
-            continue;
-        }
-        if !file.is_file() {
-            problems.push(format!(
-                "The page links to {}, which is not there; the link is left as it is.",
-                relative(root, &file)
-            ));
-            continue;
-        }
-        let name: String = file
-            .file_name()
-            .map(|n| n.to_string_lossy().nfc().collect())
-            .unwrap_or_default();
-        out.push(ImportedAttachment {
-            link: dest.to_owned(),
-            file_name: name,
-            data: AttachmentData::File(file),
-        });
-    }
-    out
-}
-
-/// The file a relative link `dest` from a page in `dir` points to, if it
-/// stays below `root`; `None` for links to the web, anchors and absolute
-/// paths.
-fn local_file(root: &Path, dir: &Path, dest: &str) -> Option<PathBuf> {
-    if dest.contains(':') || dest.starts_with(['/', '#', '?']) {
-        return None;
-    }
-    let dest = dest.replace("\\(", "(").replace("\\)", ")");
-    let dest = dest.split(['#', '?']).next().unwrap_or_default();
-    let dest = percent_decode_str(dest).decode_utf8().ok()?;
-    let mut path = dir.to_path_buf();
-    for component in Path::new(&*dest).components() {
-        match component {
-            Component::Normal(part) => path.push(part),
-            Component::CurDir => {}
-            Component::ParentDir => {
-                if !path.pop() {
-                    return None;
-                }
-            }
-            Component::RootDir | Component::Prefix(_) => return None,
-        }
-    }
-    (path.starts_with(root) && path != root).then_some(path)
 }
 
 #[cfg(test)]
@@ -754,41 +544,7 @@ mod tests {
     }
 
     #[test]
-    fn link_destinations() {
-        assert_eq!(
-            destinations(
-                "![a](x\\(1\\).png) [b](<my file.pdf>) [c](d.pdf \"t\") [e](x\\(1\\).png)"
-            ),
-            ["x\\(1\\).png", "my file.pdf", "d.pdf"]
-        );
-    }
-
-    #[test]
-    fn local_files() {
-        let root = Path::new("/r");
-        let dir = Path::new("/r/a");
-        let file = |d| local_file(root, dir, d);
-        assert_eq!(file("p%20q.png#x"), Some(PathBuf::from("/r/a/p q.png")));
-        assert_eq!(
-            file("../b/x\\(1\\).png"),
-            Some(PathBuf::from("/r/b/x(1).png"))
-        );
-        assert_eq!(file("../../etc/passwd"), None);
-        for dest in [
-            "https://x.org/a.png",
-            "/abs.png",
-            "#top",
-            "mailto:a@b",
-            "..",
-        ] {
-            assert_eq!(file(dest), None, "{dest}");
-        }
-    }
-
-    #[test]
     fn headings_and_escapes() {
-        assert_eq!(leading_heading("\n# A \\*b\\*\n\ntext"), Some("A \\*b\\*"));
-        assert_eq!(leading_heading("## A"), None);
         assert_eq!(unescape("A \\*b\\* \\ c"), "A *b* \\ c");
     }
 

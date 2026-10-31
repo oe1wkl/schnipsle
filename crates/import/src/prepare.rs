@@ -186,10 +186,13 @@ pub(crate) fn with_front_matter(body: &str, keys: &Keys<'_>) -> String {
         return out;
     }
     // `set` and `stamp` add keys at the top, so in reverse order: the
-    // result starts with `id`, …, `modified`, `source`, `source_id`.
+    // result starts with `id`, …, `modified`, `source`, `source_id`. An `id`
+    // the text brings along is replaced: the note's id is the one in the
+    // import log (§12.1 rule 1).
     let text = front_matter::set(body, "source_id", &quote(keys.source_id));
     let text = front_matter::set(&text, "source", keys.source.id());
     let text = front_matter::stamp(&text, keys.id, keys.created, keys.modified);
+    let text = front_matter::set(&text, "id", keys.id);
     if keys.pinned {
         front_matter::with_pinned(&text, true)
     } else {
@@ -346,6 +349,15 @@ mod tests {
             Some("x-coredata://A/ICNote/p1")
         );
         assert!(text.ends_with("---\nBody\n"));
+        // An id the text brings along gives way to the note's.
+        let copied = "---\nid: 01AAAAAAAAAAAAAAAAAAAAAAAA\nsource: html\n---\nBody\n";
+        let text = with_front_matter(copied, &keys);
+        assert_eq!(front_matter::get(&text, "id").as_deref(), Some(keys.id));
+        assert_eq!(text.matches("id: ").count(), 2); // id and source_id
+        assert_eq!(
+            front_matter::get(&text, "source").as_deref(),
+            Some("apple-notes")
+        );
     }
 
     #[test]

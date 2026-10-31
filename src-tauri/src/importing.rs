@@ -9,7 +9,7 @@ use std::sync::Mutex;
 
 use schnipsle_core::ImportLogError;
 use schnipsle_import::{
-    ImportError, Outcome, Plan, Source, SystemEnv, apple_notes, html, simplenote,
+    ImportError, Outcome, Plan, Source, SystemEnv, apple_notes, html, markdown, simplenote,
 };
 use serde::Serialize;
 use tauri::{AppHandle, Emitter as _, State};
@@ -58,7 +58,7 @@ struct Progress {
 
 /// Lets the user pick the export of `source`: the folder of an Apple Notes
 /// export, the zip (or `notes.json`) of a Simplenote export, a folder of
-/// HTML files or, with `file`, one of them. `None` if cancelled.
+/// HTML or Markdown files or, with `file`, one of them. `None` if cancelled.
 #[tauri::command]
 pub async fn pick_import(
     app: AppHandle,
@@ -75,6 +75,15 @@ pub async fn pick_import(
                 .blocking_pick_file(),
             Source::Html if file == Some(true) => dialog
                 .add_filter("HTML file", &["html", "htm"])
+                .blocking_pick_file(),
+            Source::Markdown if file == Some(true) => dialog
+                .add_filter(
+                    "Markdown or ChordPro file",
+                    &[
+                        "md", "markdown", "mdown", "mkd", "mkdn", "cho", "crd", "chopro",
+                        "chordpro",
+                    ],
+                )
                 .blocking_pick_file(),
             _ => dialog.blocking_pick_folder(),
         };
@@ -109,16 +118,12 @@ pub async fn plan_import(
         Source::AppleNotes => apple_notes::read(&input)?,
         Source::Simplenote => simplenote::read(&input)?,
         Source::Html => html::read(&input)?,
-        other @ Source::Markdown => {
-            return Err(CommandError::other(format!(
-                "Import from {} is not available yet",
-                other.folder()
-            )));
-        }
+        Source::Markdown => markdown::read(&input)?,
     };
     let has_metadata =
         source == Source::AppleNotes && input.join(apple_notes::METADATA_FILE).is_file();
     with_vault(&state, |v| {
+        schnipsle_import::check_input(v, &input)?;
         let plan = schnipsle_import::plan(v, &batch, &SystemEnv)?;
         *state.import.0.lock().map_err(CommandError::other)? =
             Some((v.root().to_owned(), plan.clone()));

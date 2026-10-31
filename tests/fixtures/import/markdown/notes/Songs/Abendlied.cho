@@ -1,0 +1,8 @@
+{title: Abendlied}
+{artist: Trad.}
+{key: G}
+# ``` in a comment does not end the block
+
+{start_of_verse}
+Der [G]Mond ist aufge[D]gangen,
+{end_of_verse}

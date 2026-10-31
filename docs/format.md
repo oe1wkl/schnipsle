@@ -1,9 +1,9 @@
 # Vault File Format Specification
 
 - Format version: **1** (draft)
-- Spec revision: 0.11, 2026-10-29 (§12.1 rule 6 notes from the source's trash; 0.10: §12 imported notes, import log, re-import and undo; 0.9: §9 reading and writing smart folders; 0.8: §7 retention settings; 0.7: §5.5 relative links are kept working when a note moves; 0.6: §8 `original_path` is relative to the vault root; 0.5: §8 trash names for notes without `id` and for collisions; 0.4: §5.3 refined by the first implementation, §5.6 music notation, §5.7 lyrics with chords)
+- Spec revision: 0.12, 2026-10-31 (§12.1 rule 7 the source's title as a heading; 0.11: §12.1 rule 6 notes from the source's trash; 0.10: §12 imported notes, import log, re-import and undo; 0.9: §9 reading and writing smart folders; 0.8: §7 retention settings; 0.7: §5.5 relative links are kept working when a note moves; 0.6: §8 `original_path` is relative to the vault root; 0.5: §8 trash names for notes without `id` and for collisions; 0.4: §5.3 refined by the first implementation, §5.6 music notation, §5.7 lyrics with chords)
 - Status: Draft — becomes normative when M1 ships
-- Related: ADR-0004, ADR-0008, ADR-0009, ADR-0011, ADR-0013, ADR-0014, ADR-0012, ADR-0016, ADR-0017, ADR-0018, ADR-0019
+- Related: ADR-0004, ADR-0008, ADR-0009, ADR-0011, ADR-0013, ADR-0014, ADR-0012, ADR-0016, ADR-0017, ADR-0018, ADR-0019, ADR-0020
 
 The key words MUST, MUST NOT, SHOULD, SHOULD NOT and MAY are used as described in RFC 2119.
 
@@ -287,10 +287,11 @@ How notes from other apps are written into the vault, and the log that makes an 
 
    Paths in `source_id` use `/` and are NFC-normalized.
 2. The note is written to `notes/<Folder>/` followed by the source's folders (for Apple Notes the note's folder in Notes), with a file name as in §3. Example: `notes/Apple Notes/Brot und Germgebäck/pizzateig.md`.
-3. The text of the note is the source's text converted to Markdown. Changes beyond the conversion are limited to: line endings to LF, NFC normalization, attachments stored under §6 with their links rewritten (§5.5), and a final tag line (rule 5).
+3. The text of the note is the source's text converted to Markdown. Changes beyond the conversion are limited to: line endings to LF, NFC normalization, attachments stored under §6 with their links rewritten (§5.5), a heading with the title the source gives the note (rule 7), and a final tag line (rule 5).
 4. **Folder tags.** Each folder level of the source gives one tag level: its name, NFC-normalized, with every character that §5.3 does not allow in a tag name replaced by `-`, runs of `-` collapsed to one and `-` at either end removed. Levels that end up empty are left out. Nested folders give one tag with `/` between the levels: `Radio` › `QRP Kits` → `#Radio/QRP-Kits`. If the result is not recognized as a tag by §5.3 (e.g. `#2024` or `#a0b1c2`), the folder gives no tag.
 5. Tags the source keeps outside the text (Simplenote `tags`) and folder tags are written on one final line, separated by spaces, after an empty line: `#Radio/QRP-Kits #ÖVSV`. A tag the text already carries (§5.3, compared after normalization) is not repeated. A source tag is normalized like a folder level (rule 4) and left out if the result is not a tag. A note that gets no such tags gets no final line.
 6. **Notes in the source's trash** (Simplenote `trashedNotes`) are imported like the others and then moved to the trash (§8), with `original_path` where they were written. The log lists them as `added` with that path; a re-import finds them missing (§12.3 rule 3), and undo leaves them where they are (§12.4 rule 3). A note imported before that the source has since moved to its trash is treated as in §12.3 and is never moved to the trash by an import.
+7. **Title.** If the source names the note outside its text (an HTML page's `<title>`, a Markdown file's front-matter `title`, a ChordPro file's `{title}`, §5.7 rule 9) and the text does not start with a level-1 heading, `# <title>` is put at the top of the body, after the front matter, followed by an empty line, so the note shows that title (§5.2). A front-matter `title` stays in the front matter. A leading level-1 heading wins over the source's name (ADR-0020).
 
 ### 12.2 Import log
 

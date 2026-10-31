@@ -3,7 +3,7 @@
 // Tauri: the app's page is loaded for its elements, and a stand-in for
 // Tauri's IPC answers the import commands with a sample report shaped like
 // the golden files in tests/fixtures/import/apple-notes/expected/; smaller
-// ones for Simplenote, with a note from its trash, and for HTML.
+// ones for Simplenote, with a note from its trash, for HTML and for Markdown.
 import type { ImportOutcome, ImportPlan, ImportPreview, PlanItem } from "../types";
 
 const ID = "x-coredata://00000000-0000-4000-8000-0000000000A1/ICNote/";
@@ -125,13 +125,44 @@ const htmlPlan: ImportPlan = {
       sourceId: "Radio/QRP Kits/Antenna tuner (old).html",
       title: "Antenna tuner",
       message:
-        "The page links to Radio/QRP Kits/pics/missing.png, which is not there; the link is left as it is.",
+        "It links to Radio/QRP Kits/pics/missing.png, which is not there; the link is left as it is.",
     },
     {
       sourceId: null,
       title: null,
       message:
         "Notes/Japanese.html is in the encoding shift_jis, which the import cannot read; it is not imported.",
+    },
+  ],
+};
+const markdownPlan: ImportPlan = {
+  source: "markdown",
+  input: "Old notes",
+  items: [
+    {
+      sourceId: "Projects/Copied note.md",
+      title: "Copied note",
+      action: "add",
+      reason: null,
+      path: "Markdown/Projects/copied-note.md",
+      problems: [
+        "Its front matter has the id 01AAAAAAAAAAAAAAAAAAAAAAAA; it gets 01M63HM9800000000000000002 instead, like every imported note.",
+      ],
+    },
+    {
+      sourceId: "Songs/Abendlied.cho",
+      title: "Abendlied",
+      action: "add",
+      reason: null,
+      path: "Markdown/Songs/abendlied.md",
+      problems: [],
+    },
+  ],
+  notices: [
+    {
+      sourceId: null,
+      title: null,
+      message: "Old/Grüße.md is not UTF-8 text; it is read as Windows-1252 (Western European).",
     },
   ],
 };
@@ -150,6 +181,11 @@ async function answer(cmd: string, args: Record<string, unknown> = {}): Promise<
   switch (cmd) {
     case "pick_import":
       if (args.source === "simplenote") return "/Users/me/Downloads/notes.zip";
+      if (args.source === "markdown") {
+        return args.file === true
+          ? "/Users/me/Old notes/Songs/Abendlied.cho"
+          : "/Users/me/Old notes";
+      }
       if (args.source === "html") {
         return args.file === true
           ? "/Users/me/Saved pages/Pizza dough.html"
@@ -159,7 +195,13 @@ async function answer(cmd: string, args: Record<string, unknown> = {}): Promise<
     case "plan_import": {
       await wait(300);
       const simple = args.source === "simplenote";
-      current = simple ? simplenotePlan : args.source === "html" ? htmlPlan : plan;
+      current = simple
+        ? simplenotePlan
+        : args.source === "html"
+          ? htmlPlan
+          : args.source === "markdown"
+            ? markdownPlan
+            : plan;
       return {
         plan: current,
         path: String(args.path),

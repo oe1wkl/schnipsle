@@ -18,10 +18,12 @@
 //! The caller updates the search index for the paths in the [`Outcome`] in
 //! one go.
 //!
-//! Adapters: [`apple_notes`], [`simplenote`], [`html`].
+//! Adapters: [`apple_notes`], [`simplenote`], [`html`], [`markdown`].
 
 pub mod apple_notes;
+mod files;
 pub mod html;
+pub mod markdown;
 mod note;
 mod pipeline;
 mod prepare;
@@ -30,6 +32,6 @@ pub mod simplenote;
 pub use note::{AttachmentData, Batch, ImportedAttachment, ImportedNote, Notice, Source};
 pub use pipeline::{
     Env, ImportError, Outcome, Plan, PlanItem, PlannedAction, SkipReason, SystemEnv, Written,
-    apply, apply_with_progress, plan,
+    apply, apply_with_progress, check_input, plan,
 };
 pub use prepare::{folder_tag, tag_from};

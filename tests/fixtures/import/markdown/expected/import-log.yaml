@@ -1,0 +1,44 @@
+format: 1
+id: 01M63HM9800000000000000007
+source: markdown
+input: Old notes
+started: "2026-10-29T10:00:00Z"
+finished: "2026-10-29T10:00:00Z"
+undone: null
+notes:
+  - source_id: Old/Grüße.md
+    id: 01M63HM9800000000000000001
+    path: notes/Markdown/Old/grüße.md
+    action: added
+    source_modified: "2026-10-28T22:15:00Z"
+    hash: 45840751588055d36aed1504c3e158a2b3a9a6ad74afc43bb6d6e343bbe7cac8
+  - source_id: Projects/Copied note.md
+    id: 01M63HM9800000000000000002
+    path: notes/Markdown/Projects/copied-note.md
+    action: added
+    source_modified: "2026-10-28T22:15:00Z"
+    hash: 012f28287605915d5dd45dde7c3b6a157ad4da1e049b85ff00d41953032c960a
+  - source_id: Projects/Tuner.md
+    id: 01M63HM9800000000000000003
+    path: notes/Markdown/Projects/antenna-tuner.md
+    action: added
+    source_modified: "2026-10-28T22:15:00Z"
+    hash: ccd3a1a625ebb20a4a198f47c0a82e9e447d8b71fe940847a395dad8f73450c8
+  - source_id: Songs/Abendlied.cho
+    id: 01M63HM9800000000000000004
+    path: notes/Markdown/Songs/abendlied.md
+    action: added
+    source_modified: "2026-10-28T22:15:00Z"
+    hash: 6f56285da29dd3356754011e7a377b2cbf584f3c84800549adeff89b9a65f78d
+  - source_id: Songs/campfire-round.chordpro
+    id: 01M63HM9800000000000000005
+    path: notes/Markdown/Songs/campfire-round.md
+    action: added
+    source_modified: "2026-10-28T22:15:00Z"
+    hash: 7dc9f1b74fb9070622073d448b566c033d3e4368c4d6efca72a449cc7207b894
+  - source_id: Welcome.md
+    id: 01M63HM9800000000000000006
+    path: notes/Markdown/welcome.md
+    action: added
+    source_modified: "2026-10-28T22:15:00Z"
+    hash: 2a46e80f979520b74cbbef15c234d7749bdaaac64d4262404743ed64080e46f5

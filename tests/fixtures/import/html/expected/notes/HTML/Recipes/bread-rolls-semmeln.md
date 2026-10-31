@@ -9,7 +9,7 @@ source_id: "Recipes/Bread rolls.htm"
 
 Makes twelve rolls.
 
-![Rolls on a tray](../../../attachments/f9/f91dff8490f16d946e038d39e17053b1b166a5b597fa067eb8c1a2a88debb5df.jpg)
+![Rolls on a tray](../../../attachments/e2/e24f615689c51a90fce260edbb6b16e9e27db8ce9a60ba360c189e1e7ded433f.jpg)
 
 1. Mix
 2. Knead
