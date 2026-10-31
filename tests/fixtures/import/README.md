@@ -1,6 +1,6 @@
 # Import fixtures
 
-Sample exports for the importers (format.md §12, ADR-0012, ADR-0019). All text, names, IDs and attachments are invented. Only the structure follows real exports: Apple Notes on macOS 27.0.1 in German, 137 notes in 3 folders, plus `apple-notes-metadata.json` for 679 notes; Simplenote, 463 notes plus 166 in its trash. The expected notes for each sample come with the adapters.
+Sample exports for the importers (format.md §12, ADR-0012, ADR-0019). All text, names, IDs and attachments are invented. Only the structure follows real exports: Apple Notes on macOS 27.0.1 in German, 137 notes in 3 folders, plus `apple-notes-metadata.json` for 679 notes; Simplenote, 463 notes plus 166 in its trash. The HTML pages are made up, with the kinds of files browsers save. The expected notes for each sample come with the adapters.
 
 ## `pipeline/`
 
@@ -85,3 +85,20 @@ The adapter reads only `source/notes.json`, also given unpacked as `notes.json`.
 | (empty) | Empty `content` |
 | `No line break at the end` | No final line break |
 | trashed `Old idea` | `trashedNotes` go to the trash (§8) |
+
+## `html/`
+
+`pages/` is a folder chosen for an HTML import (`crates/import/tests/html.rs`). The test copies it to a folder `Saved pages` and gives its files the time 2026-10-28T22:15:00Z, which becomes the notes' dates.
+
+| File | What it tests |
+| --- | --- |
+| `Pizza dough.html` | Leading `<h1>` wins over `<title>`; `<style>` and `<script>` left out; checkboxes, `<s>`, a `data:` PNG, `<br>`, `<hr>`; a link to another page and one to the web stay as written |
+| `Recipes/Bread rolls.htm` | No heading, so the `<title>` (spread over two lines) becomes `# Bread rolls (Semmeln)`; a picture in `Bread rolls_files/` and a PDF in `Manuals/` (link with a space) become attachments; nested list; folder tag `#Recipes` |
+| `Recipes/Bread rolls_files/frame.html` | A page in a browser's picture folder is not imported |
+| `Radio/QRP Kits/Antenna tuner (old).html` | Windows-1252 without a declared encoding (`€`, `„Grüße“`); table; `#include` in a code block is no tag; a missing local picture is reported, a picture on the web stays a link; folder tag `#Radio/QRP-Kits` |
+| `Notes/Shopping.html` | No title, no heading: the first line names the note |
+| `Notes/Empty page.html` | Empty: named after the file |
+| `Notes/Japanese.html` | Declares Shift_JIS: reported and not imported |
+| `Notes/.hidden.html`, `Notes/readme.txt` | Hidden files and files that are not HTML are left out |
+
+`html/expected/` is what the adapter and the pipeline make of it, in the layout of `pipeline/` above.

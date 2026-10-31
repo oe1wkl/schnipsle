@@ -8,7 +8,9 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use schnipsle_core::ImportLogError;
-use schnipsle_import::{ImportError, Outcome, Plan, Source, SystemEnv, apple_notes, simplenote};
+use schnipsle_import::{
+    ImportError, Outcome, Plan, Source, SystemEnv, apple_notes, html, simplenote,
+};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter as _, State};
 
@@ -55,10 +57,14 @@ struct Progress {
 }
 
 /// Lets the user pick the export of `source`: the folder of an Apple Notes
-/// export, the zip (or `notes.json`) of a Simplenote export. `None` if
-/// cancelled.
+/// export, the zip (or `notes.json`) of a Simplenote export, a folder of
+/// HTML files or, with `file`, one of them. `None` if cancelled.
 #[tauri::command]
-pub async fn pick_import(app: AppHandle, source: Source) -> CmdResult<Option<String>> {
+pub async fn pick_import(
+    app: AppHandle,
+    source: Source,
+    file: Option<bool>,
+) -> CmdResult<Option<String>> {
     #[cfg(desktop)]
     {
         use tauri_plugin_dialog::DialogExt as _;
@@ -66,6 +72,9 @@ pub async fn pick_import(app: AppHandle, source: Source) -> CmdResult<Option<Str
         let picked = match source {
             Source::Simplenote => dialog
                 .add_filter("Simplenote export", &["zip", "json"])
+                .blocking_pick_file(),
+            Source::Html if file == Some(true) => dialog
+                .add_filter("HTML file", &["html", "htm"])
                 .blocking_pick_file(),
             _ => dialog.blocking_pick_folder(),
         };
@@ -77,7 +86,7 @@ pub async fn pick_import(app: AppHandle, source: Source) -> CmdResult<Option<Str
     }
     #[cfg(mobile)]
     {
-        let _ = (app, source);
+        let _ = (app, source, file);
         Err(desktop_only())
     }
 }
@@ -99,7 +108,8 @@ pub async fn plan_import(
     let batch = match source {
         Source::AppleNotes => apple_notes::read(&input)?,
         Source::Simplenote => simplenote::read(&input)?,
-        other => {
+        Source::Html => html::read(&input)?,
+        other @ Source::Markdown => {
             return Err(CommandError::other(format!(
                 "Import from {} is not available yet",
                 other.folder()

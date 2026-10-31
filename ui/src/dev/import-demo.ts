@@ -2,8 +2,8 @@
 // Development playground for the import dialog (ui/dev/import.html), without
 // Tauri: the app's page is loaded for its elements, and a stand-in for
 // Tauri's IPC answers the import commands with a sample report shaped like
-// the golden files in tests/fixtures/import/apple-notes/expected/; a smaller
-// one for Simplenote, with a note from its trash.
+// the golden files in tests/fixtures/import/apple-notes/expected/; smaller
+// ones for Simplenote, with a note from its trash, and for HTML.
 import type { ImportOutcome, ImportPlan, ImportPreview, PlanItem } from "../types";
 
 const ID = "x-coredata://00000000-0000-4000-8000-0000000000A1/ICNote/";
@@ -98,6 +98,43 @@ const simplenotePlan: ImportPlan = {
   ],
   notices: [],
 };
+
+const htmlPlan: ImportPlan = {
+  source: "html",
+  input: "Saved pages",
+  items: [
+    {
+      sourceId: "Pizza dough.html",
+      title: "Pizza dough",
+      action: "add",
+      reason: null,
+      path: "HTML/pizza-dough.md",
+      problems: [],
+    },
+    {
+      sourceId: "Radio/QRP Kits/Antenna tuner (old).html",
+      title: "Antenna tuner",
+      action: "add",
+      reason: null,
+      path: "HTML/Radio/QRP Kits/antenna-tuner.md",
+      problems: [],
+    },
+  ],
+  notices: [
+    {
+      sourceId: "Radio/QRP Kits/Antenna tuner (old).html",
+      title: "Antenna tuner",
+      message:
+        "The page links to Radio/QRP Kits/pics/missing.png, which is not there; the link is left as it is.",
+    },
+    {
+      sourceId: null,
+      title: null,
+      message:
+        "Notes/Japanese.html is in the encoding shift_jis, which the import cannot read; it is not imported.",
+    },
+  ],
+};
 let current = plan;
 
 /** `?metadata=no` starts without the metadata file. */
@@ -112,13 +149,17 @@ function wait(ms: number): Promise<void> {
 async function answer(cmd: string, args: Record<string, unknown> = {}): Promise<unknown> {
   switch (cmd) {
     case "pick_import":
-      return args.source === "simplenote"
-        ? "/Users/me/Downloads/notes.zip"
-        : "/Users/me/Schnipsle-Import";
+      if (args.source === "simplenote") return "/Users/me/Downloads/notes.zip";
+      if (args.source === "html") {
+        return args.file === true
+          ? "/Users/me/Saved pages/Pizza dough.html"
+          : "/Users/me/Saved pages";
+      }
+      return "/Users/me/Schnipsle-Import";
     case "plan_import": {
       await wait(300);
       const simple = args.source === "simplenote";
-      current = simple ? simplenotePlan : plan;
+      current = simple ? simplenotePlan : args.source === "html" ? htmlPlan : plan;
       return {
         plan: current,
         path: String(args.path),

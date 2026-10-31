@@ -1,0 +1,38 @@
+format: 1
+id: 01M63HM9800000000000000006
+source: html
+input: Saved pages
+started: "2026-10-29T10:00:00Z"
+finished: "2026-10-29T10:00:00Z"
+undone: null
+notes:
+  - source_id: Notes/Empty page.html
+    id: 01M63HM9800000000000000001
+    path: notes/HTML/Notes/empty-page.md
+    action: added
+    source_modified: "2026-10-28T22:15:00Z"
+    hash: ed69a1beb70b7b8cf944791adcf5c14aff56b5c4bec3b1c6b42f0d1ac70e834b
+  - source_id: Notes/Shopping.html
+    id: 01M63HM9800000000000000002
+    path: notes/HTML/Notes/milk-eggs-butter.md
+    action: added
+    source_modified: "2026-10-28T22:15:00Z"
+    hash: 7813cbcee53c43b20a352125e32264d800d15e29a1b5c51b8a27003670e3bdf6
+  - source_id: Pizza dough.html
+    id: 01M63HM9800000000000000003
+    path: notes/HTML/pizza-dough.md
+    action: added
+    source_modified: "2026-10-28T22:15:00Z"
+    hash: 1a427778890b7e5d1ef488a2e1dce86c4c631190c8b1110d38b73d94a4a5d5cc
+  - source_id: Radio/QRP Kits/Antenna tuner (old).html
+    id: 01M63HM9800000000000000004
+    path: notes/HTML/Radio/QRP Kits/antenna-tuner.md
+    action: added
+    source_modified: "2026-10-28T22:15:00Z"
+    hash: d42bbcc1dc54da5db74fd3763822b16ed3e385ab5d4a8b7855d502f40b3edd7c
+  - source_id: Recipes/Bread rolls.htm
+    id: 01M63HM9800000000000000005
+    path: notes/HTML/Recipes/bread-rolls-semmeln.md
+    action: added
+    source_modified: "2026-10-28T22:15:00Z"
+    hash: 98fdebeced3a7fbb12fd2e3232cfe1837953c6ea383a73a228348d8d291f3cb2

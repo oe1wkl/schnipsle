@@ -7,7 +7,8 @@
 //
 // For Apple Notes the dates and folders come from apple-notes-metadata.json,
 // which the app writes by running the metadata script on request. Simplenote
-// is one zip file; notes from its trash go to the trash.
+// is one zip file; notes from its trash go to the trash. HTML is a folder of
+// pages or a single page.
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
@@ -54,6 +55,7 @@ const dialog = el("import-dialog") as HTMLDialogElement;
 const sourceSelect = el("import-source") as HTMLSelectElement;
 const choose = el("import-choose");
 const pickButton = el("import-pick") as HTMLButtonElement;
+const pickFileButton = el("import-pick-file") as HTMLButtonElement;
 const pathText = el("import-path");
 const metadataBox = el("import-metadata");
 const metadataText = el("import-metadata-text");
@@ -103,6 +105,7 @@ export function createImport(hooks: ImportHooks): { open(): void } {
   /** Disables the controls while something runs; Cancel only while writing. */
   function setBusy(value: boolean): void {
     pickButton.disabled = value;
+    pickFileButton.disabled = value;
     sourceSelect.disabled = value;
     metadataButton.disabled = value;
     cancelButton.disabled = writing;
@@ -123,6 +126,7 @@ export function createImport(hooks: ImportHooks): { open(): void } {
     planned = false;
     pathText.textContent = "";
     pickButton.textContent = PICK_LABELS[source()];
+    pickFileButton.hidden = source() !== "html";
     showHelp(true);
     choose.hidden = false;
     metadataBox.hidden = true;
@@ -142,6 +146,7 @@ export function createImport(hooks: ImportHooks): { open(): void } {
     if (!state.open) showError("Open a vault first: the notes are imported into it.");
     else if (state.readOnly !== null) showError(state.readOnly);
     pickButton.disabled = !state.open || state.readOnly !== null;
+    pickFileButton.disabled = pickButton.disabled;
   }
 
   function open(): void {
@@ -160,17 +165,18 @@ export function createImport(hooks: ImportHooks): { open(): void } {
     dialog.close();
   }
 
-  async function pick(): Promise<void> {
+  /** Lets the user pick the export; `file` picks a single file where a folder is the default. */
+  async function pick(file = false): Promise<void> {
     showError(null);
     try {
-      const picked = await invoke<string | null>("pick_import", { source: source() });
+      const picked = await invoke<string | null>("pick_import", { source: source(), file });
       if (picked !== null) await dryRun(picked);
     } catch (e) {
       showError(asError(e).message);
     }
   }
 
-  /** Reads the export at `folder` (a file for Simplenote) and shows what an import would do. */
+  /** Reads the export at `folder` (or file) and shows what an import would do. */
   async function dryRun(folder: string): Promise<void> {
     path = folder;
     pathText.textContent = folder;
@@ -366,6 +372,7 @@ export function createImport(hooks: ImportHooks): { open(): void } {
   }
 
   pickButton.addEventListener("click", () => void pick());
+  pickFileButton.addEventListener("click", () => void pick(true));
   metadataButton.addEventListener("click", () => void readMetadata());
   startButton.addEventListener("click", () => void start());
   cancelButton.addEventListener("click", () => void close());
