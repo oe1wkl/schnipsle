@@ -28,6 +28,7 @@ mod note;
 mod pipeline;
 mod prepare;
 pub mod simplenote;
+mod undo;
 
 pub use note::{AttachmentData, Batch, ImportedAttachment, ImportedNote, Notice, Source};
 pub use pipeline::{
@@ -35,3 +36,4 @@ pub use pipeline::{
     apply, apply_with_progress, check_input, plan,
 };
 pub use prepare::{folder_tag, tag_from};
+pub use undo::{ImportRun, Undo, UndoAction, UndoItem, plan_undo, runs, undo};

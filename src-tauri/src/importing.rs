@@ -2,14 +2,16 @@
 //! Importing notes (ADR-0012, ADR-0019, format.md §12) as commands, on the
 //! desktop only: pick the export, a dry run whose report the UI shows, then
 //! the import of exactly that plan with progress events, and the index
-//! updated for the notes it wrote.
+//! updated for the notes it wrote. File › Imports… lists the runs, and one
+//! can be undone after its own dry run (format.md §12.4).
 
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use schnipsle_core::ImportLogError;
 use schnipsle_import::{
-    ImportError, Outcome, Plan, Source, SystemEnv, apple_notes, html, markdown, simplenote,
+    ImportError, ImportRun, Outcome, Plan, Source, SystemEnv, Undo, UndoAction, apple_notes, html,
+    markdown, simplenote,
 };
 use serde::Serialize;
 use tauri::{AppHandle, Emitter as _, State};
@@ -167,6 +169,39 @@ pub async fn apply_import(app: AppHandle, state: State<'_, AppState>) -> CmdResu
             .collect();
         state.index.update(v, &keys);
         Ok(outcome)
+    })
+}
+
+/// The import runs of the open vault, newest first.
+#[tauri::command]
+pub async fn list_imports(state: State<'_, AppState>) -> CmdResult<Vec<ImportRun>> {
+    with_vault(&state, |v| Ok(schnipsle_import::runs(v)?))
+}
+
+/// The dry run of undoing the import `id`: what would happen to each note.
+#[tauri::command]
+pub async fn plan_undo_import(state: State<'_, AppState>, id: String) -> CmdResult<Undo> {
+    with_vault(&state, |v| Ok(schnipsle_import::plan_undo(v, &id)?))
+}
+
+/// Undoes the import `id` and updates the index for the notes it moved to
+/// the trash or restored. Call only after the user chose Undo.
+#[tauri::command]
+pub async fn undo_import(state: State<'_, AppState>, id: String) -> CmdResult<Undo> {
+    with_vault(&state, |v| {
+        let undone = schnipsle_import::undo(v, &id, &SystemEnv)?;
+        let mut keys = Vec::new();
+        for item in &undone.items {
+            if let (UndoAction::Trash | UndoAction::Restore, Some(path)) = (item.action, &item.path)
+            {
+                keys.push(indexing::note_key(path));
+            }
+            if let Some(key) = &item.trash_key {
+                keys.push(indexing::trash_key(key));
+            }
+        }
+        state.index.update(v, &keys);
+        Ok(undone)
     })
 }
 

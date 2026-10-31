@@ -281,5 +281,44 @@
         </div>
       </div>
     </dialog>
+    <dialog id="imports-dialog" class="import-dialog" aria-labelledby="imports-title">
+      <div class="import">
+        <h2 id="imports-title">Imports</h2>
+        <section id="imports-list" class="import-report">
+          <p id="imports-summary" class="import-summary"></p>
+          <table class="import-items">
+            <thead>
+              <tr>
+                <th scope="col">When</th>
+                <th scope="col">From</th>
+                <th scope="col">Notes</th>
+                <th scope="col" aria-label="Undo"></th>
+              </tr>
+            </thead>
+            <tbody id="imports-runs"></tbody>
+          </table>
+        </section>
+        <section id="imports-undo" class="import-report" aria-live="polite" hidden>
+          <p id="imports-undo-summary" class="import-summary"></p>
+          <table class="import-items">
+            <thead>
+              <tr>
+                <th scope="col">Note</th>
+                <th scope="col">Undo</th>
+                <th scope="col">Where, or why not</th>
+              </tr>
+            </thead>
+            <tbody id="imports-items"></tbody>
+          </table>
+        </section>
+        <p id="imports-error" class="folder-error" role="alert" hidden></p>
+        <div class="folder-buttons">
+          <button id="imports-back" type="button" hidden>All imports</button>
+          <span class="spacer"></span>
+          <button id="imports-close" type="button">Close</button>
+          <button id="imports-start" type="button" hidden>Undo import</button>
+        </div>
+      </div>
+    </dialog>
   </body>
 </html>

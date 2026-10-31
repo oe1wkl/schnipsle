@@ -4,7 +4,15 @@
 // Tauri's IPC answers the import commands with a sample report shaped like
 // the golden files in tests/fixtures/import/apple-notes/expected/; smaller
 // ones for Simplenote, with a note from its trash, for HTML and for Markdown.
-import type { ImportOutcome, ImportPlan, ImportPreview, PlanItem } from "../types";
+// With `?imports` it shows File › Imports… instead, with three runs to undo.
+import type {
+  ImportOutcome,
+  ImportPlan,
+  ImportPreview,
+  ImportRun,
+  ImportUndo,
+  PlanItem,
+} from "../types";
 
 const ID = "x-coredata://00000000-0000-4000-8000-0000000000A1/ICNote/";
 
@@ -177,8 +185,125 @@ function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+const runs: ImportRun[] = [
+  {
+    id: "01M697ZKZHKDGR5P5XAVDWEHQ4",
+    source: "markdown",
+    input: "Old notes",
+    started: "2026-10-31T14:55:26Z",
+    undone: null,
+    added: 6,
+    updated: 0,
+    problem: null,
+  },
+  {
+    id: "01M63HM980000000000000000B",
+    source: "simplenote",
+    input: "notes.zip",
+    started: "2026-10-30T09:12:00Z",
+    undone: null,
+    added: 1,
+    updated: 2,
+    problem: null,
+  },
+  {
+    id: "01M5Z0000000000000000000AA",
+    source: "apple-notes",
+    input: "Schnipsle-Import",
+    started: "2026-10-29T10:15:00Z",
+    undone: "2026-10-29T11:02:00Z",
+    added: 137,
+    updated: 0,
+    problem: null,
+  },
+  {
+    id: "01M5Y0000000000000000000ZZ",
+    source: "",
+    input: null,
+    started: "",
+    undone: null,
+    added: 0,
+    updated: 0,
+    problem: "the import log is damaged: no `source`",
+  },
+];
+
+function undoOf(run: ImportRun): ImportUndo {
+  if (run.source === "simplenote") {
+    return {
+      run,
+      items: [
+        {
+          title: "Shopping",
+          path: "Simplenote/shopping.md",
+          action: "trash",
+          problem: null,
+          trashKey: null,
+        },
+        {
+          title: "Packing list",
+          path: "Simplenote/packing-list.md",
+          action: "restore",
+          problem: null,
+          trashKey: null,
+        },
+        {
+          title: "Kein Netz",
+          path: "Simplenote/kein-netz-songtext.md",
+          action: "keep",
+          problem: "Changed here since the import, so it stays as it is.",
+          trashKey: null,
+        },
+      ],
+    };
+  }
+  return {
+    run,
+    items: [
+      { title: "note-f", path: null, action: "missing", problem: null, trashKey: null },
+      {
+        title: "Abendlied",
+        path: "Markdown/Songs/abendlied.md",
+        action: "trash",
+        problem: null,
+        trashKey: null,
+      },
+      {
+        title: "Antenna tuner",
+        path: "Markdown/Projects/antenna-tuner.md",
+        action: "trash",
+        problem: null,
+        trashKey: null,
+      },
+      {
+        title: "Welcome",
+        path: "Markdown/welcome.md",
+        action: "trash",
+        problem: null,
+        trashKey: null,
+      },
+    ],
+  };
+}
+
 async function answer(cmd: string, args: Record<string, unknown> = {}): Promise<unknown> {
   switch (cmd) {
+    case "list_imports":
+      await wait(200);
+      return runs;
+    case "plan_undo_import": {
+      await wait(300);
+      const run = runs.find((r) => r.id === args.id);
+      if (!run) throw new Error("There is no such import in this vault.");
+      return undoOf(run);
+    }
+    case "undo_import": {
+      await wait(600);
+      const run = runs.find((r) => r.id === args.id);
+      if (!run) throw new Error("There is no such import in this vault.");
+      run.undone = new Date().toISOString();
+      return undoOf(run);
+    }
     case "pick_import":
       if (args.source === "simplenote") return "/Users/me/Downloads/notes.zip";
       if (args.source === "markdown") {
@@ -253,11 +378,12 @@ const page = new DOMParser().parseFromString(
 );
 document.body.replaceChildren(...page.body.childNodes);
 const { createImport } = await import("../import");
-const importer = createImport({
-  vaultState: () => ({ open: true, readOnly: null }),
-  openNote: (path) => {
-    document.title = `Would open ${path}`;
-  },
-  imported: () => undefined,
-});
-importer.open();
+const { createImports } = await import("../imports");
+const vaultState = (): { open: true; readOnly: null } => ({ open: true, readOnly: null });
+const openNote = (path: string): void => {
+  document.title = `Would open ${path}`;
+};
+const importer = createImport({ vaultState, openNote, imported: () => undefined });
+const imports = createImports({ vaultState, openNote, changed: () => undefined });
+if (new URLSearchParams(location.search).has("imports")) imports.open();
+else importer.open();

@@ -165,6 +165,35 @@ export interface ImportPreview {
   /** Apple Notes: whether the export has `apple-notes-metadata.json`; false for other sources. */
   hasMetadata: boolean;
 }
+/** One import run, from its log (schnipsle-import `ImportRun`, format.md §12.2). */
+export interface ImportRun {
+  id: string;
+  /** As in format.md §12.1; empty for a log that cannot be read. */
+  source: ImportSource | "";
+  input: string | null;
+  started: string;
+  undone: string | null;
+  added: number;
+  updated: number;
+  /** Why it cannot be undone: a damaged log or one of a newer format. */
+  problem: string | null;
+}
+/** What undoing an import does with a note (schnipsle-import `UndoAction`, format.md §12.4). */
+export type UndoAction = "trash" | "restore" | "keep" | "missing";
+/** One note in an undo (schnipsle-import `UndoItem`). */
+export interface UndoItem {
+  title: string;
+  /** Relative to notes/; null if the note is gone. */
+  path: string | null;
+  action: UndoAction;
+  problem: string | null;
+  trashKey: string | null;
+}
+/** An undo planned or done (schnipsle-import `Undo`). */
+export interface ImportUndo {
+  run: ImportRun;
+  items: UndoItem[];
+}
 /** What `apply_import` returns (schnipsle-import `Outcome`). */
 export interface ImportOutcome {
   runId: string | null;

@@ -1,7 +1,7 @@
 # Vault File Format Specification
 
 - Format version: **1** (draft)
-- Spec revision: 0.12, 2026-10-31 (§12.1 rule 7 the source's title as a heading; 0.11: §12.1 rule 6 notes from the source's trash; 0.10: §12 imported notes, import log, re-import and undo; 0.9: §9 reading and writing smart folders; 0.8: §7 retention settings; 0.7: §5.5 relative links are kept working when a note moves; 0.6: §8 `original_path` is relative to the vault root; 0.5: §8 trash names for notes without `id` and for collisions; 0.4: §5.3 refined by the first implementation, §5.6 music notation, §5.7 lyrics with chords)
+- Spec revision: 0.13, 2026-10-31 (§12.4 rule 4 notes an undo cannot change; 0.12: §12.1 rule 7 the source's title as a heading; 0.11: §12.1 rule 6 notes from the source's trash; 0.10: §12 imported notes, import log, re-import and undo; 0.9: §9 reading and writing smart folders; 0.8: §7 retention settings; 0.7: §5.5 relative links are kept working when a note moves; 0.6: §8 `original_path` is relative to the vault root; 0.5: §8 trash names for notes without `id` and for collisions; 0.4: §5.3 refined by the first implementation, §5.6 music notation, §5.7 lyrics with chords)
 - Status: Draft — becomes normative when M1 ships
 - Related: ADR-0004, ADR-0008, ADR-0009, ADR-0011, ADR-0013, ADR-0014, ADR-0012, ADR-0016, ADR-0017, ADR-0018, ADR-0019, ADR-0020
 
@@ -341,5 +341,6 @@ Undoing a run goes through its log in reverse order. For each entry, with the no
 1. If the note's content hash differs from `hash`, the note is kept, and the entry gets `kept: true`.
 2. Otherwise, an `added` note is moved to the trash (§8); an `updated` note gets the version in snapshot `replaced` back, after its current version is stored as a snapshot.
 3. A missing note is left as it is.
+4. A note that cannot be moved to the trash or given its previous version back, e.g. because snapshot `replaced` is no longer in the history (§7), is kept as in rule 1, and the undo reports why.
 
 Then `undone` is set to the time of the undo. An undone run cannot be undone again. Undo never deletes text: every version it removes is in the trash or the history.
