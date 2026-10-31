@@ -16,8 +16,9 @@ use std::sync::{Arc, Mutex};
 
 use schnipsle_core::layout::VAULT_FILE;
 use schnipsle_core::{
-    AddedAttachment, Coordinator, Folder, MovedNotes, NewNote, NoteContent, NoteEntry, SavedNote,
-    SearchHit, SortOrder, StrayNotes, Tag, TagFolder, TrashedNote, Vault, VaultError, Version,
+    AddedAttachment, Coordinator, Folder, LinkTarget, MovedNotes, NewNote, NoteContent, NoteEntry,
+    SavedNote, SearchHit, SortOrder, StrayNotes, Tag, TagFolder, TrashedNote, Vault, VaultError,
+    Version,
 };
 use serde::Serialize;
 use tauri::State;
@@ -381,6 +382,34 @@ async fn read_linked_file(
             v.read_linked_file(&note_path, &link)?,
         ))
     })
+}
+
+/// Opens what a link in a note points to (format.md §5.5): a web page or mail
+/// address, or a file in the vault, with the system's default app. For a link
+/// to another note, returns its path instead, for the UI to open.
+#[tauri::command]
+async fn open_link(
+    state: State<'_, AppState>,
+    note_path: String,
+    link: String,
+) -> CmdResult<Option<String>> {
+    with_vault(&state, |v| match v.link_target(&note_path, &link)? {
+        LinkTarget::Note(path) => Ok(Some(path)),
+        LinkTarget::Web(url) => open_with_system(url).map(|()| None),
+        LinkTarget::File(path) => open_with_system(v.full_path(&path)).map(|()| None),
+    })
+}
+
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
+fn open_with_system(target: impl AsRef<std::ffi::OsStr>) -> CmdResult<()> {
+    open::that_detached(target).map_err(CommandError::other)
+}
+
+#[cfg(any(target_os = "ios", target_os = "android"))]
+fn open_with_system(_target: impl AsRef<std::ffi::OsStr>) -> CmdResult<()> {
+    Err(CommandError::other(
+        "Links to web pages and files cannot be opened on this device yet.",
+    ))
 }
 
 /// Stores a version of a note in its history (ADR-0011): `text` if given,
@@ -794,6 +823,7 @@ pub fn run() {
             copy_version,
             add_attachment,
             read_linked_file,
+            open_link,
             stray_notes,
             move_stray_notes,
             new_note,

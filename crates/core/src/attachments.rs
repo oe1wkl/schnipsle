@@ -14,7 +14,7 @@
 
 use std::fs;
 use std::io;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 
@@ -22,7 +22,8 @@ use crate::flat_yaml;
 use crate::layout::{ATTACHMENTS_DIR, NOTES_DIR};
 use crate::stamp::{now_ms, rfc3339_utc};
 use crate::vault::{
-    Access, Result, TempFile, Vault, VaultError, accessor_ran_twice, placeholder_of, sha256_hex,
+    Access, Result, TempFile, Vault, VaultError, accessor_ran_twice, has_md_extension,
+    placeholder_of, sha256_hex,
 };
 
 /// Longest extension kept; anything longer is not an extension.
@@ -45,6 +46,19 @@ pub struct AddedAttachment {
     pub link: String,
     /// Markdown to insert into the note: an image for image files, else a link.
     pub markdown: String,
+}
+
+/// What a link in a note points to, see [`Vault::link_target`]. Serialized
+/// as `{"kind": "web" | "note" | "file", "target": …}`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "kind", content = "target", rename_all = "camelCase")]
+pub enum LinkTarget {
+    /// A web page or mail address (`http:`, `https:`, `mailto:`), as written.
+    Web(String),
+    /// Another note, by its path relative to `notes/`.
+    Note(String),
+    /// Any other file in the vault, by its path relative to the vault root.
+    File(String),
 }
 
 impl Vault {
@@ -108,13 +122,63 @@ impl Vault {
     /// vault or reach a hidden file; [`VaultError::NotDownloaded`] for iCloud
     /// placeholders; I/O errors, e.g. if the file does not exist.
     pub fn read_linked_file(&self, note_path: &str, link: &str) -> Result<Vec<u8>> {
+        let path = self.linked_path(note_path, link)?;
+        let full = self.full_path(&path);
+        if !full.exists() && placeholder_of(&full).exists() {
+            return Err(VaultError::NotDownloaded(path));
+        }
+        self.coordinated(Access::Read, &full, |file| Ok(fs::read(file)?))
+    }
+
+    /// What a link in the note at `note_path` points to, for opening it: a
+    /// web page or mail address, another note, or a file in the vault
+    /// (format.md §5.5). Relative links follow the rules of
+    /// [`Vault::read_linked_file`].
+    ///
+    /// # Errors
+    /// [`VaultError::InvalidPath`] for other URL schemes and for links that
+    /// are absolute, leave the vault or reach a hidden file;
+    /// [`VaultError::NotDownloaded`] for iCloud placeholders; an I/O error of
+    /// kind `NotFound` if nothing is there.
+    pub fn link_target(&self, note_path: &str, link: &str) -> Result<LinkTarget> {
+        let written = unbracket(link);
+        if let Some((scheme, _)) = written.split_once(':') {
+            let web = ["http", "https", "mailto"]
+                .iter()
+                .any(|s| scheme.eq_ignore_ascii_case(s));
+            return if web {
+                Ok(LinkTarget::Web(written.to_owned()))
+            } else {
+                Err(VaultError::InvalidPath(link.to_owned()))
+            };
+        }
+        let path = self.linked_path(note_path, link)?;
+        let full = self.full_path(&path);
+        if !full.exists() {
+            if placeholder_of(&full).exists() {
+                return Err(VaultError::NotDownloaded(path));
+            }
+            return Err(VaultError::Io(io::Error::new(
+                io::ErrorKind::NotFound,
+                format!("{path} is not there"),
+            )));
+        }
+        let note = path
+            .strip_prefix(NOTES_DIR)
+            .and_then(|p| p.strip_prefix('/'))
+            .filter(|p| has_md_extension(p) && full.is_file());
+        Ok(match note {
+            Some(note) => LinkTarget::Note(note.to_owned()),
+            None => LinkTarget::File(path),
+        })
+    }
+
+    /// The path, relative to the vault root, that the relative `link` in the
+    /// note at `note_path` points to; see [`Vault::read_linked_file`].
+    fn linked_path(&self, note_path: &str, link: &str) -> Result<String> {
         let invalid = || VaultError::InvalidPath(link.to_owned());
         self.resolve(note_path)?;
-        let link = link.trim();
-        let link = link
-            .strip_prefix('<')
-            .and_then(|l| l.strip_suffix('>'))
-            .unwrap_or(link);
+        let link = unbracket(link);
         let link = link.split(['#', '?']).next().unwrap_or_default();
         let link = percent_decode(link).ok_or_else(invalid)?;
         if link.is_empty() || link.starts_with('/') || link.contains('\\') || link.contains(':') {
@@ -138,13 +202,14 @@ impl Vault {
         if parts.is_empty() {
             return Err(invalid());
         }
-        let full = parts
-            .iter()
-            .fold(self.root().to_owned(), |path, part| path.join(part));
-        if !full.exists() && placeholder_of(&full).exists() {
-            return Err(VaultError::NotDownloaded(parts.join("/")));
-        }
-        self.coordinated(Access::Read, &full, |file| Ok(fs::read(file)?))
+        Ok(parts.join("/"))
+    }
+
+    /// The file at `path`, relative to the vault root with `/`.
+    #[must_use]
+    pub fn full_path(&self, path: &str) -> PathBuf {
+        path.split('/')
+            .fold(self.root().to_owned(), |full, part| full.join(part))
     }
 
     /// Puts `bytes` at `target` unless something is there already; `true` if
@@ -195,6 +260,14 @@ fn extension_of(file_name: &str) -> Option<String> {
         && ext.len() <= MAX_EXTENSION
         && ext.chars().all(|c| c.is_ascii_alphanumeric());
     usable.then(|| ext.to_ascii_lowercase())
+}
+
+/// A link destination without spaces around it and without `<…>`.
+fn unbracket(link: &str) -> &str {
+    let link = link.trim();
+    link.strip_prefix('<')
+        .and_then(|l| l.strip_suffix('>'))
+        .unwrap_or(link)
 }
 
 /// `file_name` as link text: one line, with `\`, `[` and `]` escaped.
@@ -379,6 +452,68 @@ mod tests {
             read("Wolke.png"),
             Err(VaultError::NotDownloaded(_))
         ));
+    }
+
+    #[test]
+    fn link_targets_to_open() {
+        let (dir, vault) = vault();
+        let root = dir.path();
+        let added = vault
+            .add_attachment("Projekte/Antenne.md", "manual v2.pdf", b"%PDF")
+            .unwrap();
+        fs::create_dir_all(root.join("notes/Projekte/folder.md")).unwrap();
+        let target = |link: &str| vault.link_target("Projekte/Antenne.md", link);
+
+        for web in [
+            "https://example.org/a?b#c",
+            "<HTTP://example.org>",
+            "mailto:a@b.at",
+        ] {
+            assert_eq!(
+                target(web).unwrap(),
+                LinkTarget::Web(unbracket(web).to_owned())
+            );
+        }
+        assert_eq!(
+            target("../top.md#part").unwrap(),
+            LinkTarget::Note("top.md".to_owned())
+        );
+        assert_eq!(
+            target("<Antenne.md>").unwrap(),
+            LinkTarget::Note("Projekte/Antenne.md".to_owned())
+        );
+        assert_eq!(target(&added.link).unwrap(), LinkTarget::File(added.path));
+        assert_eq!(
+            target("folder.md").unwrap(),
+            LinkTarget::File("notes/Projekte/folder.md".to_owned())
+        );
+
+        match target("../gone.md") {
+            Err(VaultError::Io(e)) => {
+                assert_eq!(e.kind(), io::ErrorKind::NotFound);
+                assert_eq!(e.to_string(), "notes/gone.md is not there");
+            }
+            other => panic!("{other:?}"),
+        }
+        fs::write(root.join("notes/.Wolke.md.icloud"), "plist").unwrap();
+        assert!(matches!(
+            target("../Wolke.md"),
+            Err(VaultError::NotDownloaded(_))
+        ));
+        for bad in [
+            "file:///etc/passwd",
+            "javascript:alert(1)",
+            "data:text/html,x",
+            "../../../outside.md",
+            "../../.notesapp/vault.yaml",
+            "#top",
+            "",
+        ] {
+            assert!(
+                matches!(target(bad), Err(VaultError::InvalidPath(_))),
+                "{bad}"
+            );
+        }
     }
 
     #[test]

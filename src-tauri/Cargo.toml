@@ -30,8 +30,10 @@ serde_json.workspace = true
 schnipsle-apple.workspace = true
 
 # Folder picker on desktop; iOS uses tauri-plugin-vault-access instead.
+# Links in notes open in the default browser or app on desktop.
 [target.'cfg(not(any(target_os = "ios", target_os = "android")))'.dependencies]
 tauri-plugin-dialog = "2"
+open = "5"
 
 [lints]
 workspace = true

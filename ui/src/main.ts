@@ -72,6 +72,7 @@ const editor = createEditor(ui.editorHost, {
   onBlur: () => void flushSave(),
   onFiles: (files, pos) => void attachFiles(files, pos),
   loadImage: (url) => images.load(url),
+  openLink: (link) => void openLink(link),
 });
 
 /**
@@ -507,14 +508,44 @@ async function openNote(note: NoteEntry): Promise<void> {
     }
     return;
   }
+  await openPath(note.path);
+}
+
+/** Opens the note at `path`, relative to notes/. */
+async function openPath(path: string): Promise<void> {
   try {
-    const content = await invoke<NoteContent>("read_note", { path: note.path });
+    const content = await invoke<NoteContent>("read_note", { path });
     load(content);
     showView("editor");
   } catch (e) {
     const err = asError(e);
     setStatus(
       err.kind === "notDownloaded" ? "Not downloaded yet – try again shortly." : err.message,
+    );
+  }
+}
+
+/**
+ * Opens what a link in the open note points to: another note here, a web page
+ * or a file in the vault with the system's default app.
+ */
+async function openLink(link: string): Promise<void> {
+  const note = current;
+  if (!note) return;
+  const written = /^www\./i.test(link) ? `https://${link}` : link;
+  try {
+    const path = await invoke<string | null>("open_link", { notePath: note.path, link: written });
+    if (path === null) return;
+    await leaveNote();
+    await openPath(path);
+  } catch (e) {
+    const err = asError(e);
+    setStatus(
+      err.kind === "invalidPath"
+        ? `This link cannot be opened: ${link}`
+        : err.kind === "notDownloaded"
+          ? "Not downloaded yet – try again shortly."
+          : `Cannot open ${link}: ${err.message}`,
     );
   }
 }
