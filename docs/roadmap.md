@@ -46,7 +46,7 @@ Goal: bring notes over from Apple Notes and Simplenote (F-03, F-04), plus HTML f
 - [ ] Undo import (ADR-0019): from the log, unchanged notes go to the trash, edited ones are kept and listed, replaced ones get their previous version back from the history; an Imports list with Undo per run
 - [ ] Check with your full exports: dry run, import, re-import of a newer export, undo; then a look on the iPhone after sync
 
-Not in M4: import on the iPhone; Pandoc for HTML; Evernote, Google Keep, Obsidian and Bear (F-13).
+Not in M4: import on the iPhone; Pandoc for HTML; Evernote, Google Keep, Obsidian and Bear (F-13); rewriting links between imported notes or pages, which keep the paths they had in the source and so break where a note got another name or folder (comes with note links, F-12).
 
 ## M3 results
 
