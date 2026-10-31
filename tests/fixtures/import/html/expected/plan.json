@@ -1,0 +1,58 @@
+{
+  "source": "html",
+  "input": "Saved pages",
+  "items": [
+    {
+      "sourceId": "Notes/Empty page.html",
+      "title": "Empty page",
+      "action": "add",
+      "reason": null,
+      "path": "HTML/Notes/empty-page.md",
+      "problems": []
+    },
+    {
+      "sourceId": "Notes/Shopping.html",
+      "title": "Milk, eggs & **butter**",
+      "action": "add",
+      "reason": null,
+      "path": "HTML/Notes/milk-eggs-butter.md",
+      "problems": []
+    },
+    {
+      "sourceId": "Pizza dough.html",
+      "title": "Pizza dough",
+      "action": "add",
+      "reason": null,
+      "path": "HTML/pizza-dough.md",
+      "problems": []
+    },
+    {
+      "sourceId": "Radio/QRP Kits/Antenna tuner (old).html",
+      "title": "Antenna tuner",
+      "action": "add",
+      "reason": null,
+      "path": "HTML/Radio/QRP Kits/antenna-tuner.md",
+      "problems": []
+    },
+    {
+      "sourceId": "Recipes/Bread rolls.htm",
+      "title": "Bread rolls (Semmeln)",
+      "action": "add",
+      "reason": null,
+      "path": "HTML/Recipes/bread-rolls-semmeln.md",
+      "problems": []
+    }
+  ],
+  "notices": [
+    {
+      "sourceId": null,
+      "title": null,
+      "message": "Notes/Japanese.html is in the encoding shift_jis, which the import cannot read; it is not imported."
+    },
+    {
+      "sourceId": "Radio/QRP Kits/Antenna tuner (old).html",
+      "title": "Antenna tuner",
+      "message": "The page links to Radio/QRP Kits/pics/missing.png, which is not there; the link is left as it is."
+    }
+  ]
+}

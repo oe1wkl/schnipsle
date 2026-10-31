@@ -193,7 +193,7 @@
             <select id="import-source">
               <option value="apple-notes">Apple Notes</option>
               <option value="simplenote">Simplenote</option>
-              <option value="html" disabled>HTML files (coming)</option>
+              <option value="html">HTML files</option>
               <option value="markdown" disabled>Markdown folder (coming)</option>
             </select>
           </label>
@@ -221,8 +221,19 @@
               in Simplenote’s trash go to the trash here.
             </p>
           </div>
+          <div id="import-help-html" class="import-help">
+            <p>
+              Choose a folder of HTML files (.html, .htm), such as web pages saved from a browser,
+              or a single file. Each file becomes a note, and its subfolders become tags.
+            </p>
+            <p>
+              Pictures saved with a page and pictures embedded in it are copied into the vault, as
+              are files the page links to in the folder. Pictures and links on the web stay links.
+            </p>
+          </div>
           <div class="import-pick">
             <button id="import-pick" type="button">Choose folder…</button>
+            <button id="import-pick-file" type="button" hidden>Choose file…</button>
             <span id="import-path" class="muted"></span>
           </div>
         </section>
