@@ -11,6 +11,8 @@ pinned: true
 
 Some *emphasis*, **strong** and ~~struck~~ text, \`inline code\` and a [link](https://example.org "Title").
 
+Links to open with ⌘-click: the [manual](<../attachments/61/manual v2.pdf>), the [tuner](Projects/Tuner.md), <https://example.org/club> and www.example.org.
+
 ## Shopping list
 
 - [ ] Milch
@@ -62,6 +64,9 @@ const editor = createEditor(el("editor-host"), {
     url.endsWith(".svg")
       ? Promise.resolve(`data:image/svg+xml,${encodeURIComponent(DRAWING)}`)
       : Promise.reject(new Error("not found")),
+  openLink: (link) => {
+    status.textContent = `Open: ${link}`;
+  },
 });
 editor.load(SAMPLE);
 editor.setEnabled(true);

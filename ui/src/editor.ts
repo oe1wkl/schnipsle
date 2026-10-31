@@ -32,6 +32,7 @@ import {
   type ViewUpdate,
   WidgetType,
 } from "@codemirror/view";
+import type { SyntaxNode } from "@lezer/common";
 import { tags as t } from "@lezer/highlight";
 
 export type EditorMode = "live" | "source";
@@ -167,6 +168,30 @@ class ImageWidget extends WidgetType {
 const hide = Decoration.replace({});
 const muted = Decoration.mark({ class: "cm-md-mark" });
 
+/** macOS and iOS open links with ⌘-click, other systems with Ctrl-click. */
+const isApple = /Mac|iPhone|iPad/.test(navigator.userAgent);
+const linkHint = Decoration.mark({
+  attributes: { title: `${isApple ? "⌘" : "Ctrl"}-click to open` },
+});
+
+/**
+ * The destination of the link at `pos` as written: of `[text](url)`,
+ * `<url>` or a bare web address; `null` if there is none.
+ */
+function linkAt(state: EditorState, pos: number): string | null {
+  let node: SyntaxNode | null = syntaxTree(state).resolveInner(pos, 1);
+  for (; node; node = node.parent) {
+    if (node.name === "Link" || node.name === "Autolink") {
+      const url = node.getChild("URL");
+      return url ? state.sliceDoc(url.from, url.to) : null;
+    }
+    if (node.name === "URL" && node.parent?.name !== "Image") {
+      return state.sliceDoc(node.from, node.to); // a bare web address
+    }
+  }
+  return null;
+}
+
 /** Lines the user is editing: those touched by a selection, while focused. */
 function editedLines(view: EditorView): (from: number, to: number) => boolean {
   if (!view.hasFocus) return () => false;
@@ -233,6 +258,7 @@ function previewDecorations(view: EditorView): DecorationSet {
             const [open, close] = marks;
             if (open && close) {
               found.push(hide.range(open.from, open.to));
+              if (open.to < close.from) found.push(linkHint.range(open.to, close.from));
               found.push(hide.range(close.from, node.to));
             }
             break;
@@ -534,6 +560,8 @@ export function createEditor(
     /** Files pasted or dropped into the note; `pos` is where they were dropped. */
     onFiles: (files: File[], pos: number | null) => void;
     loadImage: ImageLoader;
+    /** A link ⌘-clicked (Ctrl-clicked), as written in the note. */
+    openLink?: (link: string) => void;
     /** Shown while the editor is empty; "Select a note" by default. */
     placeholderText?: string;
   },
@@ -579,6 +607,16 @@ export function createEditor(
         EditorView.domEventHandlers({
           blur: () => {
             events.onBlur();
+          },
+          mousedown: (event, view) => {
+            const { openLink } = events;
+            if (!openLink || !(isApple ? event.metaKey : event.ctrlKey)) return false;
+            const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
+            const link = pos === null ? null : linkAt(view.state, pos);
+            if (link === null) return false;
+            event.preventDefault();
+            openLink(link);
+            return true;
           },
           paste: (event) => {
             const files = Array.from(event.clipboardData?.files ?? []);

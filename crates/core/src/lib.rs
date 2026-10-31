@@ -29,7 +29,7 @@ pub mod trash;
 pub mod vault;
 pub mod watch;
 
-pub use attachments::AddedAttachment;
+pub use attachments::{AddedAttachment, LinkTarget};
 pub use conflicts::{
     ConflictVersion, NoIdLookup, NoSyncConflicts, NotesById, RawVersion, SyncConflicts,
 };
