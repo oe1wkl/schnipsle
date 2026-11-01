@@ -718,6 +718,7 @@ fn install_menu(app: &tauri::App) -> tauri::Result<()> {
             &MenuItem::with_id(app, "open-vault", "Open Vault…", true, Some("CmdOrCtrl+O"))?,
             &separator()?,
             &MenuItem::with_id(app, "import", "Import…", true, None::<&str>)?,
+            &MenuItem::with_id(app, "imports", "Imports…", true, None::<&str>)?,
             &separator()?,
             &PredefinedMenuItem::close_window(app, None)?,
             #[cfg(not(target_os = "macos"))]
@@ -786,7 +787,7 @@ fn install_menu(app: &tauri::App) -> tauri::Result<()> {
     app.set_menu(menu)?;
     app.on_menu_event(|app, event| {
         let id = event.id().as_ref();
-        if matches!(id, "new-note" | "open-vault" | "import") {
+        if matches!(id, "new-note" | "open-vault" | "import" | "imports") {
             let _ = app.emit("menu", id);
         }
     });
@@ -850,6 +851,9 @@ pub fn run() {
             importing::plan_import,
             importing::cancel_import,
             importing::apply_import,
+            importing::list_imports,
+            importing::plan_undo_import,
+            importing::undo_import,
             importing::read_apple_notes_metadata
         ])
         .run(tauri::generate_context!())

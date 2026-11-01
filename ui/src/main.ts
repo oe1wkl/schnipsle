@@ -9,6 +9,7 @@ import { asError, setStatus, ui } from "./dom";
 import { createEditor, type EditorMode, frontMatterLength, isPinned } from "./editor";
 import { createImageCache, fileName } from "./images";
 import { createImport } from "./import";
+import { createImports } from "./imports";
 import { createSidebar, type ListFilter } from "./sidebar";
 import type {
   VaultInfo,
@@ -1175,11 +1176,24 @@ const importer = createImport({
   },
 });
 
-// File menu (desktop): same actions as the buttons, plus Import….
+const imports = createImports({
+  vaultState: () => (vaultIsOpen ? { open: true, readOnly } : { open: false }),
+  openNote: (path, title) => {
+    showView("list");
+    void openNote({ path, title, modifiedMs: 0, available: true, pinned: false });
+  },
+  changed: () => {
+    void refreshList();
+    void sidebar.refresh();
+  },
+});
+
+// File menu (desktop): same actions as the buttons, plus Import… and Imports….
 void listen<string>("menu", (event) => {
   if (event.payload === "open-vault") ui.pick.click();
   else if (event.payload === "new-note" && !ui.newNote.disabled) ui.newNote.click();
   else if (event.payload === "import") importer.open();
+  else if (event.payload === "imports") imports.open();
 });
 
 /** Runs a check after any save in progress, so a save's own echo is not mistaken for a change. */
