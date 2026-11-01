@@ -12,8 +12,9 @@
 //! `in:trash`.
 //!
 //! Results are ranked with `bm25` over the words and phrases that must match,
-//! the title counting five times the body, and carry a snippet with the hits
-//! marked. A query with only tags or exclusions sorts by modification time.
+//! the title counting five times the body, and carry a snippet of the text
+//! (which starts with a heading title) with the hits marked; the title alone
+//! would repeat what the list shows already. A query with only tags or exclusions sorts by modification time.
 //! [`Index::search_sorted`] orders by a smart folder's `sort` instead.
 
 use rusqlite::params_from_iter;
@@ -319,7 +320,7 @@ impl Index {
         {
             let marks = vec!["?"; hits.len()].join(", ");
             let mut snippets = self.db().prepare(&format!(
-                "SELECT rowid, snippet(notes_fts, -1, char(2), char(3), '…', 16) FROM notes_fts
+                "SELECT rowid, snippet(notes_fts, 1, char(2), char(3), '…', 16) FROM notes_fts
                  WHERE notes_fts MATCH ? AND +rowid IN ({marks})"
             ))?;
             let args = std::iter::once(Value::Text(rank_query))
@@ -478,6 +479,12 @@ mod tests {
         let all: String = hit.snippet.iter().map(|p| p.text.as_str()).collect();
         assert!(all.contains("Dipol auf dem Dach"), "{all}");
         assert!(index.search("#chor", 0).unwrap()[0].snippet.is_empty());
+        // A word of the title: the snippet shows it in the text, not the
+        // title alone again.
+        let hit = &index.search("antennentest", 0).unwrap()[0];
+        let all: String = hit.snippet.iter().map(|p| p.text.as_str()).collect();
+        assert!(all.starts_with("Antennentest 40 m Dipol"), "{all}");
+        assert!(hit.snippet[0].hit);
         assert!(index.search("", 0).unwrap().is_empty());
     }
 

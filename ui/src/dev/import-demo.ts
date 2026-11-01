@@ -59,6 +59,14 @@ const plan: ImportPlan = {
       path: null,
       problems: [],
     },
+    {
+      sourceId: ID + "p757",
+      title: "Old shopping list",
+      action: "skip",
+      reason: "inTrash",
+      path: null,
+      problems: [],
+    },
   ],
   notices: [
     {
@@ -253,6 +261,13 @@ function undoOf(run: ImportRun): ImportUndo {
           action: "keep",
           problem: "Changed here since the import, so it stays as it is.",
           trashKey: null,
+        },
+        {
+          title: "Old packing list",
+          path: null,
+          action: "inTrash",
+          problem: null,
+          trashKey: "01M6000000000000000000000T",
         },
       ],
     };

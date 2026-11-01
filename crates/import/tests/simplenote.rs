@@ -61,20 +61,21 @@ fn a_second_import_of_the_same_export_changes_nothing() {
     let again = plan(&vault, &batch, &env).unwrap();
     assert_eq!(again.count(PlannedAction::Add), 0);
     assert_eq!(again.count(PlannedAction::Update), 0);
-    // The trashed note is in the trash here, so it counts as deleted.
+    // The note from Simplenote's trash is in the trash here, and the report
+    // says so rather than calling it deleted.
     let reasons: Vec<_> = again.items.iter().filter_map(|i| i.reason).collect();
     assert_eq!(reasons.len(), 9);
     assert_eq!(
         reasons
             .iter()
-            .filter(|r| **r == SkipReason::Missing)
+            .filter(|r| **r == SkipReason::InTrash)
             .count(),
         1
     );
     assert!(
         reasons
             .iter()
-            .all(|r| matches!(r, SkipReason::NotNewer | SkipReason::Missing))
+            .all(|r| matches!(r, SkipReason::NotNewer | SkipReason::InTrash))
     );
 }
 

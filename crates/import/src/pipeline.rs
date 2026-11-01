@@ -117,6 +117,9 @@ pub enum SkipReason {
     NoModifiedTime,
     /// Imported before, but the note is no longer in the vault.
     Missing,
+    /// Imported before, and the note is in the trash here: deleted here, or
+    /// trashed by the import as it was in the source's trash (§12.1 rule 6).
+    InTrash,
     /// Changed here between the dry run and the import.
     ChangedMeanwhile,
     /// Writing it failed; the problem says why.
@@ -322,7 +325,12 @@ fn update_target(
     source_modified: Option<&str>,
 ) -> Result<Result<Target, (SkipReason, Option<String>)>, ImportError> {
     let Some(path) = vault.find_note(&entry.id, entry.path.strip_prefix("notes/")) else {
-        return Ok(Err((SkipReason::Missing, None)));
+        let reason = if vault.find_trashed(&entry.id).is_some() {
+            SkipReason::InTrash
+        } else {
+            SkipReason::Missing
+        };
+        return Ok(Err((reason, None)));
     };
     let current = vault.read_note_text(&path)?;
     if current.hash != entry.hash {

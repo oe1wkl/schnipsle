@@ -153,6 +153,33 @@ impl Vault {
         Ok(String::from_utf8_lossy(&bytes).into_owned())
     }
 
+    /// The key of a note in the trash whose `id` is `id`: `id` itself, or
+    /// `id-n` if several notes with it were deleted (format.md §8). `None` if
+    /// there is none or the trash cannot be read.
+    #[must_use]
+    pub fn find_trashed(&self, id: &str) -> Option<String> {
+        if !is_ulid(id) {
+            return None;
+        }
+        let id = id.to_ascii_uppercase();
+        let dir = self.root().join(TRASH_DIR);
+        if dir.join(format!("{id}.md")).is_file() {
+            return Some(id);
+        }
+        let numbered = format!("{id}-");
+        let mut keys: Vec<String> = fs::read_dir(&dir)
+            .ok()?
+            .flatten()
+            .filter_map(|entry| {
+                let name = entry.file_name().to_string_lossy().into_owned();
+                let key = name.strip_suffix(".md")?;
+                (key.starts_with(&numbered) && is_key(key)).then(|| key.to_owned())
+            })
+            .collect();
+        keys.sort();
+        keys.into_iter().next()
+    }
+
     /// Moves a note out of the trash, back to its original path or, if that
     /// is taken, unknown or not inside `notes/`, into `notes/` under its file
     /// name, with a `-n` suffix on collision. If it lands in another folder,
@@ -320,6 +347,24 @@ mod tests {
         assert_eq!(vault.trash_note("a.md").unwrap().key, ID);
         assert_eq!(vault.trash_note("a 2.md").unwrap().key, format!("{ID}-2"));
         assert_eq!(vault.list_trash().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn trashed_notes_are_found_by_id() {
+        let (dir, vault) = vault();
+        assert_eq!(vault.find_trashed(ID), None);
+        let note = format!("---\nid: {ID}\n---\nx");
+        fs::write(dir.path().join("notes/a.md"), &note).unwrap();
+        fs::write(dir.path().join("notes/a 2.md"), &note).unwrap();
+        vault.trash_note("a.md").unwrap();
+        vault.trash_note("a 2.md").unwrap();
+        assert_eq!(
+            vault.find_trashed(&ID.to_ascii_lowercase()).as_deref(),
+            Some(ID)
+        );
+        vault.restore_note(ID).unwrap();
+        assert_eq!(vault.find_trashed(ID), Some(format!("{ID}-2")));
+        assert_eq!(vault.find_trashed("not-an-id"), None);
     }
 
     #[test]
