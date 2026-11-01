@@ -52,6 +52,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Changed
 
+- Search results show a snippet of the note's text with the hits marked, even when the hit is in the title; before, a title hit showed the title a second time, which looked like a second result.
 - Apple Notes import tells apart several notes with the same title also when they have tags: the metadata shows Notes' tags as placeholders, so the text is compared with and without its hashtags. A note matched only by title used to keep the time of the export and was updated by every re-import.
 - iOS remembers the vault folder in a file in the app's Application Support folder instead of `UserDefaults`, excluded from backups since it only works on the device that made it. The folder picked with an earlier build is taken over automatically.
 - Trash records store `original_path` relative to the vault root (`notes/…`, format.md 0.6); records written by earlier M1 builds are restored into `notes/` under their file name.
