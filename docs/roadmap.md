@@ -1,7 +1,7 @@
 # Roadmap and status
 
-- Updated: 2026-10-28
-- Current milestone: **M4 – Import**
+- Updated: 2026-11-01
+- Current milestone: **M5 – Export**
 
 Each milestone ends in a usable build. Scope can move between milestones; the order should not.
 
@@ -11,7 +11,7 @@ Each milestone ends in a usable build. Scope can move between milestones; the or
 | M1 – Core editor | Open a vault, CodeMirror editor with live preview, images, autosave, safe writes, change detection | Done 2026-10-21 |
 | M2 – Index and organization | SQLite/FTS5 index, tag folders with combination subfolders, full-text search | Done 2026-10-27 |
 | M3 – Smart folders | Query language, saved searches | Done 2026-10-28 |
-| M4 – Import | Apple Notes (macOS 26 Markdown export), Simplenote, HTML, Markdown folders | |
+| M4 – Import | Apple Notes (macOS 26 Markdown export), Simplenote, HTML, Markdown folders | Done 2026-11-01 |
 | M5 – Export | HTML, PDF, ODT built in; Pandoc formats on desktop | |
 | M6 – Release 1.0 | Manual, packaging and signing, performance and data-safety tests | |
 | Later | Note links, music rendering and playback (ABC), ChordPro, extras | |
@@ -30,6 +30,15 @@ Each milestone ends in a usable build. Scope can move between milestones; the or
 - Format spec at draft revision 0.8; ADR-0016 and ADR-0017 added. Tested on macOS and on the iPhone (iOS 27).
 - Moved to later milestones: loading the editor on demand (bundle ~530 kB), inline formatting inside table cells, a settings view.
 
+## M4 results
+
+- Import from Apple Notes (Markdown export plus `apple-notes-metadata.json` for ids, dates and folders), Simplenote (zip), HTML pages and Markdown folders, ChordPro files included (ADR-0012, ADR-0019, ADR-0020; format.md 0.13 §12).
+- One pipeline for all sources: a dry run that writes nothing, then atomic, coordinated writes with an import log; re-import updates only notes unchanged here and newer in the source; File › Imports… undoes an import without deleting anything for good.
+- Imported notes land in `notes/<Source>/` with their folders as tags; attachments content-addressed; titles shown as a level-1 heading.
+- ⌘-click opens links in notes.
+- Checked with the full real exports (about 760 notes) on macOS and, after sync, on the iPhone (iOS 27).
+- Moved on: import on the iPhone; links between imported notes (with F-12); Pandoc for HTML; Evernote, Google Keep, Obsidian and Bear (F-13).
+
 ## M4 backlog
 
 Goal: bring notes over from Apple Notes and Simplenote (F-03, F-04), plus HTML files and Markdown folders (F-05), without losing text and repeatably. Decisions: ADR-0012, ADR-0019 (notes in `notes/<Source>/` with the source's folders, folders as `#<Folder>` tags, re-import updates only notes unchanged since, undo trashes only unedited notes, desktop only, built-in HTML converter). Order: spec and fixtures, pipeline, Apple Notes, import UI, Simplenote, HTML, Markdown folders, undo.
@@ -44,7 +53,7 @@ Goal: bring notes over from Apple Notes and Simplenote (F-03, F-04), plus HTML f
 - [x] Markdown folders adapter (`markdown.rs`; golden files in `tests/fixtures/import/markdown/expected/`): `.md`, `.markdown`, `.mdown`, `.mkd`, `.mkdn` files from a folder at any depth or a single file, hidden entries (`.obsidian`, `.git`) left out; the text kept as written, front matter of other tools included (§4), named after its leading heading, otherwise a front-matter `title`, which then becomes that heading (§12.1 rule 7, ADR-0020), otherwise the file; relative links to pictures and files inside the chosen folder moved into `attachments/` and rewritten (shared with the HTML adapter in `files.rs`), missing ones reported; text that is not UTF-8 read as Windows-1252 and reported. ChordPro files (`.cho`, `.crd`, `.chopro`, `.chordpro`) become a note with the `{title}` (or the file name) as a level-1 heading and the file in one `chordpro` block, fenced longer than any backtick run in it (§5.7 rule 9). Dates from the file times; a front-matter `created` is kept. The pipeline now replaces an `id` that a source's front matter brings along (§12.1 rule 1) and reports it, and an import from inside the open vault, or from a folder that contains it, is refused. File › Import… offers Markdown with a folder and a file picker
 - [x] Open links from the editor (found while trying the Markdown import): ⌘-click (Ctrl-click) on a link in a note; `Vault::link_target` in core sorts it into web page, note or vault file (never outside the vault, no hidden files, only `http`, `https` and `mailto`), the `open_link` command hands web pages and files to the system with the `open` crate (MIT, desktop only) and returns notes for the UI to open. Backlinks and `[[…]]` links stay with F-12
 - [x] Undo import (ADR-0019, format.md §12.4; `undo.rs` in `schnipsle-import`, tests in `crates/import/tests/undo.rs`): `runs` lists the import logs newest first (damaged or newer ones with why they cannot be undone), `plan_undo` is the dry run, `undo` goes through the log in reverse: added notes unchanged since go to the trash, updated ones get the snapshot `replaced` back exactly as it was (after their current text is stored), edited ones get `kept: true`, missing ones and ones in the trash are left (reported as such, also by a re-import: `SkipReason::InTrash`, `UndoAction::InTrash`, found with `Vault::find_trashed`); then `undone` is set. A note the undo cannot change (no snapshot, an I/O error) is kept like an edited one and reported (format.md 0.13 §12.4 rule 4). The index is updated for the notes moved and restored. File › Imports… (`ui/src/imports.ts`) lists the runs with Undo… per run, shows the dry run, then the result; playground `/dev/import.html?imports`
-- [ ] Check with your full exports: dry run, import, re-import of a newer export, undo; then a look on the iPhone after sync. Done in a throwaway vault from the library: Apple Notes 135 notes (2 duplicates and 6 notes the export dropped, as known), Simplenote 629 (166 from its trash straight into the trash); the same export again adds and updates nothing; undoing both leaves no notes and 764 in the trash; about 6 s for 600 notes on a local disk. Open: the run in the app with a newer export, and the iPhone
+- [x] Check with your full exports: dry run, import, re-import of a newer export, undo; then a look on the iPhone after sync. In a throwaway vault from the library: Apple Notes 135 notes (2 duplicates and 6 notes the export dropped, as known), Simplenote 629 (166 from its trash straight into the trash); the same export again adds and updates nothing; undoing both leaves no notes and 764 in the trash; about 6 s for 600 notes on a local disk. In the app: a newer export of one Notes folder updates only the changed note; the vault reads and edits fine on the iPhone after iCloud sync. Fixed on the way: notes in the trash are reported as such by re-import and undo; Apple Notes with one title but tags in the text are told apart (the metadata snippet shows tags as U+FFFC); search snippets come from the text, so a title hit no longer looks like a second result
 
 Not in M4: import on the iPhone; Pandoc for HTML; Evernote, Google Keep, Obsidian and Bear (F-13); rewriting links between imported notes or pages, which keep the paths they had in the source and so break where a note got another name or folder (comes with note links, F-12).
 
