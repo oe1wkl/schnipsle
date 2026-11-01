@@ -21,10 +21,17 @@ const ACTION_LABELS: Record<UndoAction, string> = {
   restore: "Previous version back",
   keep: "Stays",
   missing: "Gone already",
+  inTrash: "In the trash already",
 };
 
 /** Notes that change first, then those that stay; otherwise in the order handled. */
-const ACTION_ORDER: Record<UndoAction, number> = { trash: 0, restore: 1, keep: 2, missing: 3 };
+const ACTION_ORDER: Record<UndoAction, number> = {
+  trash: 0,
+  restore: 1,
+  keep: 2,
+  inTrash: 3,
+  missing: 4,
+};
 
 const dialog = el("imports-dialog") as HTMLDialogElement;
 const list = el("imports-list");
@@ -179,12 +186,14 @@ export function createImports(hooks: ImportsHooks): { open(): void } {
     const restore = count("restore");
     const keep = count("keep");
     const missing = count("missing");
+    const inTrash = count("inTrash");
     const parts = [
       ...(trash > 0 ? [`${plural(trash, "note", "notes")} into the trash`] : []),
       ...(restore > 0
         ? [`${plural(restore, "note gets its", "notes get their")} previous version back`]
         : []),
       ...(keep > 0 ? [plural(keep, "note stays", "notes stay")] : []),
+      ...(inTrash > 0 ? [`${plural(inTrash, "note is", "notes are")} in the trash already`] : []),
       ...(missing > 0 ? [`${plural(missing, "note is", "notes are")} gone already`] : []),
     ].join(", ");
     const { run } = undo;
@@ -207,7 +216,9 @@ export function createImports(hooks: ImportsHooks): { open(): void } {
 
   function itemRow(item: UndoItem, done: boolean): HTMLTableRowElement {
     const tr = document.createElement("tr");
-    if (item.action === "keep" || item.action === "missing") tr.className = "skip";
+    if (item.action === "keep" || item.action === "missing" || item.action === "inTrash") {
+      tr.className = "skip";
+    }
     const title = document.createElement("td");
     const name = item.title || "(untitled)";
     const path = item.path;

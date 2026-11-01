@@ -131,6 +131,7 @@ export type SkipReason =
   | "notNewer"
   | "noModifiedTime"
   | "missing"
+  | "inTrash"
   | "changedMeanwhile"
   | "failed";
 /** One note in an import report (schnipsle-import `PlanItem`). */
@@ -179,7 +180,7 @@ export interface ImportRun {
   problem: string | null;
 }
 /** What undoing an import does with a note (schnipsle-import `UndoAction`, format.md §12.4). */
-export type UndoAction = "trash" | "restore" | "keep" | "missing";
+export type UndoAction = "trash" | "restore" | "keep" | "missing" | "inTrash";
 /** One note in an undo (schnipsle-import `UndoItem`). */
 export interface UndoItem {
   title: string;

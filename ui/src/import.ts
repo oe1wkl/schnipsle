@@ -44,6 +44,7 @@ const REASON_LABELS: Record<SkipReason, string> = {
   notNewer: "Not changed in the source since the last import",
   noModifiedTime: "Imported before; without a modification time it is not updated",
   missing: "Imported before and deleted here since",
+  inTrash: "Imported before and in the trash here",
   changedMeanwhile: "Changed here during the import, so kept as it is",
   failed: "Could not be written",
 };

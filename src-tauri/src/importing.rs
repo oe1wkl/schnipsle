@@ -196,7 +196,7 @@ pub async fn undo_import(state: State<'_, AppState>, id: String) -> CmdResult<Un
             {
                 keys.push(indexing::note_key(path));
             }
-            if let Some(key) = &item.trash_key {
+            if let (UndoAction::Trash, Some(key)) = (item.action, &item.trash_key) {
                 keys.push(indexing::trash_key(key));
             }
         }

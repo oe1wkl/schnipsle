@@ -208,6 +208,31 @@ fn a_version_no_longer_in_the_history_keeps_the_note() {
 }
 
 #[test]
+fn a_note_in_the_trash_stays_there() {
+    let t = Imported::new();
+    let trashed = t.vault.trash_note(&t.path_of("Note C")).unwrap();
+    let first = run_id(&t.first);
+    let planned = plan_undo(&t.vault, &first).unwrap();
+    let c = &planned.items[2];
+    assert_eq!(
+        (c.title.as_str(), c.action),
+        ("Note C", UndoAction::InTrash)
+    );
+    assert_eq!(
+        (c.path.as_deref(), c.trash_key.as_deref()),
+        (None, Some(&*trashed.key))
+    );
+    // F was removed for good, not into the trash.
+    assert_eq!(planned.items[0].action, UndoAction::Missing);
+
+    let done = undo(&t.vault, &first, &t.env).unwrap();
+    assert_eq!(done.items[2].action, UndoAction::InTrash);
+    // Only D goes: B was edited here, A updated by the second import.
+    assert_eq!(done.count(UndoAction::Trash), 1);
+    assert_eq!(t.vault.list_trash().unwrap().len(), 2);
+}
+
+#[test]
 fn a_read_only_vault_is_left_alone() {
     let t = Imported::new();
     let root = t.dir.path();

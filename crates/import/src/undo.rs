@@ -9,7 +9,8 @@
 //! - an added note goes to the trash;
 //! - an updated note gets the version back that the run replaced, after its
 //!   current version is stored in the history;
-//! - a missing note is left as it is.
+//! - a missing note is left as it is; one in the trash (deleted here, or
+//!   trashed by the import as it was in the source's trash) stays there.
 //!
 //! A note that cannot be moved or restored (an I/O error, a version no longer
 //! in the history) is kept like an edited one, so a later import still finds
@@ -59,6 +60,8 @@ pub enum UndoAction {
     Keep,
     /// Nothing: the note is no longer in the vault.
     Missing,
+    /// Nothing: the note is in the trash already.
+    InTrash,
 }
 
 /// One note in an undo. Serialized with camelCase names.
@@ -67,13 +70,14 @@ pub enum UndoAction {
 pub struct UndoItem {
     /// Its title now, or the name it was written with if it is missing.
     pub title: String,
-    /// Where it is, relative to `notes/`; `None` if missing.
+    /// Where it is, relative to `notes/`; `None` if missing or in the trash.
     pub path: Option<String>,
     /// What happens, or happened, to it.
     pub action: UndoAction,
     /// Why it is kept or what went wrong, for the report.
     pub problem: Option<String>,
-    /// For [`UndoAction::Trash`] after the undo: its name in the trash.
+    /// Its name in the trash: for [`UndoAction::InTrash`], and for
+    /// [`UndoAction::Trash`] after the undo.
     pub trash_key: Option<String>,
 }
 
@@ -166,6 +170,8 @@ fn undoable(vault: &Vault, run_id: &str) -> Result<ImportLog, ImportError> {
 /// A note as the undo finds it.
 enum Found {
     Missing,
+    /// In the trash, under this key.
+    InTrash(String),
     /// Edited since the import, or unreadable (with why).
     Keep(String, Option<String>),
     /// As the run wrote it: its path, text and hash.
@@ -174,7 +180,9 @@ enum Found {
 
 fn find(vault: &Vault, entry: &LogEntry) -> Found {
     let Some(path) = vault.find_note(&entry.id, entry.path.strip_prefix("notes/")) else {
-        return Found::Missing;
+        return vault
+            .find_trashed(&entry.id)
+            .map_or(Found::Missing, Found::InTrash);
     };
     match vault.read_note_text(&path) {
         Ok(note) if note.hash == entry.hash => Found::Unchanged(path, note.text, note.hash),
@@ -200,6 +208,21 @@ fn item(vault: &Vault, entry: &LogEntry, path: Option<String>, action: UndoActio
     }
 }
 
+/// The item for a note found in the trash under `key`, titled as it is there.
+fn in_trash(vault: &Vault, entry: &LogEntry, key: String) -> UndoItem {
+    let stem = stem_of(&entry.path);
+    let title = vault
+        .read_trashed(&key)
+        .map_or_else(|_| stem.to_owned(), |text| title_of(&text, stem));
+    UndoItem {
+        title,
+        path: None,
+        action: UndoAction::InTrash,
+        problem: None,
+        trash_key: Some(key),
+    }
+}
+
 fn stem_of(path: &str) -> &str {
     let name = path.rsplit('/').next().unwrap_or(path);
     name.strip_suffix(".md").unwrap_or(name)
@@ -219,6 +242,7 @@ pub fn plan_undo(vault: &Vault, run_id: &str) -> Result<Undo, ImportError> {
         .rev()
         .map(|entry| match find(vault, entry) {
             Found::Missing => item(vault, entry, None, UndoAction::Missing),
+            Found::InTrash(key) => in_trash(vault, entry, key),
             Found::Keep(path, why) => UndoItem {
                 problem: Some(why.unwrap_or_else(|| EDITED.to_owned())),
                 ..item(vault, entry, Some(path), UndoAction::Keep)
@@ -279,6 +303,7 @@ fn undo_one(vault: &Vault, entry: &LogEntry) -> (UndoItem, bool) {
     };
     let (path, text, hash) = match find(vault, entry) {
         Found::Missing => return (item(vault, entry, None, UndoAction::Missing), false),
+        Found::InTrash(key) => return (in_trash(vault, entry, key), false),
         Found::Keep(path, why) => return failed(path, why.unwrap_or_else(|| EDITED.to_owned())),
         Found::Unchanged(path, text, hash) => (path, text, hash),
     };
