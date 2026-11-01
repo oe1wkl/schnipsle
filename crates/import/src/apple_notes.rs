@@ -9,7 +9,8 @@
 //! first line or its file name, compared without Markdown marks and the
 //! characters a file name drops; a name shortened with `…` matches the start.
 //! Of several matches the one whose snippet continues like the file's text
-//! wins. A matched note gets the note's `id`, dates and real folder in
+//! wins; the snippet shows Notes' tags as U+FFFC, so the text is compared
+//! with and without its hashtags. A matched note gets the note's `id`, dates and real folder in
 //! Notes; a file without a clear match keeps the time of the export and the
 //! folder it has in the export.
 //!
@@ -61,6 +62,7 @@ struct Metadata {
 
 /// One note in [`METADATA_FILE`]; fields not needed here are ignored.
 #[derive(Deserialize)]
+#[cfg_attr(test, derive(Default))]
 struct MetaNote {
     id: String,
     #[serde(default)]
@@ -78,6 +80,7 @@ struct MetaNote {
 }
 
 /// An exported Markdown file.
+#[cfg_attr(test, derive(Default))]
 struct Exported {
     /// Its path relative to the chosen folder, with `/`, NFC.
     path: String,
@@ -286,8 +289,16 @@ fn find(file: &Exported, meta: &[MetaNote]) -> Result<Option<usize>, ()> {
     if candidates.len() <= 1 {
         return Ok(candidates.first().copied());
     }
-    let text = plain(&strip_links(&file.text));
-    let score = |i: usize| common_prefix(&text, &plain(&meta[i].snippet));
+    let text = strip_links(&file.text);
+    let texts = [plain(&text), plain(&without_hashtags(&text))];
+    let score = |i: usize| {
+        let snippet = plain(&meta[i].snippet);
+        texts
+            .iter()
+            .map(|t| common_prefix(t, &snippet))
+            .max()
+            .unwrap_or(0)
+    };
     let best = candidates.iter().map(|&i| score(i)).max().unwrap_or(0);
     let mut winners = candidates.into_iter().filter(|&i| score(i) == best);
     match (winners.next(), winners.next()) {
@@ -472,6 +483,25 @@ fn strip_links(text: &str) -> String {
     }
     out.push_str(rest);
     out
+}
+
+/// `text` without words that start with `#` and a letter or digit: the
+/// hashtags that Notes turned into tags.
+fn without_hashtags(text: &str) -> String {
+    text.lines()
+        .map(|line| {
+            line.split(' ')
+                .filter(|word| {
+                    !word
+                        .strip_prefix('#')
+                        .and_then(|t| t.chars().next())
+                        .is_some_and(char::is_alphanumeric)
+                })
+                .collect::<Vec<_>>()
+                .join(" ")
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 /// Letters and digits only, lowercase, list numbers left out: what the
@@ -763,5 +793,33 @@ mod tests {
             common_prefix(&text, &plain("Pizza dough #recipe ￼ Mix"))
                 > common_prefix(&text, &plain("Pizza dough #recipe Ingredients"))
         );
+        assert_eq!(
+            without_hashtags("# Pizza dough  \n#recipe #baking  \nMix #2 # x"),
+            "# Pizza dough  \n \nMix # x"
+        );
+    }
+
+    #[test]
+    fn tags_shown_as_objects_in_snippets_still_match() {
+        let file = |text: &str| Exported {
+            path: "Pizza dough.md".into(),
+            stem: "Pizza dough".into(),
+            text: text.into(),
+            ..Exported::default()
+        };
+        let meta = |snippet: &str| MetaNote {
+            name: "Pizza dough".into(),
+            snippet: snippet.into(),
+            ..MetaNote::default()
+        };
+        let notes = [
+            meta("Pizza dough ￼ ￼ Zutaten für 3 Pizzen"),
+            meta("Pizza dough ￼ ￼ Ingredients 1000 g flour"),
+        ];
+        let exported =
+            file("# Pizza dough  \n#recipe #baking  \n  \nIngredients  \n • 1000 g flour");
+        assert_eq!(find(&exported, &notes), Ok(Some(1)));
+        // Without anything telling them apart, neither is chosen.
+        assert_eq!(find(&file("# Pizza dough"), &notes), Err(()));
     }
 }
