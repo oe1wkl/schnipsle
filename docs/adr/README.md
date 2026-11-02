@@ -34,4 +34,4 @@ This folder records every significant architectural decision of the project, one
 | [0018](0018-smart-folders-file.md) | Reading and writing `smart-folders.yaml` | Accepted | 2026-10-28 |
 | [0019](0019-import-placement-reimport-undo.md) | Where imported notes go, re-import and undo | Accepted | 2026-10-28 |
 | [0020](0020-imported-notes-show-their-title.md) | Imported notes show the title they are named by | Accepted | 2026-10-31 |
-| [0021](0021-what-an-exported-note-looks-like.md) | What an exported note looks like | Proposed | 2026-11-01 |
+| [0021](0021-what-an-exported-note-looks-like.md) | What an exported note looks like | Accepted | 2026-11-01 |

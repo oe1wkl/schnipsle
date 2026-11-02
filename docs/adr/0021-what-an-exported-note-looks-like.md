@@ -1,6 +1,6 @@
 # ADR-0021: What an exported note looks like
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-01
 - Deciders: Willi Kraml
 - Related: F-06, F-13, ADR-0008, ADR-0010, ADR-0013, ADR-0014, [format.md §4–§6](../format.md#4-front-matter)
