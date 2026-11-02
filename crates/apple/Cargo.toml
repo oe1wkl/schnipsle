@@ -36,6 +36,11 @@ objc2-foundation = { version = "0.3", default-features = false, features = [
 [dev-dependencies]
 tempfile.workspace = true
 
+# Only for examples/pdf_spike.rs; already in the lock file through the Tauri shell.
+[target.'cfg(target_os = "macos")'.dev-dependencies]
+objc2-app-kit = "0.3"
+objc2-web-kit = "0.3"
+
 # Not `workspace = true`: the workspace forbids `unsafe`, but calling Objective-C
 # needs it (ADR-0015). Stricter rules than elsewhere make up for it.
 [lints.rust]
