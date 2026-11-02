@@ -1,0 +1,265 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Samples</title>
+<style>
+:root {
+  color-scheme: light;
+  color: #1d1d1f;
+  background: #ffffff;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+body {
+  margin: 0;
+}
+
+main {
+  max-width: 48rem;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+main > section + section {
+  margin-top: 3em;
+}
+
+h1 {
+  font-size: 1.6em;
+}
+
+h2 {
+  font-size: 1.35em;
+}
+
+h3 {
+  font-size: 1.15em;
+}
+
+h4,
+h5,
+h6 {
+  font-size: 1em;
+}
+
+a {
+  color: #0a66d8;
+}
+
+code,
+kbd,
+pre {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.9em;
+}
+
+pre {
+  padding: 8px 12px;
+  overflow-x: auto;
+  background: #f5f5f7;
+  border-radius: 6px;
+}
+
+pre code {
+  font-size: 1em;
+}
+
+blockquote {
+  margin-left: 0;
+  padding-left: 1em;
+  color: #6e6e73;
+  border-left: 3px solid #d2d2d7;
+}
+
+hr {
+  border: 0;
+  border-top: 1px solid #d2d2d7;
+}
+
+img {
+  max-width: 100%;
+}
+
+table {
+  border-collapse: collapse;
+  font-size: 0.95em;
+}
+
+th,
+td {
+  padding: 4px 10px;
+  vertical-align: top;
+  border: 1px solid #d2d2d7;
+}
+
+th {
+  font-weight: 600;
+  background: #f5f5f7;
+}
+
+th:not([align]) {
+  text-align: left;
+}
+
+li.task {
+  list-style: none;
+}
+
+.footnotes {
+  margin-top: 2em;
+  font-size: 0.9em;
+  border-top: 1px solid #d2d2d7;
+}
+
+@media print {
+  main {
+    max-width: none;
+    padding: 0;
+  }
+
+  main > section + section {
+    margin-top: 0;
+    break-before: page;
+  }
+
+  pre {
+    white-space: pre-wrap;
+  }
+
+  img,
+  pre,
+  tr {
+    break-inside: avoid;
+  }
+}
+</style>
+</head>
+<body>
+<main>
+<section id="note-welcome">
+<h1>Welcome</h1>
+<p>This vault holds <strong>sample notes</strong> for the exporters, with <em>emphasis</em>,
+<del>strikethrough</del> and <code>inline code</code>. A line ends here<br />
+with a hard break.</p>
+<h2>Links</h2>
+<ul>
+<li>A page on the web: <a href="https://github.com/oe1wkl/schnipsle">Schnipsle</a></li>
+<li>An address: <a href="mailto:club@example.org">write to the club</a></li>
+<li>A bare one: <a href="http://www.example.org">www.example.org</a> and <a href="https://example.org/qrp">https://example.org/qrp</a></li>
+<li>A footnote.<sup class="footnote-ref"><a href="#fn-note-welcome-1" id="fnref-note-welcome-1" data-footnote-ref>1</a></sup></li>
+</ul>
+<h3>Tags in the text</h3>
+<p>Tags such as #radio and #projects/tuner stay text in an export.</p>
+<section class="footnotes" data-footnotes>
+<ol>
+<li id="fn-note-welcome-1">
+<p>Footnotes go to the end of the note. <a href="#fnref-note-welcome-1" class="footnote-backref" data-footnote-backref data-footnote-backref-idx="1" aria-label="Back to reference 1">↩</a></p>
+</li>
+</ol>
+</section>
+</section>
+<section id="note-packing-list-for-field-day">
+<h1>Packing list for Field Day</h1>
+<ol>
+<li>Radio
+<ul>
+<li>Keyer</li>
+<li>Spare fuses</li>
+</ul>
+</li>
+<li>Antenna</li>
+<li>Logbook</li>
+</ol>
+<ul>
+<li class="task">☑ Charge the batteries</li>
+<li class="task">☐ Print the band plan</li>
+</ul>
+<blockquote>
+<p>Leave nothing behind but footprints.</p>
+</blockquote>
+<hr />
+<p>A literal #notatag, a colour #00ff00 and C# stay as written.</p>
+<p>Bring the #keyer and #m32.</p>
+</section>
+<section id="note-antenna-tuner">
+<h1>Antenna tuner</h1>
+<p>The finished box:</p>
+<p><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAPAAAACgCAIAAAC9uXYyAAACi0lEQVR42u3cIVICYRzG4W8djkD2EGSTwUOQDCQC2WQwmQ0mg8nAEQwmssFkNhs8gsFC0dFhV9j3/zyJoDPOx29eF1jt1i8fDVIcOQIEDYIGQYOgETQIGgQNggZBI2gQNAgaBA2CRtAgaBA0CBq+M3EE9O7h8vzrwfzq3kKDoEHQCBoEDYIGQSNoEDQcps5/Hx3K8rTdPrXEz/+G0Ndnij76Hibl7QdZWVvoqjVvK9b0Hu/lsNADp2yqvShMq/lPX4OFHkHKptpCB9Zsqi10Wsqm2kIH1myqLXRayqbaQgfWbKotdFrKplrQaSnL2iVHZs2uQCx0bFKmurk5KXIgD7XpHe8mHei+JQt98L/rTbWFzrxyHU/Tbh+Vsqlu3uUo+ZaCN0AsdFocptpCB06dqbbQaSmY6upBR66arItecmT/jnYFUmihizzZprrEQlebrtpTPfHUmmoLrWYnYKE9kabaQqvZmVRdaCmb6pCgpSzrnEsONTuxkIWWsqnOWWg1O8OQhZayqc5ZaDU71ZCFlrKpzlloNTvnkIWWsqnOWWg1O/mQhZayqY4K+sdznL3f6a0vz9NF88EKCBoEDYJG0CBoEDQIGgSNoEHQ0NzLwW8dn5zt8u1vm0cLDYIGQYOgwYvCnd1c9/mHBauLhSO10CBoBA2CBkGDoEHQCBoEDYIGQYOgaW5OYo9K/cmJhQZBI2gQNAgaBA2CRtAgaBA0CBpBg6BB0CBoEDRFTTavy9H90LPpzDPXl0ED+P+6LDQuOUDQIGgQNIV1q/XcKWChQdAgaBA0ggZBg6BB0CBoBA2CBkGDoEHQCBoEDYIGQYOgETQIGgQNggZBI2gQNAgaBA2CRtAgaBA0CBo+AULMjDV0GcqnAAAAAElFTkSuQmCC" alt="Front view of the tuner" /></p>
+<p>The circuit is in the datasheet.</p>
+<p>[Inside, not photographed yet]</p>
+<p><img src="https://example.org/images/tuner.jpg" alt="A picture on the web" /></p>
+<p>See the <a href="#note-welcome">welcome note</a>, the <a href="#note-packing-list-for-field-day">Packing list for Field Day</a>
+and last year's log.</p>
+</section>
+<section id="note-bread-rolls">
+<h1>Bread rolls</h1>
+<p><img src="data:image/jpeg;base64,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" alt="Rolls on the tray" /></p>
+<table>
+<thead>
+<tr>
+<th align="left">Ingredient</th>
+<th align="right">Amount</th>
+<th align="center">Note</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td align="left">Flour</td>
+<td align="right">500 g</td>
+<td align="center">type 700</td>
+</tr>
+<tr>
+<td align="left">Water</td>
+<td align="right">320 g</td>
+<td align="center">cold</td>
+</tr>
+<tr>
+<td align="left">Salt</td>
+<td align="right">10 g</td>
+<td align="center"></td>
+</tr>
+</tbody>
+</table>
+<pre><code class="language-text">Bake at 230 °C for 20 minutes.
+</code></pre>
+<pre><code>Indented code is code too.
+</code></pre>
+</section>
+<section id="note-abendlied">
+<h1>Abendlied</h1>
+<pre><code class="language-chordpro">{title: Abendlied}
+{key: G}
+
+{start_of_verse}
+Der [G]Mond ist aufge[D]gangen,
+die [G]goldnen Sternlein [C]pran[D]gen
+{end_of_verse}
+</code></pre>
+<pre><code class="language-abc">X:1
+T:Kanon
+M:4/4
+L:1/4
+K:D
+f2 e2 | d2 c2 |
+</code></pre>
+<pre><code class="language-mermaid">graph LR
+  Rig --&gt; Tuner --&gt; Antenna
+</code></pre>
+<p>Inline math <code>$E = mc^2$</code> and a block:</p>
+<pre><code>$$
+f = \frac{c}{\lambda}
+$$
+</code></pre>
+</section>
+<section id="note-raw-html">
+<h1>Raw HTML</h1>
+<p>Text with <b>bold</b>, <kbd>Ctrl</kbd>, <span>a span</span> and H<sub>2</sub>O.</p>
+<p>A div with a handler; its text stays.</p>
+</section>
+</main>
+</body>
+</html>

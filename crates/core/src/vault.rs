@@ -1008,12 +1008,16 @@ pub(crate) fn accessor_ran_twice() -> VaultError {
 
 /// A fully written and flushed temporary file next to its target (format.md §10).
 /// Dropping it without placing it removes the file.
-pub(crate) struct TempFile {
+pub struct TempFile {
     path: PathBuf,
 }
 
 impl TempFile {
-    pub(crate) fn write(target: &Path, bytes: &[u8]) -> io::Result<Self> {
+    /// Writes `bytes` to a new temporary file in the folder of `target`.
+    ///
+    /// # Errors
+    /// I/O errors; nothing is left behind.
+    pub fn write(target: &Path, bytes: &[u8]) -> io::Result<Self> {
         static COUNTER: AtomicU64 = AtomicU64::new(0);
         let dir = target.parent().unwrap_or_else(|| Path::new("."));
         let name = target
@@ -1037,7 +1041,10 @@ impl TempFile {
     }
 
     /// Renames the file over `target`, replacing what is there.
-    pub(crate) fn replace(self, target: &Path) -> io::Result<()> {
+    ///
+    /// # Errors
+    /// I/O errors; `target` stays as it was.
+    pub fn replace(self, target: &Path) -> io::Result<()> {
         fs::rename(&self.path, target)
         // on success Drop finds nothing left to remove
     }
@@ -1046,7 +1053,10 @@ impl TempFile {
     /// atomically with `AlreadyExists`, so a note created elsewhere in the meantime
     /// is never replaced. File systems without hard links fall back to an
     /// exclusive create, which is equally safe but not atomic for the content.
-    pub(crate) fn place_new(self, target: &Path) -> io::Result<()> {
+    ///
+    /// # Errors
+    /// An error of kind `AlreadyExists` if something is at `target`; other I/O errors.
+    pub fn place_new(self, target: &Path) -> io::Result<()> {
         match fs::hard_link(&self.path, target) {
             Ok(()) => Ok(()),
             Err(e) if e.kind() == io::ErrorKind::AlreadyExists => Err(e),
