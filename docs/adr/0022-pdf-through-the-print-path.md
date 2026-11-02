@@ -1,6 +1,6 @@
 # ADR-0022: PDF through the print path on macOS
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-02
 - Deciders: Willi Kraml
 - Related: F-06, ADR-0010, ADR-0021, [spike](../spikes/pdf-print.md)

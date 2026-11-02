@@ -3,7 +3,7 @@
 - Branch: `spike/pdf-print`
 - Started: 2026-11-02
 - Decides: how the PDF exporter (M5 package 4) makes pages on macOS
-- Status: **concluded 2026-11-02: use the print path, not `createPDF`** (proposed as [ADR-0022](../adr/0022-pdf-through-the-print-path.md)). Tested in a small program, not yet inside the Tauri app; iOS not tested
+- Status: **concluded 2026-11-02: use the print path, not `createPDF`** (decided in [ADR-0022](../adr/0022-pdf-through-the-print-path.md)). Tested in a small program, not yet inside the Tauri app; iOS not tested
 
 ## Question
 
