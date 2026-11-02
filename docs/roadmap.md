@@ -12,8 +12,8 @@ Each milestone ends in a usable build. Scope can move between milestones; the or
 | M2 – Index and organization | SQLite/FTS5 index, tag folders with combination subfolders, full-text search | Done 2026-10-27 |
 | M3 – Smart folders | Query language, saved searches | Done 2026-10-28 |
 | M4 – Import | Apple Notes (macOS 26 Markdown export), Simplenote, HTML, Markdown folders | Done 2026-11-01 |
-| M5 – Export | HTML, PDF, ODT built in; Pandoc formats on desktop | |
-| M6 – Release 1.0 | Manual, packaging and signing, performance and data-safety tests | |
+| M5 – Export | HTML, PDF, ODT built in; Pandoc formats on desktop (desktop first) | |
+| M6 – Release 1.0 | Export on iOS, manual, packaging and signing, performance and data-safety tests | |
 | Later | Note links, music rendering and playback (ABC), ChordPro, extras | |
 
 ## M0 results
@@ -29,6 +29,21 @@ Each milestone ends in a usable build. Scope can move between milestones; the or
 - Data safety: atomic, coordinated writes with conflict checks; iCloud conflict versions and same-id copies resolved without losing text; trash; history snapshots with retention and a history view to read, restore or copy versions; relative links kept working when notes move (ADR-0016).
 - Format spec at draft revision 0.8; ADR-0016 and ADR-0017 added. Tested on macOS and on the iPhone (iOS 27).
 - Moved to later milestones: loading the editor on demand (bundle ~530 kB), inline formatting inside table cells, a settings view.
+
+## M5 backlog
+
+Goal: export a note, or the notes of a tag folder, search or smart folder, to HTML, PDF and ODT (F-06), plus DOCX and EPUB through Pandoc when it is installed (F-13, desktop). Decisions: ADR-0010 (built-in engines, Pandoc optional and never bundled). Several notes become, by choice in the dialog, one document with a section per note (a page break between notes in PDF and ODT) or one file per note in a folder. The final tag line of a note is left out by default; tags inside the text stay as text. Desktop first; export on iOS (share sheet) moves to M6, since F-06 is a must for 1.0. Order: export rules and fixtures, HTML, PDF spike, PDF, ODT, export UI, Pandoc, check with real notes.
+
+- [x] Export rules and test data: ADR-0021 (front matter into the document's metadata, a single note as written, sections with their titles in one document, the final tag line left out unless kept, pictures embedded or copied, other attachments only in a folder export, links to notes only to notes exported too, music and math as source until the music milestone, raw HTML through an allowlist, no notes from the trash, a report at the end); the sample vault `tests/fixtures/export/vault/` (six notes, three attachments, one note in the trash) with a README of what each note covers, checked by `crates/export/tests/sample_vault.rs`
+- [ ] HTML exporter in `schnipsle-export`: comrak with the extensions the editor uses, a CSS theme close to the editor's preview; a single file with pictures as `data:` URLs, or a folder with an `attachments/` copy; one or several notes; golden files
+- [ ] PDF spike: `WKWebView.createPDF` makes one long page, so try the print path (`NSPrintOperation` to a file) for page breaks, A4/Letter and margins, in `schnipsle-apple`; findings in `docs/spikes/`
+- [ ] PDF exporter (macOS) on the HTML exporter, by what the spike found; Linux and Windows later
+- [ ] ODT writer (ADR-0010): `content.xml`, `styles.xml`, `meta.xml`, manifest and pictures zipped from the comrak AST (headings, paragraphs, emphasis, lists, tasks, tables, code, quotes, pictures, links); golden files; LibreOffice opens and converts every fixture in CI (`soffice --headless --convert-to pdf`)
+- [ ] Export UI (desktop): File › Export… with what (this note, or the notes shown in the list), format, one document or one file per note, page size for PDF and ODT, keep the tag line; then a save dialog; the result opens in Finder on request
+- [ ] Pandoc (desktop, F-13): found on `PATH` or in the usual Homebrew folders; DOCX and EPUB offered only then, from the exported Markdown with its pictures; its version shown; never bundled (ADR-0005, ADR-0010)
+- [ ] Check with real notes: your recipes, songs and radio notes in every format, opened in a browser, Preview, LibreOffice and Word
+
+Not in M5: export on iOS (M6); rendered music and song sheets in exports (music milestone; until then they export as code blocks); multi-select in the note list.
 
 ## M4 results
 
