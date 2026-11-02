@@ -3069,7 +3069,14 @@ dependencies = [
 name = "schnipsle-export"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
+ "comrak",
+ "percent-encoding",
  "schnipsle-core",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "unicode-normalization",
 ]
 
 [[package]]

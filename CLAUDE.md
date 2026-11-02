@@ -20,7 +20,7 @@ Work as a professional software developer: follow the decisions below, keep docs
 ```text
 crates/core/                     schnipsle-core: vault access, tags, (later) index, query. No UI deps
 crates/apple/                    schnipsle-apple: NSFileCoordinator and NSFilePresenter via objc2, ADR-0015
-crates/import/, crates/export/   importer and exporter crates (empty until M4/M5)
+crates/import/, crates/export/   importer and exporter crates
 crates/tauri-plugin-vault-access iOS folder picker + security-scoped bookmark (Swift in ios/)
 src-tauri/                       Tauri 2 app shell: commands (lib.rs), platform glue (vault_location.rs)
 src-tauri/gen/apple/             generated Xcode project, committed and hand-patched (see below)

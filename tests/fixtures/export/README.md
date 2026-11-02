@@ -15,3 +15,5 @@
 Several notes: the tests use the order of this table. As one document every section starts with its title: `packing-list.md`, which has no level-1 heading, gets `# Packing list for Field Day`; the others start with their own (3).
 
 Reports expected for all six notes (12): the missing picture `attachments/00/0000…0000.png` and the wiki link to "Logbook 2025" in `antenna-tuner.md`; for formats other than a folder export, the PDF attachment not included; for PDF and ODT, the picture on the web shown as a link.
+
+`html/expected/` holds the HTML export (`crates/export/tests/html.rs`): `single-file/` each note alone with its report, `one-document/` all six in one file holding its pictures, `folder/` all six in one document with copies of the attachments, `file-per-note/` a document per note with copies. `copied.txt` lists the copies, which the test compares with the vault.

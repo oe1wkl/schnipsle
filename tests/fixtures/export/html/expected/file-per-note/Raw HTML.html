@@ -1,0 +1,152 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Raw HTML</title>
+<meta name="dcterms.created" content="2026-10-01T09:00:00+02:00">
+<meta name="dcterms.modified" content="2026-10-20T18:30:00+02:00">
+<style>
+:root {
+  color-scheme: light;
+  color: #1d1d1f;
+  background: #ffffff;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+body {
+  margin: 0;
+}
+
+main {
+  max-width: 48rem;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+main > section + section {
+  margin-top: 3em;
+}
+
+h1 {
+  font-size: 1.6em;
+}
+
+h2 {
+  font-size: 1.35em;
+}
+
+h3 {
+  font-size: 1.15em;
+}
+
+h4,
+h5,
+h6 {
+  font-size: 1em;
+}
+
+a {
+  color: #0a66d8;
+}
+
+code,
+kbd,
+pre {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.9em;
+}
+
+pre {
+  padding: 8px 12px;
+  overflow-x: auto;
+  background: #f5f5f7;
+  border-radius: 6px;
+}
+
+pre code {
+  font-size: 1em;
+}
+
+blockquote {
+  margin-left: 0;
+  padding-left: 1em;
+  color: #6e6e73;
+  border-left: 3px solid #d2d2d7;
+}
+
+hr {
+  border: 0;
+  border-top: 1px solid #d2d2d7;
+}
+
+img {
+  max-width: 100%;
+}
+
+table {
+  border-collapse: collapse;
+  font-size: 0.95em;
+}
+
+th,
+td {
+  padding: 4px 10px;
+  vertical-align: top;
+  border: 1px solid #d2d2d7;
+}
+
+th {
+  font-weight: 600;
+  background: #f5f5f7;
+}
+
+th:not([align]) {
+  text-align: left;
+}
+
+li.task {
+  list-style: none;
+}
+
+.footnotes {
+  margin-top: 2em;
+  font-size: 0.9em;
+  border-top: 1px solid #d2d2d7;
+}
+
+@media print {
+  main {
+    max-width: none;
+    padding: 0;
+  }
+
+  main > section + section {
+    margin-top: 0;
+    break-before: page;
+  }
+
+  pre {
+    white-space: pre-wrap;
+  }
+
+  img,
+  pre,
+  tr {
+    break-inside: avoid;
+  }
+}
+</style>
+</head>
+<body>
+<main>
+<section id="note-raw-html">
+<h1>Raw HTML</h1>
+<p>Text with <b>bold</b>, <kbd>Ctrl</kbd>, <span>a span</span> and H<sub>2</sub>O.</p>
+<p>A div with a handler; its text stays.</p>
+</section>
+</main>
+</body>
+</html>
