@@ -138,11 +138,100 @@ mod macos {
         }
     }
 
+    /// TEMPORARY, to learn what macOS 26 does with the dates; prints and asserts nothing.
+    fn report_what_this_macos_keeps() {
+        fn raw(bytes: &[u8]) -> Vec<String> {
+            let text = String::from_utf8_lossy(bytes);
+            [
+                "/CreationDate",
+                "/ModDate",
+                "/Title",
+                "/Info",
+                "/ObjStm",
+                "/Producer",
+            ]
+            .iter()
+            .map(|key| {
+                let count = text.matches(key).count();
+                let first = text.find(key).map_or(String::new(), |at| {
+                    text[at..].chars().take(50).collect::<String>()
+                });
+                format!("{key} x{count} {first:?}")
+            })
+            .collect()
+        }
+        fn dates(document: &PDFDocument) -> (Option<f64>, Option<f64>) {
+            // SAFETY: plain getters on a valid document.
+            unsafe {
+                let attributes = document.documentAttributes().unwrap();
+                let get = |key: &NSString| {
+                    attributes
+                        .objectForKey(key.as_ref())
+                        .and_then(|o| o.downcast::<NSDate>().ok())
+                        .map(|d| d.timeIntervalSince1970())
+                };
+                (
+                    get(PDFDocumentCreationDateAttribute),
+                    get(PDFDocumentModificationDateAttribute),
+                )
+            }
+        }
+        let bytes = print(page(HTML)).unwrap();
+        println!("DIAG header {:?}", String::from_utf8_lossy(&bytes[..8]));
+        println!("DIAG now {}", NSDate::now().timeIntervalSince1970());
+        println!("DIAG print_pdf raw {:#?}", raw(&bytes));
+        println!("DIAG print_pdf read {:?}", dates(&document(&bytes)));
+
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("in.pdf");
+        std::fs::write(&file, &bytes).unwrap();
+        let url =
+            objc2_foundation::NSURL::fileURLWithPath(&NSString::from_str(&file.to_string_lossy()));
+        // SAFETY: valid objects; attributes of the types PDFKit documents.
+        unsafe {
+            let from_file = PDFDocument::initWithURL(PDFDocument::alloc(), &url).unwrap();
+            let attributes = objc2_foundation::NSMutableDictionary::<
+                objc2::runtime::AnyObject,
+                objc2::runtime::AnyObject,
+            >::new();
+            for (key, seconds) in [
+                (PDFDocumentCreationDateAttribute, 1_767_225_600.0),
+                (PDFDocumentModificationDateAttribute, 1_770_000_000.0),
+            ] {
+                let date = NSDate::dateWithTimeIntervalSince1970(seconds);
+                let value: &objc2::runtime::AnyObject = date.as_ref();
+                attributes.setObject_forKey(value, objc2::runtime::ProtocolObject::from_ref(key));
+            }
+            from_file.setDocumentAttributes(Some(&attributes));
+            println!("DIAG right after setting {:?}", dates(&from_file));
+
+            let data = from_file.dataRepresentation().unwrap().to_vec();
+            println!("DIAG dataRepresentation raw {:#?}", raw(&data));
+            println!("DIAG dataRepresentation read {:?}", dates(&document(&data)));
+
+            let out = dir.path().join("out.pdf");
+            let out_url = objc2_foundation::NSURL::fileURLWithPath(&NSString::from_str(
+                &out.to_string_lossy(),
+            ));
+            println!("DIAG writeToURL ok {}", from_file.writeToURL(&out_url));
+            let written = std::fs::read(&out).unwrap();
+            println!("DIAG writeToURL raw {:#?}", raw(&written));
+            println!("DIAG writeToURL read {:?}", dates(&document(&written)));
+
+            // A document opened from the rewritten file, set and written once more.
+            let again = PDFDocument::initWithURL(PDFDocument::alloc(), &out_url).unwrap();
+            again.setDocumentAttributes(Some(&attributes));
+            let data = again.dataRepresentation().unwrap().to_vec();
+            println!("DIAG second round read {:?}", dates(&document(&data)));
+        }
+    }
+
     pub fn main() {
         let mtm = MainThreadMarker::new().expect("main thread");
         let app = NSApplication::sharedApplication(mtm);
         app.setActivationPolicy(NSApplicationActivationPolicy::Accessory);
         app.finishLaunching();
+        report_what_this_macos_keeps();
         pages_and_paper_and_metadata();
         several_jobs_one_after_the_other();
         the_samples_start_a_page_per_note();
