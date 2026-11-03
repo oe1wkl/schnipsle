@@ -123,6 +123,33 @@ li.task {
     white-space: pre-wrap;
   }
 
+  /* Printing leaves out backgrounds unless told otherwise. */
+  pre,
+  th {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Whatever is wider than the paper would shrink the whole document and still be cut off. */
+  p,
+  li,
+  td,
+  th,
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6,
+  blockquote,
+  pre {
+    overflow-wrap: anywhere;
+  }
+
+  table {
+    max-width: 100%;
+  }
+
   img,
   pre,
   tr {

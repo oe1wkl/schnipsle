@@ -17,3 +17,5 @@ Several notes: the tests use the order of this table. As one document every sect
 Reports expected for all six notes (12): the missing picture `attachments/00/0000…0000.png` and the wiki link to "Logbook 2025" in `antenna-tuner.md`; for formats other than a folder export, the PDF attachment not included; for PDF and ODT, the picture on the web shown as a link.
 
 `html/expected/` holds the HTML export (`crates/export/tests/html.rs`): `single-file/` each note alone with its report, `one-document/` all six in one file holding its pictures, `folder/` all six in one document with copies of the attachments, `file-per-note/` a document per note with copies. `copied.txt` lists the copies, which the test compares with the vault.
+
+`pdf/expected/` holds what the PDF export hands to the printer (`crates/export/tests/pdf.rs`): for each PDF its HTML page and a `.job.txt` with title, paper, margin and dates, and the report. `one-document/` is all six notes in one PDF, `file-per-note/` a PDF per note, where links to notes in the other PDFs become text and are reported as `noteInOtherFile`. `crates/apple/tests/pdf.rs` prints `one-document/all.html` for real.

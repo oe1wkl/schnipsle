@@ -1,0 +1,196 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Welcome</title>
+<meta name="dcterms.created" content="2026-10-01T09:00:00+02:00">
+<meta name="dcterms.modified" content="2026-10-20T18:30:00+02:00">
+<style>
+:root {
+  color-scheme: light;
+  color: #1d1d1f;
+  background: #ffffff;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+body {
+  margin: 0;
+}
+
+main {
+  max-width: 48rem;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+main > section + section {
+  margin-top: 3em;
+}
+
+h1 {
+  font-size: 1.6em;
+}
+
+h2 {
+  font-size: 1.35em;
+}
+
+h3 {
+  font-size: 1.15em;
+}
+
+h4,
+h5,
+h6 {
+  font-size: 1em;
+}
+
+a {
+  color: #0a66d8;
+}
+
+code,
+kbd,
+pre {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.9em;
+}
+
+pre {
+  padding: 8px 12px;
+  overflow-x: auto;
+  background: #f5f5f7;
+  border-radius: 6px;
+}
+
+pre code {
+  font-size: 1em;
+}
+
+blockquote {
+  margin-left: 0;
+  padding-left: 1em;
+  color: #6e6e73;
+  border-left: 3px solid #d2d2d7;
+}
+
+hr {
+  border: 0;
+  border-top: 1px solid #d2d2d7;
+}
+
+img {
+  max-width: 100%;
+}
+
+table {
+  border-collapse: collapse;
+  font-size: 0.95em;
+}
+
+th,
+td {
+  padding: 4px 10px;
+  vertical-align: top;
+  border: 1px solid #d2d2d7;
+}
+
+th {
+  font-weight: 600;
+  background: #f5f5f7;
+}
+
+th:not([align]) {
+  text-align: left;
+}
+
+li.task {
+  list-style: none;
+}
+
+.footnotes {
+  margin-top: 2em;
+  font-size: 0.9em;
+  border-top: 1px solid #d2d2d7;
+}
+
+@media print {
+  main {
+    max-width: none;
+    padding: 0;
+  }
+
+  main > section + section {
+    margin-top: 0;
+    break-before: page;
+  }
+
+  pre {
+    white-space: pre-wrap;
+  }
+
+  /* Printing leaves out backgrounds unless told otherwise. */
+  pre,
+  th {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Whatever is wider than the paper would shrink the whole document and still be cut off. */
+  p,
+  li,
+  td,
+  th,
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6,
+  blockquote,
+  pre {
+    overflow-wrap: anywhere;
+  }
+
+  table {
+    max-width: 100%;
+  }
+
+  img,
+  pre,
+  tr {
+    break-inside: avoid;
+  }
+}
+</style>
+</head>
+<body>
+<main>
+<section id="note-welcome">
+<h1>Welcome</h1>
+<p>This vault holds <strong>sample notes</strong> for the exporters, with <em>emphasis</em>,
+<del>strikethrough</del> and <code>inline code</code>. A line ends here<br />
+with a hard break.</p>
+<h2>Links</h2>
+<ul>
+<li>A page on the web: <a href="https://github.com/oe1wkl/schnipsle">Schnipsle</a></li>
+<li>An address: <a href="mailto:club@example.org">write to the club</a></li>
+<li>A bare one: <a href="http://www.example.org">www.example.org</a> and <a href="https://example.org/qrp">https://example.org/qrp</a></li>
+<li>A footnote.<sup class="footnote-ref"><a href="#fn-note-welcome-1" id="fnref-note-welcome-1" data-footnote-ref>1</a></sup></li>
+</ul>
+<h3>Tags in the text</h3>
+<p>Tags such as #radio and #projects/tuner stay text in an export.</p>
+<section class="footnotes" data-footnotes>
+<ol>
+<li id="fn-note-welcome-1">
+<p>Footnotes go to the end of the note. <a href="#fnref-note-welcome-1" class="footnote-backref" data-footnote-backref data-footnote-backref-idx="1" aria-label="Back to reference 1">↩</a></p>
+</li>
+</ol>
+</section>
+</section>
+</main>
+</body>
+</html>

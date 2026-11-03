@@ -5,6 +5,7 @@
 //! here (ADR-0003). Commands that may show system UI or wait for iOS are `async`,
 //! so they run off the main thread.
 
+mod exporting;
 mod importing;
 mod indexing;
 mod smart_folders;
@@ -847,6 +848,7 @@ pub fn run() {
             keep_both,
             download_note,
             extract_tags,
+            exporting::export_notes,
             importing::pick_import,
             importing::plan_import,
             importing::cancel_import,

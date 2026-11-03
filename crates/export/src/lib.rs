@@ -4,30 +4,35 @@
 //! Design: [ADR-0010](../../docs/adr/0010-export-engines.md) for the engines,
 //! [ADR-0021](../../docs/adr/0021-what-an-exported-note-looks-like.md) for what
 //! an exported note contains. The rules live in `document`, which turns a note
-//! into a syntax tree every format can write; so far HTML is written, by
-//! [`HtmlExporter`].
+//! into a syntax tree every format can write; so far [`HtmlExporter`] writes
+//! HTML, and [`PdfExporter`] has that HTML printed.
 
 mod document;
 mod html;
 mod output;
+mod pdf;
 mod raw_html;
 
 use std::path::Path;
 
 use schnipsle_core::vault::{Result, Vault};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 pub use html::HtmlExporter;
+pub use pdf::{PdfExporter, PrintJob, Printer};
 
 /// A format an [`Exporter`] writes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub enum Format {
     /// HTML with its own style sheet.
     Html,
+    /// PDF, printed from that HTML.
+    Pdf,
 }
 
 /// What to export (ADR-0021 rule 3).
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 pub struct Input {
     /// The notes by their path relative to `notes/`, in the order of the list they come from.
     pub notes: Vec<String>,
@@ -37,7 +42,8 @@ pub struct Input {
 }
 
 /// Where the notes go.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub enum Layout {
     /// One document, the file `to`, holding its pictures. Replaces what is there:
     /// the save dialog has asked.
@@ -50,13 +56,28 @@ pub enum Layout {
     FilePerNote,
 }
 
+/// The paper of a format with pages.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Paper {
+    /// 210 × 297 mm.
+    #[default]
+    A4,
+    /// 8.5 × 11 inches.
+    Letter,
+}
+
 /// How to export.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Options {
     /// Where the notes go.
     pub layout: Layout,
     /// Keep the final line of tags of a note (ADR-0021 rule 4).
     pub keep_tag_line: bool,
+    /// The paper, for a format with pages.
+    #[serde(default)]
+    pub paper: Paper,
 }
 
 /// What an export did (ADR-0021 rule 12). Serialized with camelCase names.
@@ -97,6 +118,9 @@ pub enum ProblemKind {
     AttachmentNotIncluded,
     /// The note linked to is not in this export; the text of its link stays.
     NoteNotExported,
+    /// The note linked to is in another file of this export, which a PDF cannot
+    /// link to; the text of its link stays.
+    NoteInOtherFile,
 }
 
 /// Writes notes in one format (ADR-0010).

@@ -3,7 +3,7 @@
 - Branch: `spike/pdf-print`
 - Started: 2026-11-02
 - Decides: how the PDF exporter (M5 package 4) makes pages on macOS
-- Status: **concluded 2026-11-02: use the print path, not `createPDF`** (decided in [ADR-0022](../adr/0022-pdf-through-the-print-path.md)). Tested in a small program, not yet inside the Tauri app; iOS not tested
+- Status: **concluded 2026-11-02: use the print path, not `createPDF`** (decided in [ADR-0022](../adr/0022-pdf-through-the-print-path.md)). Tested in a small program, and in the Tauri app with the exporter of package 4; iOS not tested
 
 ## Question
 
@@ -78,9 +78,16 @@ Not needed, tested by leaving them out: setting the frame of the print view, and
 - Add the print rules above to `crates/export/src/theme.css`.
 - The exporter's `Rules` already has `web_pictures: false` for PDF, so the page loads nothing from the network.
 
+## Found in package 4
+
+- **Inside the app:** an export started from a worker thread and printed on Tauri's main thread took 0.15 s for seven notes in one PDF and 0.45 s for a PDF each. The focused window stayed focused and visible, and no other window appeared.
+- **Backgrounds** of code blocks and table headers are left out when printing unless the style sheet sets `print-color-adjust: exact`.
+- **Links between PDF files:** WebKit drops a relative link when the page has no base URL. With a base URL it keeps the link, but PDFKit's `PDFActionRemoteGoTo` with a relative file wrote `/A << /S /GoToR >>` without the file. See ADR-0023.
+- **Dates:** `setDocumentAttributes` replaces all attributes, so a PDF of several notes has a title and no dates.
+- **A very wide table** stays on the page, with its cells broken within words.
+
 ## Open
 
-- **Inside the app:** nothing here ran next to Tauri's windows and event loop. Package 4 must check that printing does not disturb the open window or take the focus.
 - **Sandbox:** the app is not sandboxed today. A Mac App Store build may need the print entitlement (`com.apple.security.print`) and access to the target; to be tested when sandboxing comes.
 - **iOS (M6):** `NSPrintOperation` does not exist there, and `createPDF` should have the same one-page limit. The likely path is `UIPrintPageRenderer` with the web view's print formatter. Not tested.
 - **Page numbers:** the print path adds no headers or footers. Not asked for by ADR-0021, so left out.

@@ -3,7 +3,7 @@
 //! a page with a style sheet close to the editor's look, without scripts. A
 //! note is a `<section>`, so print can start each on a new page.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::fmt::Write as _;
 use std::fs;
 use std::io;
@@ -75,7 +75,7 @@ impl Exporter for HtmlExporter {
     }
 }
 
-/// One document of all `notes`, with an anchor per note.
+/// One document of all `notes`.
 fn one_document(
     vault: &Vault,
     notes: &[Source],
@@ -85,39 +85,71 @@ fn one_document(
     report: &mut Report,
     collected: &mut Collected,
 ) -> Result<()> {
+    let single_file = options.layout == Layout::SingleFile;
+    let one = one_page(vault, notes, input, options, !single_file, true, collected)?;
+    if single_file {
+        output::replace_file(to, one.page.as_bytes())?;
+        let name = to.file_name().map(|n| n.to_string_lossy().into_owned());
+        report.files.extend(name);
+    } else {
+        fs::create_dir_all(to)?;
+        let name = Names::new(to).free(&one.title, "html");
+        output::write_new(&to.join(&name), one.page.as_bytes())?;
+        report.files.push(name);
+    }
+    Ok(())
+}
+
+/// The page of one document, and what its metadata needs.
+pub(crate) struct OnePage<'n> {
+    pub title: String,
+    /// The note it holds, if only one: a document of several has no dates of its own.
+    pub note: Option<&'n Source>,
+    pub page: String,
+}
+
+/// One page of all `notes`, with an anchor per note.
+pub(crate) fn one_page<'n>(
+    vault: &Vault,
+    notes: &'n [Source],
+    input: &Input,
+    options: Options,
+    copy_attachments: bool,
+    web_pictures: bool,
+    collected: &mut Collected,
+) -> Result<OnePage<'n>> {
     let mut used = HashSet::new();
     let anchors: Vec<String> = notes
         .iter()
         .map(|note| output::free_anchor(&mut used, &slug(&note.title)))
         .collect();
-    let hrefs = notes
-        .iter()
-        .zip(&anchors)
-        .map(|(note, anchor)| (note.path.clone(), format!("#{}", document::href_of(anchor))))
-        .collect();
-    let single_file = options.layout == Layout::SingleFile;
-    let rules = rules_for(vault, notes, hrefs, options, !single_file, notes.len() > 1);
+    let rules = Rules {
+        vault,
+        hrefs: notes
+            .iter()
+            .zip(&anchors)
+            .map(|(note, anchor)| (note.path.clone(), format!("#{}", document::href_of(anchor))))
+            .collect(),
+        titles: document::titles_of(notes),
+        out_of_reach: HashSet::new(),
+        copy_attachments,
+        web_pictures,
+        keep_tag_line: options.keep_tag_line,
+        sections: notes.len() > 1,
+    };
     let mut body = String::new();
     for (note, anchor) in notes.iter().zip(&anchors) {
         body.push_str(&section(note, anchor, &rules, collected)?);
     }
-    // A document of several notes has no dates of its own.
-    let (title, dated) = match notes {
+    let (title, note) = match notes {
         [note] => (note.title.as_str(), Some(note)),
         _ => (input.name.as_deref().unwrap_or(DEFAULT_TITLE), None),
     };
-    let page = page(title, dated, &body);
-    if single_file {
-        output::replace_file(to, page.as_bytes())?;
-        let name = to.file_name().map(|n| n.to_string_lossy().into_owned());
-        report.files.extend(name);
-    } else {
-        fs::create_dir_all(to)?;
-        let name = Names::new(to).free(title, "html");
-        output::write_new(&to.join(&name), page.as_bytes())?;
-        report.files.push(name);
-    }
-    Ok(())
+    Ok(OnePage {
+        title: title.to_owned(),
+        note,
+        page: page(title, note, &body),
+    })
 }
 
 /// A document per note, linking to each other.
@@ -135,43 +167,37 @@ fn file_per_note(
         .iter()
         .map(|note| names.free(&note.title, "html"))
         .collect();
-    let hrefs = notes
-        .iter()
-        .zip(&files)
-        .map(|(note, name)| (note.path.clone(), document::href_of(name)))
-        .collect();
-    let rules = rules_for(vault, notes, hrefs, options, true, false);
+    let rules = Rules {
+        vault,
+        hrefs: notes
+            .iter()
+            .zip(&files)
+            .map(|(note, name)| (note.path.clone(), document::href_of(name)))
+            .collect(),
+        titles: document::titles_of(notes),
+        out_of_reach: HashSet::new(),
+        copy_attachments: true,
+        web_pictures: true,
+        keep_tag_line: options.keep_tag_line,
+        sections: false,
+    };
     for (note, name) in notes.iter().zip(files) {
-        let body = section(
-            note,
-            &format!("note-{}", slug(&note.title)),
-            &rules,
-            collected,
-        )?;
-        let page = page(&note.title, Some(note), &body);
+        let page = page_of_note(note, &rules, collected)?;
         output::write_new(&to.join(&name), page.as_bytes())?;
         report.files.push(name);
     }
     Ok(())
 }
 
-fn rules_for<'r>(
-    vault: &'r Vault,
-    notes: &'r [Source],
-    hrefs: HashMap<String, String>,
-    options: Options,
-    copy_attachments: bool,
-    sections: bool,
-) -> Rules<'r> {
-    Rules {
-        vault,
-        hrefs,
-        titles: document::titles_of(notes),
-        copy_attachments,
-        web_pictures: true,
-        keep_tag_line: options.keep_tag_line,
-        sections,
-    }
+/// The page of `note` alone.
+pub(crate) fn page_of_note(
+    note: &Source,
+    rules: &Rules<'_>,
+    collected: &mut Collected,
+) -> Result<String> {
+    let anchor = format!("note-{}", slug(&note.title));
+    let body = section(note, &anchor, rules, collected)?;
+    Ok(page(&note.title, Some(note), &body))
 }
 
 /// The HTML of `note`.

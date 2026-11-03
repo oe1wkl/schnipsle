@@ -1,0 +1,5 @@
+title: Samples
+paper: 595 x 842
+margin: 57
+created: None
+modified: None
