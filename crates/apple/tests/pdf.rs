@@ -80,13 +80,20 @@ mod macos {
                 title.downcast::<NSString>().unwrap().to_string(),
                 "Grüße & mehr"
             );
-            for (key, seconds) in [
-                (PDFDocumentCreationDateAttribute, 1_767_225_600.0),
-                (PDFDocumentModificationDateAttribute, 1_770_000_000.0),
-            ] {
+            // Each date by itself in a failure: macOS versions differ in what they keep.
+            let date = |key: &NSString| {
                 let date = get(key).downcast::<NSDate>().unwrap();
-                assert!((date.timeIntervalSince1970() - seconds).abs() < 1.0);
-            }
+                date.timeIntervalSince1970()
+            };
+            let found = (
+                date(PDFDocumentCreationDateAttribute),
+                date(PDFDocumentModificationDateAttribute),
+            );
+            let now = NSDate::now().timeIntervalSince1970();
+            assert!(
+                (found.0 - 1_767_225_600.0).abs() < 1.0 && (found.1 - 1_770_000_000.0).abs() < 1.0,
+                "created and modified are {found:?}, printed at {now}"
+            );
 
             // The web link and the link to the anchor stay.
             let kinds: Vec<String> = first
