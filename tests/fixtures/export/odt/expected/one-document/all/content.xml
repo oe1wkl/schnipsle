@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0" xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0" xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0" xmlns:svg="urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0" xmlns:xlink="http://www.w3.org/1999/xlink" office:version="1.2">
+<office:automatic-styles>
+<style:style style:name="Table" style:family="table"><style:table-properties style:width="17cm" table:align="margins" fo:margin-top="0.1cm" fo:margin-bottom="0.3cm"/></style:style>
+<style:style style:name="Row" style:family="table-row"><style:table-row-properties fo:keep-together="always"/></style:style>
+<style:style style:name="Cell" style:family="table-cell"><style:table-cell-properties fo:padding="0.1cm" fo:border="0.5pt solid #d2d2d7"/></style:style>
+<style:style style:name="Heading_20_Cell" style:family="table-cell"><style:table-cell-properties fo:padding="0.1cm" fo:border="0.5pt solid #d2d2d7" fo:background-color="#f5f5f7"/></style:style>
+</office:automatic-styles>
+<office:body>
+<office:text>
+<text:h text:style-name="Heading_20_1" text:outline-level="1"><text:bookmark text:name="note-welcome"/>Welcome</text:h>
+<text:p text:style-name="Text_20_body">This vault holds <text:span text:style-name="Strong_20_Emphasis">sample notes</text:span> for the exporters, with <text:span text:style-name="Emphasis">emphasis</text:span>, <text:span text:style-name="Strikethrough">strikethrough</text:span> and <text:span text:style-name="Source_20_Text">inline code</text:span>. A line ends here<text:line-break/>with a hard break.</text:p>
+<text:h text:style-name="Heading_20_2" text:outline-level="2">Links</text:h>
+<text:list text:style-name="Bullets">
+<text:list-item>
+<text:p text:style-name="List_20_Contents">A page on the web: <text:a xlink:type="simple" xlink:href="https://github.com/oe1wkl/schnipsle" text:style-name="Internet_20_link" text:visited-style-name="Internet_20_link">Schnipsle</text:a></text:p>
+</text:list-item>
+<text:list-item>
+<text:p text:style-name="List_20_Contents">An address: <text:a xlink:type="simple" xlink:href="mailto:club@example.org" text:style-name="Internet_20_link" text:visited-style-name="Internet_20_link">write to the club</text:a></text:p>
+</text:list-item>
+<text:list-item>
+<text:p text:style-name="List_20_Contents">A bare one: <text:a xlink:type="simple" xlink:href="http://www.example.org" text:style-name="Internet_20_link" text:visited-style-name="Internet_20_link">www.example.org</text:a> and <text:a xlink:type="simple" xlink:href="https://example.org/qrp" text:style-name="Internet_20_link" text:visited-style-name="Internet_20_link">https://example.org/qrp</text:a></text:p>
+</text:list-item>
+<text:list-item>
+<text:p text:style-name="List_20_Contents">A footnote.<text:note text:id="ftn1" text:note-class="footnote"><text:note-citation>1</text:note-citation><text:note-body><text:p text:style-name="Footnote">Footnotes go to the end of the note.</text:p>
+</text:note-body></text:note></text:p>
+</text:list-item>
+</text:list>
+<text:h text:style-name="Heading_20_3" text:outline-level="3">Tags in the text</text:h>
+<text:p text:style-name="Text_20_body">Tags such as #radio and #projects/tuner stay text in an export.</text:p>
+<text:h text:style-name="Note_20_Start" text:outline-level="1"><text:bookmark text:name="note-packing-list-for-field-day"/>Packing list for Field Day</text:h>
+<text:list text:style-name="Numbering">
+<text:list-item>
+<text:p text:style-name="List_20_Contents">Radio</text:p>
+<text:list text:style-name="Bullets">
+<text:list-item>
+<text:p text:style-name="List_20_Contents">Keyer</text:p>
+</text:list-item>
+<text:list-item>
+<text:p text:style-name="List_20_Contents">Spare fuses</text:p>
+</text:list-item>
+</text:list>
+</text:list-item>
+<text:list-item>
+<text:p text:style-name="List_20_Contents">Antenna</text:p>
+</text:list-item>
+<text:list-item>
+<text:p text:style-name="List_20_Contents">Logbook</text:p>
+</text:list-item>
+</text:list>
+<text:list text:style-name="Bullets">
+<text:list-item text:style-override="Tasks">
+<text:p text:style-name="List_20_Contents">☑ Charge the batteries</text:p>
+</text:list-item>
+<text:list-item text:style-override="Tasks">
+<text:p text:style-name="List_20_Contents">☐ Print the band plan</text:p>
+</text:list-item>
+</text:list>
+<text:p text:style-name="Quotations">Leave nothing behind but footprints.</text:p>
+<text:p text:style-name="Horizontal_20_Line"></text:p>
+<text:p text:style-name="Text_20_body">A literal #notatag, a colour #00ff00 and C# stay as written.</text:p>
+<text:p text:style-name="Text_20_body">Bring the #keyer and #m32.</text:p>
+<text:h text:style-name="Note_20_Start" text:outline-level="1"><text:bookmark text:name="note-antenna-tuner"/>Antenna tuner</text:h>
+<text:p text:style-name="Text_20_body">The finished box:</text:p>
+<text:p text:style-name="Text_20_body"><draw:frame draw:style-name="Picture" draw:name="Picture1" text:anchor-type="as-char" svg:width="6.350cm" svg:height="4.233cm"><draw:image xlink:href="Pictures/1.png" xlink:type="simple" xlink:show="embed" xlink:actuate="onLoad"/><svg:desc>Front view of the tuner</svg:desc></draw:frame></text:p>
+<text:p text:style-name="Text_20_body">The circuit is in the datasheet.</text:p>
+<text:p text:style-name="Text_20_body">[Inside, not photographed yet]</text:p>
+<text:p text:style-name="Text_20_body"><text:a xlink:type="simple" xlink:href="https://example.org/images/tuner.jpg" text:style-name="Internet_20_link" text:visited-style-name="Internet_20_link">A picture on the web</text:a></text:p>
+<text:p text:style-name="Text_20_body">See the <text:a xlink:type="simple" xlink:href="#note-welcome" text:style-name="Internet_20_link" text:visited-style-name="Internet_20_link">welcome note</text:a>, the <text:a xlink:type="simple" xlink:href="#note-packing-list-for-field-day" text:style-name="Internet_20_link" text:visited-style-name="Internet_20_link">Packing list for Field Day</text:a> and last year's log.</text:p>
+<text:h text:style-name="Note_20_Start" text:outline-level="1"><text:bookmark text:name="note-bread-rolls"/>Bread rolls</text:h>
+<text:p text:style-name="Text_20_body"><draw:frame draw:style-name="Picture" draw:name="Picture2" text:anchor-type="as-char" svg:width="5.292cm" svg:height="3.440cm"><draw:image xlink:href="Pictures/2.jpg" xlink:type="simple" xlink:show="embed" xlink:actuate="onLoad"/><svg:desc>Rolls on the tray</svg:desc></draw:frame></text:p>
+<table:table table:name="Table1" table:style-name="Table">
+<table:table-column table:number-columns-repeated="3"/>
+<table:table-header-rows>
+<table:table-row table:style-name="Row">
+<table:table-cell table:style-name="Heading_20_Cell"><text:p text:style-name="Table_20_Heading">Ingredient</text:p></table:table-cell>
+<table:table-cell table:style-name="Heading_20_Cell"><text:p text:style-name="Table_20_Heading_20_Right">Amount</text:p></table:table-cell>
+<table:table-cell table:style-name="Heading_20_Cell"><text:p text:style-name="Table_20_Heading_20_Center">Note</text:p></table:table-cell>
+</table:table-row>
+</table:table-header-rows>
+<table:table-row table:style-name="Row">
+<table:table-cell table:style-name="Cell"><text:p text:style-name="Table_20_Contents">Flour</text:p></table:table-cell>
+<table:table-cell table:style-name="Cell"><text:p text:style-name="Table_20_Right">500 g</text:p></table:table-cell>
+<table:table-cell table:style-name="Cell"><text:p text:style-name="Table_20_Center">type 700</text:p></table:table-cell>
+</table:table-row>
+<table:table-row table:style-name="Row">
+<table:table-cell table:style-name="Cell"><text:p text:style-name="Table_20_Contents">Water</text:p></table:table-cell>
+<table:table-cell table:style-name="Cell"><text:p text:style-name="Table_20_Right">320 g</text:p></table:table-cell>
+<table:table-cell table:style-name="Cell"><text:p text:style-name="Table_20_Center">cold</text:p></table:table-cell>
+</table:table-row>
+<table:table-row table:style-name="Row">
+<table:table-cell table:style-name="Cell"><text:p text:style-name="Table_20_Contents">Salt</text:p></table:table-cell>
+<table:table-cell table:style-name="Cell"><text:p text:style-name="Table_20_Right">10 g</text:p></table:table-cell>
+<table:table-cell table:style-name="Cell"><text:p text:style-name="Table_20_Center"></text:p></table:table-cell>
+</table:table-row>
+</table:table>
+<text:p text:style-name="Preformatted_20_Text">Bake at 230 °C for 20 minutes.</text:p>
+<text:p text:style-name="Preformatted_20_Text">Indented code is code too.</text:p>
+<text:h text:style-name="Note_20_Start" text:outline-level="1"><text:bookmark text:name="note-abendlied"/>Abendlied</text:h>
+<text:p text:style-name="Preformatted_20_Text">{title: Abendlied}<text:line-break/>{key: G}<text:line-break/><text:line-break/>{start_of_verse}<text:line-break/>Der [G]Mond ist aufge[D]gangen,<text:line-break/>die [G]goldnen Sternlein [C]pran[D]gen<text:line-break/>{end_of_verse}</text:p>
+<text:p text:style-name="Preformatted_20_Text">X:1<text:line-break/>T:Kanon<text:line-break/>M:4/4<text:line-break/>L:1/4<text:line-break/>K:D<text:line-break/>f2 e2 | d2 c2 |</text:p>
+<text:p text:style-name="Preformatted_20_Text">graph LR<text:line-break/><text:s text:c="2"/>Rig --&gt; Tuner --&gt; Antenna</text:p>
+<text:p text:style-name="Text_20_body">Inline math <text:span text:style-name="Source_20_Text">$E = mc^2$</text:span> and a block:</text:p>
+<text:p text:style-name="Preformatted_20_Text">$$<text:line-break/>f = \frac{c}{\lambda}<text:line-break/>$$</text:p>
+<text:h text:style-name="Note_20_Start" text:outline-level="1"><text:bookmark text:name="note-raw-html"/>Raw HTML</text:h>
+<text:p text:style-name="Text_20_body">Text with bold, Ctrl, a span and H2O.</text:p>
+<text:p text:style-name="Text_20_body">A div with a handler; its text stays.</text:p>
+</office:text>
+</office:body>
+</office:document-content>

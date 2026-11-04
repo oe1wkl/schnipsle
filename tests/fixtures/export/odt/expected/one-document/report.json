@@ -1,0 +1,31 @@
+{
+  "files": [
+    "all.odt"
+  ],
+  "problems": [
+    {
+      "path": "Radio/antenna-tuner.md",
+      "title": "Antenna tuner",
+      "kind": "attachmentNotIncluded",
+      "target": "../../attachments/d0/d009639f2187c44b0fa8838f659b03ac0d0a54cbfcda6b36ae9c54c2e564d06f.pdf"
+    },
+    {
+      "path": "Radio/antenna-tuner.md",
+      "title": "Antenna tuner",
+      "kind": "pictureMissing",
+      "target": "../../attachments/00/0000000000000000000000000000000000000000000000000000000000000000.png"
+    },
+    {
+      "path": "Radio/antenna-tuner.md",
+      "title": "Antenna tuner",
+      "kind": "webPictureAsLink",
+      "target": "https://example.org/images/tuner.jpg"
+    },
+    {
+      "path": "Radio/antenna-tuner.md",
+      "title": "Antenna tuner",
+      "kind": "noteNotExported",
+      "target": "Logbook 2025"
+    }
+  ]
+}

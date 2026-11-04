@@ -4,11 +4,13 @@
 //! Design: [ADR-0010](../../docs/adr/0010-export-engines.md) for the engines,
 //! [ADR-0021](../../docs/adr/0021-what-an-exported-note-looks-like.md) for what
 //! an exported note contains. The rules live in `document`, which turns a note
-//! into a syntax tree every format can write; so far [`HtmlExporter`] writes
-//! HTML, and [`PdfExporter`] has that HTML printed.
+//! into a syntax tree every format can write: [`HtmlExporter`] writes HTML,
+//! [`PdfExporter`] has that HTML printed, and [`OdtExporter`] writes ODT.
 
 mod document;
 mod html;
+mod odt;
+mod odt_content;
 mod output;
 mod pdf;
 mod pdf_dates;
@@ -20,6 +22,7 @@ use schnipsle_core::vault::{Result, Vault};
 use serde::{Deserialize, Serialize};
 
 pub use html::HtmlExporter;
+pub use odt::OdtExporter;
 pub use pdf::{PdfExporter, PrintJob, Printer};
 
 /// A format an [`Exporter`] writes.
@@ -30,6 +33,8 @@ pub enum Format {
     Html,
     /// PDF, printed from that HTML.
     Pdf,
+    /// `OpenDocument` text.
+    Odt,
 }
 
 /// What to export (ADR-0021 rule 3).

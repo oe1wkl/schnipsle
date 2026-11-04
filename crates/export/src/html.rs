@@ -22,9 +22,6 @@ use crate::{Exporter, Format, Input, Layout, Options, Problem, ProblemKind, Repo
 
 const THEME: &str = include_str!("theme.css");
 
-/// The title of one document of several notes without a name of its own.
-const DEFAULT_TITLE: &str = "Notes";
-
 comrak::create_formatter!(NoteHtml, {
     // The ☐ or ☑ is in the text (ADR-0021 rule 10), not a form control.
     NodeValue::TaskItem(_) => |context, entering| {
@@ -118,38 +115,15 @@ pub(crate) fn one_page<'n>(
     web_pictures: bool,
     collected: &mut Collected,
 ) -> Result<OnePage<'n>> {
-    let mut used = HashSet::new();
-    let anchors: Vec<String> = notes
-        .iter()
-        .map(|note| output::free_anchor(&mut used, &slug(&note.title)))
-        .collect();
-    let rules = Rules {
-        vault,
-        hrefs: notes
-            .iter()
-            .zip(&anchors)
-            .map(|(note, anchor)| (note.path.clone(), format!("#{}", document::href_of(anchor))))
-            .collect(),
-        titles: document::titles_of(notes),
-        out_of_reach: HashSet::new(),
-        copy_attachments,
-        web_pictures,
-        keep_tag_line: options.keep_tag_line,
-        sections: notes.len() > 1,
-    };
+    let (anchors, rules) =
+        document::rules_of_one_document(vault, notes, options, copy_attachments, web_pictures);
     let mut body = String::new();
     for (note, anchor) in notes.iter().zip(&anchors) {
         body.push_str(&section(note, anchor, &rules, collected)?);
     }
-    let (title, note) = match notes {
-        [note] => (note.title.as_str(), Some(note)),
-        _ => (input.name.as_deref().unwrap_or(DEFAULT_TITLE), None),
-    };
-    Ok(OnePage {
-        title: title.to_owned(),
-        note,
-        page: page(title, note, &body),
-    })
+    let (title, note) = document::title_of_one_document(notes, input);
+    let page = page(&title, note, &body);
+    Ok(OnePage { title, note, page })
 }
 
 /// A document per note, linking to each other.

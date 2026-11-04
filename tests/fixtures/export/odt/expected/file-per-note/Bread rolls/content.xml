@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0" xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0" xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0" xmlns:svg="urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0" xmlns:xlink="http://www.w3.org/1999/xlink" office:version="1.2">
+<office:automatic-styles>
+<style:style style:name="Table" style:family="table"><style:table-properties style:width="17cm" table:align="margins" fo:margin-top="0.1cm" fo:margin-bottom="0.3cm"/></style:style>
+<style:style style:name="Row" style:family="table-row"><style:table-row-properties fo:keep-together="always"/></style:style>
+<style:style style:name="Cell" style:family="table-cell"><style:table-cell-properties fo:padding="0.1cm" fo:border="0.5pt solid #d2d2d7"/></style:style>
+<style:style style:name="Heading_20_Cell" style:family="table-cell"><style:table-cell-properties fo:padding="0.1cm" fo:border="0.5pt solid #d2d2d7" fo:background-color="#f5f5f7"/></style:style>
+</office:automatic-styles>
+<office:body>
+<office:text>
+<text:h text:style-name="Heading_20_1" text:outline-level="1"><text:bookmark text:name="note-bread-rolls"/>Bread rolls</text:h>
+<text:p text:style-name="Text_20_body"><draw:frame draw:style-name="Picture" draw:name="Picture1" text:anchor-type="as-char" svg:width="5.292cm" svg:height="3.440cm"><draw:image xlink:href="Pictures/1.jpg" xlink:type="simple" xlink:show="embed" xlink:actuate="onLoad"/><svg:desc>Rolls on the tray</svg:desc></draw:frame></text:p>
+<table:table table:name="Table1" table:style-name="Table">
+<table:table-column table:number-columns-repeated="3"/>
+<table:table-header-rows>
+<table:table-row table:style-name="Row">
+<table:table-cell table:style-name="Heading_20_Cell"><text:p text:style-name="Table_20_Heading">Ingredient</text:p></table:table-cell>
+<table:table-cell table:style-name="Heading_20_Cell"><text:p text:style-name="Table_20_Heading_20_Right">Amount</text:p></table:table-cell>
+<table:table-cell table:style-name="Heading_20_Cell"><text:p text:style-name="Table_20_Heading_20_Center">Note</text:p></table:table-cell>
+</table:table-row>
+</table:table-header-rows>
+<table:table-row table:style-name="Row">
+<table:table-cell table:style-name="Cell"><text:p text:style-name="Table_20_Contents">Flour</text:p></table:table-cell>
+<table:table-cell table:style-name="Cell"><text:p text:style-name="Table_20_Right">500 g</text:p></table:table-cell>
+<table:table-cell table:style-name="Cell"><text:p text:style-name="Table_20_Center">type 700</text:p></table:table-cell>
+</table:table-row>
+<table:table-row table:style-name="Row">
+<table:table-cell table:style-name="Cell"><text:p text:style-name="Table_20_Contents">Water</text:p></table:table-cell>
+<table:table-cell table:style-name="Cell"><text:p text:style-name="Table_20_Right">320 g</text:p></table:table-cell>
+<table:table-cell table:style-name="Cell"><text:p text:style-name="Table_20_Center">cold</text:p></table:table-cell>
+</table:table-row>
+<table:table-row table:style-name="Row">
+<table:table-cell table:style-name="Cell"><text:p text:style-name="Table_20_Contents">Salt</text:p></table:table-cell>
+<table:table-cell table:style-name="Cell"><text:p text:style-name="Table_20_Right">10 g</text:p></table:table-cell>
+<table:table-cell table:style-name="Cell"><text:p text:style-name="Table_20_Center"></text:p></table:table-cell>
+</table:table-row>
+</table:table>
+<text:p text:style-name="Preformatted_20_Text">Bake at 230 °C for 20 minutes.</text:p>
+<text:p text:style-name="Preformatted_20_Text">Indented code is code too.</text:p>
+</office:text>
+</office:body>
+</office:document-content>

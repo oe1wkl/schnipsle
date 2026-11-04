@@ -14,8 +14,10 @@
 
 Several notes: the tests use the order of this table. As one document every section starts with its title: `packing-list.md`, which has no level-1 heading, gets `# Packing list for Field Day`; the others start with their own (3).
 
-Reports expected for all six notes (12): the missing picture `attachments/00/0000…0000.png` and the wiki link to "Logbook 2025" in `antenna-tuner.md`; for formats other than a folder export, the PDF attachment not included; for PDF and ODT, the picture on the web shown as a link.
+Reports expected for all six notes (12): the missing picture `attachments/00/0000…0000.png` and the wiki link to "Logbook 2025" in `antenna-tuner.md`; for formats other than a folder export, the PDF attachment not included; for PDF and ODT, the picture on the web shown as a link; for a PDF per note, links to the other PDFs as text (ADR-0023).
 
 `html/expected/` holds the HTML export (`crates/export/tests/html.rs`): `single-file/` each note alone with its report, `one-document/` all six in one file holding its pictures, `folder/` all six in one document with copies of the attachments, `file-per-note/` a document per note with copies. `copied.txt` lists the copies, which the test compares with the vault.
 
 `pdf/expected/` holds what the PDF export hands to the printer (`crates/export/tests/pdf.rs`): for each PDF its HTML page and a `.job.txt` with title, paper, margin and dates, and the report. `one-document/` is all six notes in one PDF, `file-per-note/` a PDF per note, where links to notes in the other PDFs become text and are reported as `noteInOtherFile`. `crates/apple/tests/pdf.rs` prints `one-document/all.html` for real.
+
+`odt/expected/` holds the ODT export (`crates/export/tests/odt.rs`): for each file `content.xml`, `meta.xml`, `manifest.xml` and `files.txt`, the size of its other parts, in `one-document/all/` for all six notes and `file-per-note/<title>/` for a file each, plus `styles-a4.xml` and each layout's report. Links between the files of `file-per-note/` stay links, to `../<title>.odt`. `cargo test -p schnipsle-export --test odt -- --ignored` has LibreOffice convert all of them, and a note with more of the dialect, to PDF and text (`SOFFICE` names the program, `SCHNIPSLE_ODT_KEEP` a folder that keeps the results); CI runs this in a job of its own.

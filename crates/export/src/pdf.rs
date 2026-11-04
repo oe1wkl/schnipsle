@@ -9,8 +9,6 @@ use std::fs;
 use std::io;
 use std::path::Path;
 
-use schnipsle_core::dates::parse_rfc3339;
-use schnipsle_core::front_matter;
 use schnipsle_core::vault::{Result, Vault};
 
 use crate::document::{self, Collected, Rules, Source};
@@ -73,10 +71,7 @@ impl<P: Printer> PdfExporter<P> {
             Paper::A4 => (210.0 * MM, 297.0 * MM),
             Paper::Letter => (612.0, 792.0),
         };
-        let date = |key| {
-            note.and_then(|n| front_matter::get(&n.text, key))
-                .and_then(|value| parse_rfc3339(&value))
-        };
+        let date = |key| note.and_then(|note| document::date_of(note, key));
         let mut pdf = self.printer.print(PrintJob {
             html,
             width,
