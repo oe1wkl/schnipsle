@@ -203,3 +203,32 @@ export interface ImportOutcome {
   /** Names in the trash of the notes moved there. */
   trashed: string[];
 }
+
+/** A format `export_formats` offers (schnipsle-export `Format`). */
+export type ExportFormat = "html" | "pdf" | "odt";
+/** Where the notes go (schnipsle-export `Layout`). */
+export type ExportLayout = "singleFile" | "folder" | "filePerNote";
+/** The paper of a format with pages (schnipsle-export `Paper`). */
+export type ExportPaper = "a4" | "letter";
+/** What happened to a link, picture or note (schnipsle-export `ProblemKind`). */
+export type ExportProblemKind =
+  | "noteNotRead"
+  | "pictureMissing"
+  | "webPictureAsLink"
+  | "attachmentNotIncluded"
+  | "noteNotExported"
+  | "noteInOtherFile";
+/** One thing an export could not carry over (schnipsle-export `Problem`). */
+export interface ExportProblem {
+  path: string;
+  title: string;
+  kind: ExportProblemKind;
+  target: string;
+}
+/** What `export_notes` returns (schnipsle-export `Report`). */
+export interface ExportReport {
+  files: string[];
+  /** Those of `files` that got a number, as their name was already taken. */
+  numbered: string[];
+  problems: ExportProblem[];
+}

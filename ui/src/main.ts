@@ -7,6 +7,7 @@ import { listen } from "@tauri-apps/api/event";
 
 import { asError, setStatus, ui } from "./dom";
 import { createEditor, type EditorMode, frontMatterLength, isPinned } from "./editor";
+import { createExport } from "./export";
 import { createImageCache, fileName } from "./images";
 import { createImport } from "./import";
 import { createImports } from "./imports";
@@ -48,6 +49,8 @@ let current: { path: string; hash: string; savedText: string; titleAtOpen: strin
 let trashShown: { key: string; path: string } | null = null;
 const images = createImageCache(() => current?.path ?? trashShown?.path ?? null);
 let listMode: "notes" | "trash" = "notes";
+/** The list's search hits in the trash, by path; never exported (ADR-0021). */
+let hitsInTrash = new Set<string>();
 let sortOrder: SortOrder = "modified";
 let lastTrashed: TrashedNote | null = null;
 let conflictHash: string | null | undefined; // set while the conflict banner shows
@@ -207,6 +210,7 @@ async function refreshList(): Promise<void> {
   let snippets = new Map<string, SnippetPart[]>();
   /** Search hits in the trash (`in:trash`): restored from the Trash view, not opened. */
   let inTrash = new Set<string>();
+  hitsInTrash = inTrash;
   try {
     switch (filter.kind) {
       case "all":
@@ -234,6 +238,7 @@ async function refreshList(): Promise<void> {
         entries = hits.map((h) => ({ ...h, available: true }));
         snippets = new Map(hits.map((h) => [h.path, h.snippet]));
         inTrash = new Set(hits.filter((h) => h.inTrash).map((h) => h.path));
+        hitsInTrash = inTrash;
         break;
       }
     }
@@ -296,16 +301,35 @@ function showFilter(filter: ListFilter): void {
   // Search results come best first, a smart folder has its own order.
   ui.sort.hidden = filter.kind === "search" || filter.kind === "smart";
   ui.listFilter.hidden = filter.kind === "all";
-  ui.listFilterText.textContent =
-    filter.kind === "tag"
-      ? filter.label
-      : filter.kind === "untagged"
-        ? "Untagged notes"
-        : filter.kind === "search"
-          ? `Search: ${filter.query}`
-          : filter.kind === "smart"
-            ? filter.folder.name
-            : "";
+  ui.listFilterText.textContent = listLabel(filter);
+}
+
+/** What the list shows, in words; empty for all notes. */
+function listLabel(filter: ListFilter): string {
+  switch (filter.kind) {
+    case "tag":
+      return filter.label;
+    case "untagged":
+      return "Untagged notes";
+    case "search":
+      return `Search: ${filter.query}`;
+    case "smart":
+      return filter.folder.name;
+    case "all":
+      return "";
+  }
+}
+
+/** The title of one document made of the list's notes (ADR-0021 rule 3). */
+function listName(filter: ListFilter): string | null {
+  switch (filter.kind) {
+    case "search":
+      return filter.query;
+    case "all":
+      return null;
+    default:
+      return listLabel(filter);
+  }
 }
 
 /** A search snippet with the matching words emphasized. */
@@ -1188,12 +1212,44 @@ const imports = createImports({
   },
 });
 
-// File menu (desktop): same actions as the buttons, plus Import… and Imports….
+const exporter = createExport({
+  vaultOpen: () => vaultIsOpen,
+  // Saved first, as the export reads the files; saving can also rename the note.
+  selection: async () => {
+    await leaveNote();
+    await refreshList();
+    const note = current;
+    const filter = sidebar.filter();
+    return {
+      note: note && {
+        path: note.path,
+        title: entries.find((e) => e.path === note.path)?.title ?? note.titleAtOpen,
+        unsaved: isDirty() || conflictHash !== undefined,
+      },
+      list:
+        listMode === "trash"
+          ? null
+          : {
+              notes: entries.filter((e) => !hitsInTrash.has(e.path)).map((e) => e.path),
+              inTrash: hitsInTrash.size,
+              name: listName(filter),
+              label: listLabel(filter),
+            },
+    };
+  },
+  openNote: (path, title) => {
+    showView("list");
+    void openNote({ path, title, modifiedMs: 0, available: true, pinned: false });
+  },
+});
+
+// File menu (desktop): same actions as the buttons, plus Import…, Imports… and Export….
 void listen<string>("menu", (event) => {
   if (event.payload === "open-vault") ui.pick.click();
   else if (event.payload === "new-note" && !ui.newNote.disabled) ui.newNote.click();
   else if (event.payload === "import") importer.open();
   else if (event.payload === "imports") imports.open();
+  else if (event.payload === "export") void exporter.open();
 });
 
 /** Runs a check after any save in progress, so a save's own echo is not mistaken for a change. */

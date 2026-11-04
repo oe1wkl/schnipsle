@@ -23,10 +23,11 @@ use serde::{Deserialize, Serialize};
 
 pub use html::HtmlExporter;
 pub use odt::OdtExporter;
+pub use output::{check_target, suggested_file_name};
 pub use pdf::{PdfExporter, PrintJob, Printer};
 
 /// A format an [`Exporter`] writes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Format {
     /// HTML with its own style sheet.
@@ -35,6 +36,18 @@ pub enum Format {
     Pdf,
     /// `OpenDocument` text.
     Odt,
+}
+
+impl Format {
+    /// The extension of a file in this format.
+    #[must_use]
+    pub const fn extension(self) -> &'static str {
+        match self {
+            Self::Html => "html",
+            Self::Pdf => "pdf",
+            Self::Odt => "odt",
+        }
+    }
 }
 
 /// What to export (ADR-0021 rule 3).
@@ -92,6 +105,9 @@ pub struct Options {
 pub struct Report {
     /// The files written, relative to the folder they went to, with `/`.
     pub files: Vec<String>,
+    /// Those of `files` that got a number, as their name was already taken: by
+    /// something in the folder, which stays, or by another note of this export.
+    pub numbered: Vec<String>,
     /// What did not make it into the export as it is in the vault.
     pub problems: Vec<Problem>,
 }
@@ -141,4 +157,39 @@ pub trait Exporter {
     /// # Errors
     /// I/O errors while writing; files written before stay.
     fn export(&self, vault: &Vault, input: &Input, options: &Options, to: &Path) -> Result<Report>;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The arguments as `ui/src/export.ts` sends them.
+    #[test]
+    fn the_dialog_s_choices_are_understood() {
+        let format: Format = serde_json::from_str(r#""odt""#).unwrap();
+        assert_eq!(format, Format::Odt);
+        let input: Input =
+            serde_json::from_str(r##"{"notes": ["a.md", "b.md"], "name": "#tuner"}"##).unwrap();
+        assert_eq!(input.notes, ["a.md", "b.md"]);
+        assert_eq!(input.name.as_deref(), Some("#tuner"));
+        let options: Options = serde_json::from_str(
+            r#"{"layout": "filePerNote", "keepTagLine": true, "paper": "letter"}"#,
+        )
+        .unwrap();
+        assert_eq!(options.layout, Layout::FilePerNote);
+        assert!(options.keep_tag_line);
+        assert_eq!(options.paper, Paper::Letter);
+        let options: Options = serde_json::from_str(
+            r#"{"layout": "singleFile", "keepTagLine": false, "paper": "a4"}"#,
+        )
+        .unwrap();
+        assert_eq!(options.layout, Layout::SingleFile);
+        assert_eq!(options.paper, Paper::A4);
+    }
+
+    #[test]
+    fn formats_are_named_as_the_dialog_expects() {
+        let names = serde_json::to_string(&[Format::Html, Format::Pdf, Format::Odt]).unwrap();
+        assert_eq!(names, r#"["html","pdf","odt"]"#);
+    }
 }

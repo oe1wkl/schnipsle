@@ -571,6 +571,29 @@ button.danger {
   background: var(--bg);
   color: var(--fg);
 }
+.export-dialog {
+  width: min(600px, calc(100vw - 32px));
+}
+.export-choose {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.export-choose fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+.export-choose legend {
+  margin-bottom: 4px;
+  padding: 0;
+}
+.export-choose .import-box {
+  margin: 0;
+}
 .import-help {
   font-size: 13px;
 }

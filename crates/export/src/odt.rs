@@ -58,6 +58,7 @@ impl Exporter for OdtExporter {
             }
         }
         report.problems.append(&mut collected.problems);
+        report.numbered.append(&mut collected.numbered);
         Ok(report)
     }
 }
@@ -86,7 +87,9 @@ fn one_document(
         return Ok(to.file_name().map(|n| n.to_string_lossy().into_owned()));
     }
     fs::create_dir_all(to)?;
-    let name = Names::new(to).free(&title, "odt");
+    let mut names = Names::new(to);
+    let name = names.free(&title, "odt");
+    collected.numbered.append(&mut names.numbered);
     output::write_new(&to.join(&name), &odt)?;
     Ok(Some(name))
 }
@@ -107,6 +110,7 @@ fn file_per_note(
         .iter()
         .map(|note| names.free(&note.title, "odt"))
         .collect();
+    collected.numbered.append(&mut names.numbered);
     let rules = Rules {
         vault,
         hrefs: notes
