@@ -1,6 +1,6 @@
 # ADR-0024: PDF dates are corrected in the file
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-04
 - Deciders: Willi Kraml
 - Related: F-06, ADR-0021, ADR-0022, [spike](../spikes/pdf-print.md)
