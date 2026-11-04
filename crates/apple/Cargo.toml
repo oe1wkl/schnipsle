@@ -28,18 +28,49 @@ objc2-foundation = { version = "0.3", default-features = false, features = [
   "NSFilePresenter",
   "NSFileVersion",
   "NSOperation",
+  "NSRunLoop",
   "NSString",
   "NSURL",
   "NSValue",
 ] }
 
+# PDF through the print path (ADR-0022).
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-app-kit = { version = "0.3", default-features = false, features = [
+  "std",
+  "NSGraphics",
+  "NSPrintInfo",
+  "NSPrintOperation",
+  "NSResponder",
+  "NSView",
+  "NSWindow",
+] }
+objc2-web-kit = { version = "0.3", default-features = false, features = [
+  "std",
+  "block2",
+  "objc2-app-kit",
+  "WKNavigation",
+  "WKNavigationDelegate",
+  "WKWebView",
+  "WKWebViewConfiguration",
+  "WKWebpagePreferences",
+] }
+tempfile.workspace = true
+
 [dev-dependencies]
 tempfile.workspace = true
 
-# Only for examples/pdf_spike.rs; already in the lock file through the Tauri shell.
+# Only for examples/pdf_spike.rs and tests/pdf.rs; already in the lock file through the Tauri shell.
 [target.'cfg(target_os = "macos")'.dev-dependencies]
 objc2-app-kit = "0.3"
+objc2-pdf-kit = "0.3"
 objc2-web-kit = "0.3"
+schnipsle-export.workspace = true
+
+# The print path runs on the main thread, which the test harness keeps to itself.
+[[test]]
+name = "pdf"
+harness = false
 
 # Not `workspace = true`: the workspace forbids `unsafe`, but calling Objective-C
 # needs it (ADR-0015). Stricter rules than elsewhere make up for it.

@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 
 use schnipsle_core::vault::Vault;
 use schnipsle_export::{
-    Exporter, Format, HtmlExporter, Input, Layout, Options, ProblemKind, Report,
+    Exporter, Format, HtmlExporter, Input, Layout, Options, Paper, ProblemKind, Report,
 };
 
 /// The notes in the order of the README's table.
@@ -41,6 +41,7 @@ fn options(layout: Layout) -> Options {
     Options {
         layout,
         keep_tag_line: false,
+        paper: Paper::A4,
     }
 }
 
@@ -186,6 +187,7 @@ fn the_final_tag_line_is_left_out_unless_kept() {
     let keep = Options {
         layout: Layout::SingleFile,
         keep_tag_line: true,
+        paper: Paper::A4,
     };
     let (html, _) = export_note(&one("welcome.md"), keep);
     assert!(html.contains("#schnipsle #demo"));

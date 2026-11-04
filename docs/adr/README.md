@@ -36,3 +36,5 @@ This folder records every significant architectural decision of the project, one
 | [0020](0020-imported-notes-show-their-title.md) | Imported notes show the title they are named by | Accepted | 2026-10-31 |
 | [0021](0021-what-an-exported-note-looks-like.md) | What an exported note looks like | Accepted | 2026-11-01 |
 | [0022](0022-pdf-through-the-print-path.md) | PDF through the print path on macOS | Accepted | 2026-11-02 |
+| [0023](0023-links-between-pdf-files.md) | Links between separate PDF files become text | Accepted | 2026-11-03 |
+| [0024](0024-pdf-dates-in-the-file.md) | PDF dates are corrected in the file | Proposed | 2026-11-04 |

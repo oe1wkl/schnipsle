@@ -6,7 +6,7 @@
 //! point where they should in this export, or are text; raw HTML is clean
 //! ([`crate::raw_html`]); math is code; a task item starts with ☐ or ☑.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use base64::Engine as _;
 use comrak::nodes::{
@@ -58,6 +58,8 @@ pub(crate) struct Rules<'r> {
     pub hrefs: HashMap<String, String>,
     /// Exported notes by their normalized title; the first of several wins.
     pub titles: HashMap<String, String>,
+    /// Notes in other files of this export that a link cannot reach, by path.
+    pub out_of_reach: HashSet<String>,
     /// Attachments are copied next to the document, else pictures are embedded.
     pub copy_attachments: bool,
     /// Pictures on the web stay pictures, else they become links.
@@ -338,8 +340,17 @@ impl<'a> Preparer<'a, '_> {
         if let Some(href) = self.rules.hrefs.get(path) {
             set_url(node, href);
         } else {
-            self.problem(ProblemKind::NoteNotExported, url);
+            self.problem(self.no_link_to(Some(path)), url);
             unwrap(node);
+        }
+    }
+
+    /// Why a link to the note at `path` has no target.
+    fn no_link_to(&self, path: Option<&str>) -> ProblemKind {
+        if path.is_some_and(|path| self.rules.out_of_reach.contains(path)) {
+            ProblemKind::NoteInOtherFile
+        } else {
+            ProblemKind::NoteNotExported
         }
     }
 
@@ -365,12 +376,8 @@ impl<'a> Preparer<'a, '_> {
     }
 
     fn wiki_link(&mut self, node: &'a AstNode<'a>, title: &str) {
-        let href = self
-            .rules
-            .titles
-            .get(&normalize(title))
-            .and_then(|path| self.rules.hrefs.get(path))
-            .cloned();
+        let path = self.rules.titles.get(&normalize(title));
+        let href = path.and_then(|path| self.rules.hrefs.get(path)).cloned();
         if let Some(url) = href {
             let link = NodeLink {
                 url,
@@ -378,7 +385,8 @@ impl<'a> Preparer<'a, '_> {
             };
             node.data_mut().value = NodeValue::Link(Box::new(link));
         } else {
-            self.problem(ProblemKind::NoteNotExported, title);
+            let kind = self.no_link_to(path.map(String::as_str));
+            self.problem(kind, title);
             unwrap(node);
         }
     }
@@ -597,6 +605,7 @@ mod tests {
             vault: &vault,
             hrefs: HashMap::new(),
             titles: HashMap::new(),
+            out_of_reach: HashSet::new(),
             copy_attachments,
             web_pictures,
             keep_tag_line: false,

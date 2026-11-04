@@ -9,7 +9,7 @@ Work as a professional software developer: follow the decisions below, keep docs
 | File                       | What it holds                                                                                               |
 | -------------------------- | ----------------------------------------------------------------------------------------------------------- |
 | `docs/roadmap.md`          | Current milestone, open tasks, what is next                                                                 |
-| `docs/adr/`                | Architecture decisions (ADR-0001 … 0022). Do not contradict an accepted ADR; propose a new one              |
+| `docs/adr/`                | Architecture decisions (ADR-0001 … 0024). Do not contradict an accepted ADR; propose a new one              |
 | `docs/format.md`           | Vault file format (normative): notes, tags §5.3, music §5.6, chords §5.7, history, trash, writing rules §10 |
 | `docs/design/hld.md`       | High-level design snapshot (requirements F-xx / N-xx, architecture)                                         |
 | `docs/spikes/ios-vault.md` | iOS findings, including the iOS 27 build pitfalls                                                           |
@@ -20,7 +20,7 @@ Work as a professional software developer: follow the decisions below, keep docs
 
 ```text
 crates/core/                     schnipsle-core: vault access, tags, (later) index, query. No UI deps
-crates/apple/                    schnipsle-apple: NSFileCoordinator and NSFilePresenter via objc2, ADR-0015
+crates/apple/                    schnipsle-apple: NSFileCoordinator, NSFilePresenter, PDF printing via objc2, ADR-0015
 crates/import/, crates/export/   importer and exporter crates
 crates/tauri-plugin-vault-access iOS folder picker + security-scoped bookmark (Swift in ios/)
 src-tauri/                       Tauri 2 app shell: commands (lib.rs), platform glue (vault_location.rs)
