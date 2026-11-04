@@ -14,12 +14,16 @@ use comrak::nodes::{
 };
 use comrak::{Arena, parse_document};
 use schnipsle_core::attachments::LinkTarget;
+use schnipsle_core::dates::parse_rfc3339;
+use schnipsle_core::front_matter;
+use schnipsle_core::names::slug;
 use schnipsle_core::tags::{extract_tags, normalize, parse_options};
 use schnipsle_core::vault::{Vault, VaultError};
 use unicode_normalization::UnicodeNormalization;
 
+use crate::output;
 use crate::raw_html;
-use crate::{Problem, ProblemKind, Report};
+use crate::{Input, Options, Problem, ProblemKind, Report};
 
 /// A note to export.
 pub(crate) struct Source {
@@ -67,6 +71,62 @@ pub(crate) struct Rules<'r> {
     pub keep_tag_line: bool,
     /// Each note is a section of one document, which starts with its title.
     pub sections: bool,
+}
+
+/// The title of one document of several notes without a name of its own.
+const DEFAULT_TITLE: &str = "Notes";
+
+/// The anchors of `notes` in one document, and the rules that link to them.
+pub(crate) fn rules_of_one_document<'r>(
+    vault: &'r Vault,
+    notes: &[Source],
+    options: Options,
+    copy_attachments: bool,
+    web_pictures: bool,
+) -> (Vec<String>, Rules<'r>) {
+    let mut used = HashSet::new();
+    let anchors: Vec<String> = notes
+        .iter()
+        .map(|note| output::free_anchor(&mut used, &slug(&note.title)))
+        .collect();
+    let rules = Rules {
+        vault,
+        hrefs: notes
+            .iter()
+            .zip(&anchors)
+            .map(|(note, anchor)| (note.path.clone(), format!("#{}", href_of(anchor))))
+            .collect(),
+        titles: titles_of(notes),
+        out_of_reach: HashSet::new(),
+        copy_attachments,
+        web_pictures,
+        keep_tag_line: options.keep_tag_line,
+        sections: notes.len() > 1,
+    };
+    (anchors, rules)
+}
+
+/// The title of one document of `notes`, and the note if it is the only one: a
+/// document of several has no dates of its own.
+pub(crate) fn title_of_one_document<'n>(
+    notes: &'n [Source],
+    input: &Input,
+) -> (String, Option<&'n Source>) {
+    match notes {
+        [note] => (note.title.clone(), Some(note)),
+        _ => (
+            input
+                .name
+                .clone()
+                .unwrap_or_else(|| DEFAULT_TITLE.to_owned()),
+            None,
+        ),
+    }
+}
+
+/// A date of the note's front matter, in milliseconds since the Unix epoch.
+pub(crate) fn date_of(note: &Source, key: &str) -> Option<i64> {
+    front_matter::get(&note.text, key).and_then(|value| parse_rfc3339(&value))
 }
 
 /// The notes by their normalized title, for [`Rules::titles`].

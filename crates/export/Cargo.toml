@@ -12,10 +12,12 @@ publish.workspace = true
 [dependencies]
 base64.workspace = true
 comrak.workspace = true
+imagesize = "0.14"
 percent-encoding.workspace = true
 schnipsle-core.workspace = true
 serde.workspace = true
 unicode-normalization.workspace = true
+zip.workspace = true
 
 [dev-dependencies]
 serde_json.workspace = true

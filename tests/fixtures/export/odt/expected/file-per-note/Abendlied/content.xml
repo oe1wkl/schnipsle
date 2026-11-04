@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0" xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0" xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0" xmlns:svg="urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0" xmlns:xlink="http://www.w3.org/1999/xlink" office:version="1.2">
+<office:automatic-styles>
+<style:style style:name="Table" style:family="table"><style:table-properties style:width="17cm" table:align="margins" fo:margin-top="0.1cm" fo:margin-bottom="0.3cm"/></style:style>
+<style:style style:name="Row" style:family="table-row"><style:table-row-properties fo:keep-together="always"/></style:style>
+<style:style style:name="Cell" style:family="table-cell"><style:table-cell-properties fo:padding="0.1cm" fo:border="0.5pt solid #d2d2d7"/></style:style>
+<style:style style:name="Heading_20_Cell" style:family="table-cell"><style:table-cell-properties fo:padding="0.1cm" fo:border="0.5pt solid #d2d2d7" fo:background-color="#f5f5f7"/></style:style>
+</office:automatic-styles>
+<office:body>
+<office:text>
+<text:h text:style-name="Heading_20_1" text:outline-level="1"><text:bookmark text:name="note-abendlied"/>Abendlied</text:h>
+<text:p text:style-name="Preformatted_20_Text">{title: Abendlied}<text:line-break/>{key: G}<text:line-break/><text:line-break/>{start_of_verse}<text:line-break/>Der [G]Mond ist aufge[D]gangen,<text:line-break/>die [G]goldnen Sternlein [C]pran[D]gen<text:line-break/>{end_of_verse}</text:p>
+<text:p text:style-name="Preformatted_20_Text">X:1<text:line-break/>T:Kanon<text:line-break/>M:4/4<text:line-break/>L:1/4<text:line-break/>K:D<text:line-break/>f2 e2 | d2 c2 |</text:p>
+<text:p text:style-name="Preformatted_20_Text">graph LR<text:line-break/><text:s text:c="2"/>Rig --&gt; Tuner --&gt; Antenna</text:p>
+<text:p text:style-name="Text_20_body">Inline math <text:span text:style-name="Source_20_Text">$E = mc^2$</text:span> and a block:</text:p>
+<text:p text:style-name="Preformatted_20_Text">$$<text:line-break/>f = \frac{c}{\lambda}<text:line-break/>$$</text:p>
+</office:text>
+</office:body>
+</office:document-content>

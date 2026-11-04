@@ -5,7 +5,7 @@
 
 use std::path::Path;
 
-use schnipsle_export::{Exporter as _, Format, HtmlExporter, Input, Options, Report};
+use schnipsle_export::{Exporter as _, Format, HtmlExporter, Input, OdtExporter, Options, Report};
 use tauri::{AppHandle, State};
 
 use crate::{AppState, CmdResult, with_vault};
@@ -24,6 +24,7 @@ pub async fn export_notes(
         let to = Path::new(&to);
         Ok(match format {
             Format::Html => HtmlExporter.export(vault, &input, &options, to)?,
+            Format::Odt => OdtExporter.export(vault, &input, &options, to)?,
             Format::Pdf => export_pdf(&app, vault, &input, options, to)?,
         })
     })
