@@ -3132,7 +3132,7 @@ dependencies = [
 name = "schnipsle-export"
 version = "0.1.0"
 dependencies = [
- "base64 0.22.1",
+ "base64 0.23.1",
  "comrak",
  "percent-encoding",
  "schnipsle-core",
@@ -3146,7 +3146,7 @@ dependencies = [
 name = "schnipsle-import"
 version = "0.1.0"
 dependencies = [
- "base64 0.22.1",
+ "base64 0.23.1",
  "htmd",
  "percent-encoding",
  "schnipsle-core",
