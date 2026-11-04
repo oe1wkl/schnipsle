@@ -16,6 +16,7 @@ use schnipsle_core::vault::{Result, Vault};
 use crate::document::{self, Collected, Rules, Source};
 use crate::html;
 use crate::output::{self, Names};
+use crate::pdf_dates;
 use crate::{Exporter, Format, Input, Layout, Options, Paper, Report};
 
 /// Points per millimetre.
@@ -37,11 +38,6 @@ pub struct PrintJob {
     pub margin: f64,
     /// The title for the PDF's metadata.
     pub title: String,
-    /// The note's creation time in milliseconds since the Unix epoch, for a
-    /// document of one note that has it.
-    pub created_ms: Option<i64>,
-    /// The note's modification time, likewise.
-    pub modified_ms: Option<i64>,
 }
 
 /// Prints HTML to a PDF. Blocks until it is done, so an implementation must not
@@ -81,15 +77,15 @@ impl<P: Printer> PdfExporter<P> {
             note.and_then(|n| front_matter::get(&n.text, key))
                 .and_then(|value| parse_rfc3339(&value))
         };
-        self.printer.print(PrintJob {
+        let mut pdf = self.printer.print(PrintJob {
             html,
             width,
             height,
             margin: MARGIN,
             title: title.to_owned(),
-            created_ms: date("created"),
-            modified_ms: date("modified"),
-        })
+        })?;
+        pdf_dates::set_dates(&mut pdf, date("created"), date("modified"));
+        Ok(pdf)
     }
 
     /// One PDF of all `notes`, and its file name. Attachments never come along

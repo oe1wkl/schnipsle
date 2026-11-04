@@ -78,8 +78,6 @@ mod printing {
                 height: job.height,
                 margin: job.margin,
                 title: job.title,
-                created_ms: job.created_ms,
-                modified_ms: job.modified_ms,
             };
             let (sender, receiver) = mpsc::channel();
             self.0

@@ -3,9 +3,9 @@
 //! in `docs/spikes/pdf-print.md`).
 //!
 //! [`print_pdf`] loads the page into a web view that is never shown, with
-//! JavaScript off, and prints it to a temporary file with no panels. `PDFKit` then
-//! sets the title and dates. Everything happens in callbacks on the main thread,
-//! which must keep running; the result arrives through a callback there too.
+//! JavaScript off, and prints it to a temporary file with no panels. Everything
+//! happens in callbacks on the main thread, which must keep running; the result
+//! arrives through a callback there too.
 
 use std::cell::{Cell, OnceCell};
 use std::ffi::c_void;
@@ -22,14 +22,7 @@ use objc2_app_kit::{
     NSBackingStoreType, NSPrintInfo, NSPrintJobSavingURL, NSPrintOperation, NSPrintSaveJob,
     NSPrintingPaginationMode, NSWindow, NSWindowStyleMask,
 };
-use objc2_foundation::{
-    NSDate, NSError, NSMutableDictionary, NSObject, NSPoint, NSRect, NSRunLoop, NSSize, NSString,
-    NSURL,
-};
-use objc2_pdf_kit::{
-    PDFDocument, PDFDocumentCreationDateAttribute, PDFDocumentModificationDateAttribute,
-    PDFDocumentTitleAttribute,
-};
+use objc2_foundation::{NSError, NSObject, NSPoint, NSRect, NSRunLoop, NSSize, NSString, NSURL};
 use objc2_web_kit::{WKNavigation, WKNavigationDelegate, WKWebView, WKWebViewConfiguration};
 
 /// A page to print. Lengths are in points, 1/72 of an inch.
@@ -46,10 +39,6 @@ pub struct PdfPage {
     pub margin: f64,
     /// The PDF's title.
     pub title: String,
-    /// The PDF's creation date in milliseconds since the Unix epoch; none if `None`.
-    pub created_ms: Option<i64>,
-    /// The PDF's modification date, likewise.
-    pub modified_ms: Option<i64>,
 }
 
 type Done = Box<dyn FnOnce(io::Result<Vec<u8>>)>;
@@ -219,41 +208,19 @@ impl PrintJob {
         self.ivars().dir.path().join("printed.pdf")
     }
 
-    /// The PDF with its title and dates. Success of the print operation does not
-    /// mean there is a file, so a missing one counts as a failure.
+    /// The PDF. Success of the print operation does not mean there is a file, so
+    /// a missing one counts as a failure.
     fn result(&self) -> io::Result<Vec<u8>> {
         let file = self.printed_file();
         if !file.is_file() {
             return Err(failed("printing wrote no file"));
         }
-        // SAFETY: a valid file URL; PDFKit returns `None` if it cannot read it.
-        let document = unsafe { PDFDocument::initWithURL(PDFDocument::alloc(), &file_url(&file)) };
-        let document = document.ok_or_else(|| failed("printing wrote no PDF"))?;
-        let page = &self.ivars().page;
-        let attributes = NSMutableDictionary::<AnyObject, AnyObject>::new();
-        // SAFETY: the system's constant.
-        let key = unsafe { PDFDocumentTitleAttribute };
-        set_attribute(&attributes, key, &NSString::from_str(&page.title));
-        // SAFETY: the system's constants.
-        let dates = unsafe {
-            [
-                (PDFDocumentCreationDateAttribute, page.created_ms),
-                (PDFDocumentModificationDateAttribute, page.modified_ms),
-            ]
-        };
-        for (key, ms) in dates {
-            if let Some(ms) = ms {
-                #[allow(clippy::cast_precision_loss)]
-                let date = NSDate::dateWithTimeIntervalSince1970(ms as f64 / 1000.0);
-                set_attribute(&attributes, key, &date);
-            }
+        let bytes = std::fs::read(file)?;
+        if bytes.starts_with(b"%PDF") {
+            Ok(bytes)
+        } else {
+            Err(failed("printing wrote no PDF"))
         }
-        // SAFETY: PDFKit copies the dictionary, of keys and value types it documents.
-        unsafe { document.setDocumentAttributes(Some(&attributes)) };
-        // SAFETY: a plain getter on a valid document.
-        let data = unsafe { document.dataRepresentation() };
-        data.map(|data| data.to_vec())
-            .ok_or_else(|| failed("PDFKit could not write the PDF"))
     }
 
     /// Reports `result`, the first time. Called from the callbacks of the objects
@@ -273,17 +240,6 @@ impl PrintJob {
 
 fn file_url(path: &std::path::Path) -> Retained<NSURL> {
     NSURL::fileURLWithPath(&NSString::from_str(&path.to_string_lossy()))
-}
-
-fn set_attribute(
-    attributes: &NSMutableDictionary<AnyObject, AnyObject>,
-    key: &NSString,
-    value: &NSObject,
-) {
-    let value: &AnyObject = value.as_ref();
-    // SAFETY: the dictionary is typed for any object, `NSString` keys copy, and
-    // PDFKit reads each attribute as the type this module sets.
-    unsafe { attributes.setObject_forKey(value, ProtocolObject::from_ref(key)) };
 }
 
 /// Prints `page` to a PDF, and calls `done` with its bytes on the main thread.

@@ -37,6 +37,17 @@ impl Printer for &FakePrinter {
     }
 }
 
+/// Prints what a Mac prints: a file with an Info dictionary holding the time of printing.
+struct DatedPrinter;
+
+const PRINTED: &str = "%PDF-1.3\n9 0 obj\n<< /Title (x) /CreationDate (D:20261104141857Z00'00') /ModDate (D:20261104141857Z00'00') >>\nendobj\ntrailer\n<< /Info 9 0 R >>\n";
+
+impl Printer for DatedPrinter {
+    fn print(&self, _job: PrintJob) -> io::Result<Vec<u8>> {
+        Ok(PRINTED.as_bytes().to_vec())
+    }
+}
+
 struct FailingPrinter;
 
 impl Printer for FailingPrinter {
@@ -78,8 +89,8 @@ fn pretty(report: &Report) -> Vec<u8> {
 fn add_job(actual: &mut BTreeMap<String, Vec<u8>>, name: &str, job: &PrintJob) {
     actual.insert(format!("{name}.html"), job.html.clone().into_bytes());
     let text = format!(
-        "title: {}\npaper: {:.0} x {:.0}\nmargin: {:.0}\ncreated: {:?}\nmodified: {:?}\n",
-        job.title, job.width, job.height, job.margin, job.created_ms, job.modified_ms
+        "title: {}\npaper: {:.0} x {:.0}\nmargin: {:.0}\n",
+        job.title, job.width, job.height, job.margin
     );
     actual.insert(format!("{name}.job.txt"), text.into_bytes());
 }
@@ -193,11 +204,10 @@ fn nothing_loads_from_the_web_and_attachments_stay_behind() {
     let jobs = printer.jobs.borrow();
     assert!(!jobs[0].html.contains("<img src=\"http"));
     assert!(!jobs[0].html.contains("attachments/"));
-    assert!(jobs[0].created_ms.is_some());
 }
 
 #[test]
-fn a_document_of_several_notes_has_no_dates_and_the_title_of_the_list() {
+fn a_document_of_several_notes_has_the_title_of_the_list() {
     let printer = FakePrinter::default();
     let dir = tempfile::tempdir().unwrap();
     PdfExporter::new(&printer)
@@ -210,8 +220,6 @@ fn a_document_of_several_notes_has_no_dates_and_the_title_of_the_list() {
         .unwrap();
     let jobs = printer.jobs.borrow();
     assert_eq!(jobs[0].title, "Samples");
-    assert_eq!(jobs[0].created_ms, None);
-    assert_eq!(jobs[0].modified_ms, None);
     assert!((jobs[0].width - 595.3).abs() < 0.1);
 }
 
@@ -255,6 +263,31 @@ fn links_to_notes_in_other_pdfs_become_text_and_are_reported() {
     let tuner = jobs.iter().find(|j| j.title == "Antenna tuner").unwrap();
     assert!(!tuner.html.contains("href=\"Welcome"));
     assert!(!tuner.html.contains(".pdf"));
+}
+
+#[test]
+fn a_single_note_gets_its_dates_and_several_keep_the_time_of_printing() {
+    let dir = tempfile::tempdir().unwrap();
+    let to = dir.path().join("a.pdf");
+    let exporter = PdfExporter::new(DatedPrinter);
+    let input = Input {
+        notes: vec!["welcome.md".to_owned()],
+        name: None,
+    };
+    exporter
+        .export(&vault(), &input, &options(Layout::SingleFile), &to)
+        .unwrap();
+    let pdf = fs::read_to_string(&to).unwrap();
+    assert!(
+        pdf.contains("/CreationDate (D:20261001070000+00'00')"),
+        "{pdf}"
+    );
+    assert!(pdf.contains("/ModDate (D:20261020163000+00'00')"), "{pdf}");
+
+    exporter
+        .export(&vault(), &all_notes(), &options(Layout::SingleFile), &to)
+        .unwrap();
+    assert_eq!(fs::read_to_string(&to).unwrap(), PRINTED);
 }
 
 #[test]

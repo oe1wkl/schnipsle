@@ -11,6 +11,7 @@ mod document;
 mod html;
 mod output;
 mod pdf;
+mod pdf_dates;
 mod raw_html;
 
 use std::path::Path;

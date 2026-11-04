@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
-//! The real print path (ADR-0022) with a small page, read back with `PDFKit`: pages,
-//! paper size, title, dates and links. Not in the test harness, as it needs the
-//! main thread.
+//! The real print path (ADR-0022), read back with `PDFKit`: pages, paper size, title,
+//! links, and with the exporter the dates of a note (ADR-0024). Not in the test
+//! harness, as it needs the main thread.
 
 // The blocks here hold only plain getters on valid objects, one after the other.
 #![allow(clippy::multiple_unsafe_ops_per_block)]
@@ -9,7 +9,11 @@
 #[cfg(target_os = "macos")]
 mod macos {
     use std::cell::RefCell;
+    use std::io;
+    use std::path::PathBuf;
     use std::rc::Rc;
+    use std::sync::mpsc;
+    use std::thread;
     use std::time::{Duration, Instant};
 
     use objc2::rc::Retained;
@@ -21,6 +25,11 @@ mod macos {
         PDFDocumentModificationDateAttribute, PDFDocumentTitleAttribute,
     };
     use schnipsle_apple::{PdfPage, print_pdf};
+    use schnipsle_core::dates::parse_rfc3339;
+    use schnipsle_core::vault::Vault;
+    use schnipsle_export::{
+        Exporter as _, Input, Layout, Options, Paper, PdfExporter, PrintJob, Printer,
+    };
 
     const HTML: &str = r##"<!doctype html><html><head><meta charset="utf-8"><style>
         section + section { break-before: page }
@@ -37,33 +46,47 @@ mod macos {
             height: 842.0,
             margin: 56.0,
             title: "Grüße & mehr".to_owned(),
-            created_ms: Some(1_767_225_600_000),
-            modified_ms: Some(1_770_000_000_000),
         }
     }
 
-    fn print(page: PdfPage) -> std::io::Result<Vec<u8>> {
+    fn run_loop_for_a_moment() {
+        NSRunLoop::currentRunLoop().runUntilDate(&NSDate::dateWithTimeIntervalSinceNow(0.02));
+    }
+
+    fn print(page: PdfPage) -> io::Result<Vec<u8>> {
         let result = Rc::new(RefCell::new(None));
         let slot = result.clone();
         print_pdf(page, move |r| *slot.borrow_mut() = Some(r));
         let start = Instant::now();
         while result.borrow().is_none() {
             assert!(start.elapsed() < Duration::from_secs(60), "no result");
-            NSRunLoop::currentRunLoop().runUntilDate(&NSDate::dateWithTimeIntervalSinceNow(0.02));
+            run_loop_for_a_moment();
         }
         result.borrow_mut().take().unwrap()
     }
 
     fn document(bytes: &[u8]) -> Retained<PDFDocument> {
         let data = NSData::with_bytes(bytes);
-        // SAFETY: valid data; `None` is handled by the caller's unwrap.
+        // SAFETY: valid data; `None` is handled by the unwrap.
         unsafe { PDFDocument::initWithData(PDFDocument::alloc(), &data) }.unwrap()
     }
 
-    fn pages_and_paper_and_metadata() {
+    fn title(document: &PDFDocument) -> String {
+        // SAFETY: plain getters on a valid document.
+        unsafe {
+            let attributes = document.documentAttributes().unwrap();
+            let title = attributes
+                .objectForKey(PDFDocumentTitleAttribute.as_ref())
+                .unwrap();
+            title.downcast::<NSString>().unwrap().to_string()
+        }
+    }
+
+    fn pages_and_paper_and_title_and_links() {
         let bytes = print(page(HTML)).unwrap();
         assert!(bytes.starts_with(b"%PDF"));
         let document = document(&bytes);
+        assert_eq!(title(&document), "Grüße & mehr");
         // SAFETY: plain getters on a valid document.
         unsafe {
             assert_eq!(document.pageCount(), 2);
@@ -72,30 +95,6 @@ mod macos {
             assert!((size.width - 595.0).abs() < 1.0, "{size:?}");
             assert!((size.height - 842.0).abs() < 1.0, "{size:?}");
             assert!(first.string().unwrap().to_string().contains("First"));
-
-            let attributes = document.documentAttributes().unwrap();
-            let get = |key: &NSString| attributes.objectForKey(key.as_ref()).unwrap();
-            let title = get(PDFDocumentTitleAttribute);
-            assert_eq!(
-                title.downcast::<NSString>().unwrap().to_string(),
-                "Grüße & mehr"
-            );
-            // Each date by itself in a failure: macOS versions differ in what they keep.
-            let date = |key: &NSString| {
-                let date = get(key).downcast::<NSDate>().unwrap();
-                date.timeIntervalSince1970()
-            };
-            let found = (
-                date(PDFDocumentCreationDateAttribute),
-                date(PDFDocumentModificationDateAttribute),
-            );
-            let now = NSDate::now().timeIntervalSince1970();
-            assert!(
-                (found.0 - 1_767_225_600.0).abs() < 1.0 && (found.1 - 1_770_000_000.0).abs() < 1.0,
-                "created and modified are {found:?}, printed at {now}"
-            );
-
-            // The web link and the link to the anchor stay.
             let kinds: Vec<String> = first
                 .annotations()
                 .iter()
@@ -114,15 +113,100 @@ mod macos {
         }
     }
 
-    /// The sample notes as the exporter prints them: a page each, the wide ones too.
-    fn the_samples_start_a_page_per_note() {
-        let golden = concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../../tests/fixtures/export/pdf/expected/one-document/all.html"
-        );
-        let html = std::fs::read_to_string(golden).unwrap();
-        let bytes = print(page(&html)).unwrap();
+    type Request = (PrintJob, mpsc::Sender<io::Result<Vec<u8>>>);
+
+    /// Hands the job to the main thread, as the app shell does.
+    struct MainThreadPrinter(mpsc::Sender<Request>);
+
+    impl Printer for MainThreadPrinter {
+        fn print(&self, job: PrintJob) -> io::Result<Vec<u8>> {
+            let (sender, receiver) = mpsc::channel();
+            self.0.send((job, sender)).unwrap();
+            receiver.recv().unwrap()
+        }
+    }
+
+    /// Exports `notes` of the sample vault on a thread and prints here.
+    fn export(notes: &[&str]) -> Vec<u8> {
+        let vault =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/export/vault");
+        let input = Input {
+            notes: notes.iter().map(|n| (*n).to_owned()).collect(),
+            name: Some("Samples".to_owned()),
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let to = dir.path().join("out.pdf");
+        let target = to.clone();
+        let (requests, jobs) = mpsc::channel();
+        let exporting = thread::spawn(move || {
+            let options = Options {
+                layout: Layout::SingleFile,
+                keep_tag_line: false,
+                paper: Paper::A4,
+            };
+            PdfExporter::new(MainThreadPrinter(requests))
+                .export(&Vault::open(vault).unwrap(), &input, &options, &target)
+                .unwrap();
+        });
+        let start = Instant::now();
+        while !exporting.is_finished() {
+            assert!(start.elapsed() < Duration::from_secs(60), "no result");
+            if let Ok((job, answer)) = jobs.try_recv() {
+                let page = PdfPage {
+                    html: job.html,
+                    width: job.width,
+                    height: job.height,
+                    margin: job.margin,
+                    title: job.title,
+                };
+                print_pdf(page, move |result| answer.send(result).unwrap());
+            }
+            run_loop_for_a_moment();
+        }
+        exporting.join().unwrap();
+        std::fs::read(&to).unwrap()
+    }
+
+    /// The dates of the note reach the file on every macOS, whatever `PDFKit` does.
+    fn a_note_keeps_its_dates() {
+        let bytes = export(&["welcome.md"]);
         let document = document(&bytes);
+        assert_eq!(title(&document), "Welcome");
+        // SAFETY: plain getters on a valid document.
+        let found = unsafe {
+            let attributes = document.documentAttributes().unwrap();
+            let date = |key: &NSString| {
+                let date = attributes.objectForKey(key.as_ref()).unwrap();
+                date.downcast::<NSDate>().unwrap().timeIntervalSince1970()
+            };
+            (
+                date(PDFDocumentCreationDateAttribute),
+                date(PDFDocumentModificationDateAttribute),
+            )
+        };
+        #[allow(clippy::cast_precision_loss)]
+        let seconds = |text| parse_rfc3339(text).unwrap() as f64 / 1000.0;
+        let expected = (
+            seconds("2026-10-01T07:00:00Z"),
+            seconds("2026-10-20T16:30:00Z"),
+        );
+        assert!(
+            (found.0 - expected.0).abs() < 1.0 && (found.1 - expected.1).abs() < 1.0,
+            "created and modified are {found:?}, not {expected:?}"
+        );
+    }
+
+    fn the_samples_start_a_page_per_note() {
+        let bytes = export(&[
+            "welcome.md",
+            "packing-list.md",
+            "Radio/antenna-tuner.md",
+            "Recipes/bread-rolls.md",
+            "Songs/abendlied.md",
+            "raw-html.md",
+        ]);
+        let document = document(&bytes);
+        assert_eq!(title(&document), "Samples");
         // SAFETY: plain getters on a valid document.
         unsafe {
             assert!(document.pageCount() >= 6, "{}", document.pageCount());
@@ -138,104 +222,16 @@ mod macos {
         }
     }
 
-    /// TEMPORARY, to learn what macOS 26 does with the dates; prints and asserts nothing.
-    fn report_what_this_macos_keeps() {
-        fn raw(bytes: &[u8]) -> Vec<String> {
-            let text = String::from_utf8_lossy(bytes);
-            [
-                "/CreationDate",
-                "/ModDate",
-                "/Title",
-                "/Info",
-                "/ObjStm",
-                "/Producer",
-            ]
-            .iter()
-            .map(|key| {
-                let count = text.matches(key).count();
-                let first = text.find(key).map_or(String::new(), |at| {
-                    text[at..].chars().take(50).collect::<String>()
-                });
-                format!("{key} x{count} {first:?}")
-            })
-            .collect()
-        }
-        fn dates(document: &PDFDocument) -> (Option<f64>, Option<f64>) {
-            // SAFETY: plain getters on a valid document.
-            unsafe {
-                let attributes = document.documentAttributes().unwrap();
-                let get = |key: &NSString| {
-                    attributes
-                        .objectForKey(key.as_ref())
-                        .and_then(|o| o.downcast::<NSDate>().ok())
-                        .map(|d| d.timeIntervalSince1970())
-                };
-                (
-                    get(PDFDocumentCreationDateAttribute),
-                    get(PDFDocumentModificationDateAttribute),
-                )
-            }
-        }
-        let bytes = print(page(HTML)).unwrap();
-        println!("DIAG header {:?}", String::from_utf8_lossy(&bytes[..8]));
-        println!("DIAG now {}", NSDate::now().timeIntervalSince1970());
-        println!("DIAG print_pdf raw {:#?}", raw(&bytes));
-        println!("DIAG print_pdf read {:?}", dates(&document(&bytes)));
-
-        let dir = tempfile::tempdir().unwrap();
-        let file = dir.path().join("in.pdf");
-        std::fs::write(&file, &bytes).unwrap();
-        let url =
-            objc2_foundation::NSURL::fileURLWithPath(&NSString::from_str(&file.to_string_lossy()));
-        // SAFETY: valid objects; attributes of the types PDFKit documents.
-        unsafe {
-            let from_file = PDFDocument::initWithURL(PDFDocument::alloc(), &url).unwrap();
-            let attributes = objc2_foundation::NSMutableDictionary::<
-                objc2::runtime::AnyObject,
-                objc2::runtime::AnyObject,
-            >::new();
-            for (key, seconds) in [
-                (PDFDocumentCreationDateAttribute, 1_767_225_600.0),
-                (PDFDocumentModificationDateAttribute, 1_770_000_000.0),
-            ] {
-                let date = NSDate::dateWithTimeIntervalSince1970(seconds);
-                let value: &objc2::runtime::AnyObject = date.as_ref();
-                attributes.setObject_forKey(value, objc2::runtime::ProtocolObject::from_ref(key));
-            }
-            from_file.setDocumentAttributes(Some(&attributes));
-            println!("DIAG right after setting {:?}", dates(&from_file));
-
-            let data = from_file.dataRepresentation().unwrap().to_vec();
-            println!("DIAG dataRepresentation raw {:#?}", raw(&data));
-            println!("DIAG dataRepresentation read {:?}", dates(&document(&data)));
-
-            let out = dir.path().join("out.pdf");
-            let out_url = objc2_foundation::NSURL::fileURLWithPath(&NSString::from_str(
-                &out.to_string_lossy(),
-            ));
-            println!("DIAG writeToURL ok {}", from_file.writeToURL(&out_url));
-            let written = std::fs::read(&out).unwrap();
-            println!("DIAG writeToURL raw {:#?}", raw(&written));
-            println!("DIAG writeToURL read {:?}", dates(&document(&written)));
-
-            // A document opened from the rewritten file, set and written once more.
-            let again = PDFDocument::initWithURL(PDFDocument::alloc(), &out_url).unwrap();
-            again.setDocumentAttributes(Some(&attributes));
-            let data = again.dataRepresentation().unwrap().to_vec();
-            println!("DIAG second round read {:?}", dates(&document(&data)));
-        }
-    }
-
     pub fn main() {
         let mtm = MainThreadMarker::new().expect("main thread");
         let app = NSApplication::sharedApplication(mtm);
         app.setActivationPolicy(NSApplicationActivationPolicy::Accessory);
         app.finishLaunching();
-        report_what_this_macos_keeps();
-        pages_and_paper_and_metadata();
+        pages_and_paper_and_title_and_links();
         several_jobs_one_after_the_other();
+        a_note_keeps_its_dates();
         the_samples_start_a_page_per_note();
-        println!("pdf: 3 checks passed");
+        println!("pdf: 4 checks passed");
     }
 }
 

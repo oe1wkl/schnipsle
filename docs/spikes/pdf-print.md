@@ -83,7 +83,7 @@ Not needed, tested by leaving them out: setting the frame of the print view, and
 - **Inside the app:** an export started from a worker thread and printed on Tauri's main thread took 0.15 s for seven notes in one PDF and 0.45 s for a PDF each. The focused window stayed focused and visible, and no other window appeared.
 - **Backgrounds** of code blocks and table headers are left out when printing unless the style sheet sets `print-color-adjust: exact`.
 - **Links between PDF files:** WebKit drops a relative link when the page has no base URL. With a base URL it keeps the link, but PDFKit's `PDFActionRemoteGoTo` with a relative file wrote `/A << /S /GoToR >>` without the file. See ADR-0023.
-- **Dates:** `setDocumentAttributes` replaces all attributes, so a PDF of several notes has a title and no dates.
+- **Dates on macOS 26:** the Swift test of pitfall 3 only ran on macOS 27. On macOS 26.6 PDFKit writes the current time for both dates, through `dataRepresentation` and `writeToURL` alike, though the document held the right ones just before. On both versions the Info dictionary is plain text with dates of 23 characters, so the exporter corrects them in the bytes (ADR-0024). A PDF of several notes keeps the time of printing.
 - **A very wide table** stays on the page, with its cells broken within words.
 
 ## Open
