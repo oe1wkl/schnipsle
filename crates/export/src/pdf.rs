@@ -101,7 +101,9 @@ impl<P: Printer> PdfExporter<P> {
             return Ok(to.file_name().map(|n| n.to_string_lossy().into_owned()));
         }
         fs::create_dir_all(to)?;
-        let name = Names::new(to).free(&one.title, "pdf");
+        let mut names = Names::new(to);
+        let name = names.free(&one.title, "pdf");
+        collected.numbered.append(&mut names.numbered);
         output::write_new(&to.join(&name), &pdf)?;
         Ok(Some(name))
     }
@@ -136,6 +138,7 @@ impl<P: Printer> PdfExporter<P> {
             output::write_new(&to.join(&name), &pdf)?;
             report.files.push(name);
         }
+        collected.numbered.append(&mut names.numbered);
         Ok(())
     }
 }
@@ -162,6 +165,7 @@ impl<P: Printer> Exporter for PdfExporter<P> {
             }
         }
         report.problems.append(&mut collected.problems);
+        report.numbered.append(&mut collected.numbered);
         Ok(report)
     }
 }

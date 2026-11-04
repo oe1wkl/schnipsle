@@ -281,6 +281,80 @@
         </div>
       </div>
     </dialog>
+    <dialog id="export-dialog" class="import-dialog export-dialog" aria-labelledby="export-title">
+      <div class="import">
+        <h2 id="export-title">Export notes</h2>
+        <section id="export-choose" class="import-choose export-choose">
+          <fieldset>
+            <legend>Notes</legend>
+            <label>
+              <input id="export-what-note" type="radio" name="export-what" value="note" />
+              <span id="export-note-label"></span>
+            </label>
+            <label>
+              <input id="export-what-list" type="radio" name="export-what" value="list" />
+              <span id="export-list-label"></span>
+            </label>
+          </fieldset>
+          <label>
+            Format
+            <select id="export-format"></select>
+          </label>
+          <fieldset>
+            <legend>Files</legend>
+            <label>
+              <input id="export-layout-one" type="radio" name="export-layout" value="singleFile" />
+              <span id="export-one-label"></span>
+            </label>
+            <label>
+              <input
+                id="export-layout-many"
+                type="radio"
+                name="export-layout"
+                value="filePerNote"
+              />
+              <span id="export-many-label"></span>
+            </label>
+          </fieldset>
+          <label id="export-paper-row">
+            Page size
+            <select id="export-paper">
+              <option value="a4">A4</option>
+              <option value="letter">Letter</option>
+            </select>
+          </label>
+          <label>
+            <input id="export-keep-tags" type="checkbox" />
+            Keep the line of tags at the end of a note
+          </label>
+          <p id="export-unsaved" class="import-box warn" hidden></p>
+        </section>
+        <div id="export-progress" class="import-progress" hidden>
+          <progress></progress>
+          <span id="export-progress-text" class="muted"></span>
+        </div>
+        <section id="export-report" class="import-report" aria-live="polite" hidden>
+          <p id="export-summary" class="import-summary"></p>
+          <p id="export-numbered" class="import-summary" hidden></p>
+          <table id="export-problems-table" class="import-items">
+            <thead>
+              <tr>
+                <th>Note</th>
+                <th>What is different in the export</th>
+              </tr>
+            </thead>
+            <tbody id="export-problems"></tbody>
+          </table>
+        </section>
+        <p id="export-error" class="folder-error" role="alert" hidden></p>
+        <div class="folder-buttons">
+          <span class="spacer"></span>
+          <button id="export-reveal" type="button" hidden></button>
+          <button id="export-cancel" type="button">Cancel</button>
+          <button id="export-start" type="button">Export…</button>
+        </div>
+      </div>
+    </dialog>
     <dialog id="imports-dialog" class="import-dialog" aria-labelledby="imports-title">
       <div class="import">
         <h2 id="imports-title">Imports</h2>

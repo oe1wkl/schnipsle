@@ -692,7 +692,7 @@ fn extract_tags(markdown: &str) -> Vec<Tag> {
 
 /// The app's own menu bar (desktop). Unlike Tauri's default it has "Close
 /// Window" only once, in the File menu, next to "New Note" (⌘N), "Open
-/// Vault…" (⌘O) and "Import…". A click on those three is sent to the UI as a
+/// Vault…" (⌘O), "Import…" and "Export…". A click on those is sent to the UI as a
 /// `menu` event carrying the item id; everything else is a standard system
 /// item.
 #[cfg(desktop)]
@@ -720,6 +720,7 @@ fn install_menu(app: &tauri::App) -> tauri::Result<()> {
             &separator()?,
             &MenuItem::with_id(app, "import", "Import…", true, None::<&str>)?,
             &MenuItem::with_id(app, "imports", "Imports…", true, None::<&str>)?,
+            &MenuItem::with_id(app, "export", "Export…", true, None::<&str>)?,
             &separator()?,
             &PredefinedMenuItem::close_window(app, None)?,
             #[cfg(not(target_os = "macos"))]
@@ -788,7 +789,10 @@ fn install_menu(app: &tauri::App) -> tauri::Result<()> {
     app.set_menu(menu)?;
     app.on_menu_event(|app, event| {
         let id = event.id().as_ref();
-        if matches!(id, "new-note" | "open-vault" | "import" | "imports") {
+        if matches!(
+            id,
+            "new-note" | "open-vault" | "import" | "imports" | "export"
+        ) {
             let _ = app.emit("menu", id);
         }
     });
@@ -848,7 +852,10 @@ pub fn run() {
             keep_both,
             download_note,
             extract_tags,
+            exporting::export_formats,
+            exporting::pick_export,
             exporting::export_notes,
+            exporting::reveal_export,
             importing::pick_import,
             importing::plan_import,
             importing::cancel_import,

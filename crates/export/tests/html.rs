@@ -250,6 +250,7 @@ fn a_folder_export_never_replaces_what_is_there() {
         )
         .unwrap();
     assert_eq!(report.files, ["Welcome-2.html"]);
+    assert_eq!(report.numbered, ["Welcome-2.html"]);
     assert_eq!(fs::read_to_string(to.join("Welcome.html")).unwrap(), "mine");
 
     // Exporting again reuses the attachments copied before.
@@ -262,6 +263,8 @@ fn a_folder_export_never_replaces_what_is_there() {
         .unwrap();
     assert_eq!(first.files[0], "Antenna tuner.html");
     assert_eq!(again.files[0], "Antenna tuner-2.html");
+    assert!(first.numbered.is_empty());
+    assert_eq!(again.numbered, ["Antenna tuner-2.html"]);
     assert_eq!(first.files[1..], again.files[1..]);
     assert_eq!(first.problems, again.problems);
 }

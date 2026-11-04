@@ -241,6 +241,7 @@ fn letter_paper_and_a_folder_with_a_free_name() {
         )
         .unwrap();
     assert_eq!(report.files, ["Samples-2.pdf"]);
+    assert_eq!(report.numbered, ["Samples-2.pdf"]);
     assert_eq!(fs::read(dir.path().join("Samples.pdf")).unwrap(), b"mine");
     let jobs = printer.jobs.borrow();
     assert_eq!((jobs[0].width, jobs[0].height), (612.0, 792.0));

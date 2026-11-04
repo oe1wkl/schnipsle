@@ -250,6 +250,7 @@ fn letter_paper_and_a_folder_with_a_free_name() {
         )
         .unwrap();
     assert_eq!(report.files, ["Samples-2.odt"]);
+    assert_eq!(report.numbered, ["Samples-2.odt"]);
     assert_eq!(fs::read(dir.path().join("Samples.odt")).unwrap(), b"mine");
     let styles = part(&dir.path().join("Samples-2.odt"), "styles.xml");
     assert!(styles.contains("fo:page-width=\"21.59cm\""), "{styles}");

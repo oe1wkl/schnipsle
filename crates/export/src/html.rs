@@ -67,6 +67,7 @@ impl Exporter for HtmlExporter {
             }
         }
         report.problems.append(&mut collected.problems);
+        report.numbered.append(&mut collected.numbered);
         copy_attachments(vault, to, &collected, &mut report)?;
         Ok(report)
     }
@@ -90,7 +91,9 @@ fn one_document(
         report.files.extend(name);
     } else {
         fs::create_dir_all(to)?;
-        let name = Names::new(to).free(&one.title, "html");
+        let mut names = Names::new(to);
+        let name = names.free(&one.title, "html");
+        collected.numbered.append(&mut names.numbered);
         output::write_new(&to.join(&name), one.page.as_bytes())?;
         report.files.push(name);
     }
@@ -141,6 +144,7 @@ fn file_per_note(
         .iter()
         .map(|note| names.free(&note.title, "html"))
         .collect();
+    collected.numbered.append(&mut names.numbered);
     let rules = Rules {
         vault,
         hrefs: notes

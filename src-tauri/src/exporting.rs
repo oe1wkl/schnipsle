@@ -1,14 +1,100 @@
 // SPDX-License-Identifier: Apache-2.0
-//! Exporting notes (ADR-0010, ADR-0021) as a command, for File › Export… to
-//! come. A PDF is printed on the main thread, which the export waits for
-//! (ADR-0022), so this runs only from an `async` command.
+//! Exporting notes (ADR-0010, ADR-0021) for File › Export…: where to, the
+//! export, and showing the result. A PDF is printed on the main thread, which
+//! the export waits for (ADR-0022), so this runs only from an `async` command.
 
 use std::path::Path;
 
-use schnipsle_export::{Exporter as _, Format, HtmlExporter, Input, OdtExporter, Options, Report};
+use schnipsle_export::{
+    Exporter as _, Format, HtmlExporter, Input, Layout, OdtExporter, Options, Report,
+};
 use tauri::{AppHandle, State};
 
 use crate::{AppState, CmdResult, with_vault};
+
+/// The formats this platform can write, for the dialog to offer.
+#[tauri::command]
+pub async fn export_formats() -> Vec<Format> {
+    let mut formats = vec![Format::Html];
+    if cfg!(target_os = "macos") {
+        formats.push(Format::Pdf);
+    }
+    formats.push(Format::Odt);
+    formats
+}
+
+/// Asks where the export goes: a file for one document, which the save dialog
+/// asks about replacing, otherwise a folder. `None` if the user cancelled.
+#[tauri::command]
+pub async fn pick_export(
+    app: AppHandle,
+    format: Format,
+    layout: Layout,
+    title: Option<String>,
+) -> CmdResult<Option<String>> {
+    #[cfg(desktop)]
+    {
+        use tauri_plugin_dialog::DialogExt as _;
+        let dialog = app.dialog().file();
+        let picked = if layout == Layout::SingleFile {
+            let (filter, extension) = (filter_name(format), format.extension());
+            dialog
+                .add_filter(filter, &[extension])
+                .set_file_name(schnipsle_export::suggested_file_name(
+                    title.as_deref(),
+                    format,
+                ))
+                .blocking_save_file()
+        } else {
+            dialog
+                .set_can_create_directories(true)
+                .blocking_pick_folder()
+        };
+        let Some(picked) = picked else {
+            return Ok(None);
+        };
+        let path = picked.into_path().map_err(crate::CommandError::other)?;
+        Ok(Some(path.display().to_string()))
+    }
+    #[cfg(mobile)]
+    {
+        let _ = (app, format, layout, title);
+        Err(crate::CommandError::other(
+            "Export is available in Schnipsle on the Mac",
+        ))
+    }
+}
+
+#[cfg(desktop)]
+const fn filter_name(format: Format) -> &'static str {
+    match format {
+        Format::Html => "HTML page",
+        Format::Pdf => "PDF document",
+        Format::Odt => "OpenDocument text",
+    }
+}
+
+/// Shows an exported file in Finder, or opens the folder of an export.
+#[tauri::command]
+pub async fn reveal_export(path: String) -> CmdResult<()> {
+    let path = Path::new(&path);
+    if path.is_dir() {
+        return crate::open_with_system(path);
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("/usr/bin/open")
+            .arg("-R")
+            .arg(path)
+            .status()
+            .map_err(crate::CommandError::other)?;
+        Ok(())
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        crate::open_with_system(path.parent().unwrap_or(path))
+    }
+}
 
 /// Exports `input` to `to`, a file or a folder as `options` say.
 #[tauri::command]
@@ -22,6 +108,10 @@ pub async fn export_notes(
 ) -> CmdResult<Report> {
     with_vault(&state, |vault| {
         let to = Path::new(&to);
+        schnipsle_export::check_target(vault, to).map_err(|e| crate::CommandError {
+            kind: "insideVault",
+            ..crate::CommandError::other(e)
+        })?;
         Ok(match format {
             Format::Html => HtmlExporter.export(vault, &input, &options, to)?,
             Format::Odt => OdtExporter.export(vault, &input, &options, to)?,

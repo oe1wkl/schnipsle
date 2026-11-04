@@ -74,7 +74,7 @@ pub(crate) struct Rules<'r> {
 }
 
 /// The title of one document of several notes without a name of its own.
-const DEFAULT_TITLE: &str = "Notes";
+pub(crate) const DEFAULT_TITLE: &str = "Notes";
 
 /// The anchors of `notes` in one document, and the rules that link to them.
 pub(crate) fn rules_of_one_document<'r>(
@@ -151,6 +151,8 @@ pub(crate) struct Copy {
 #[derive(Default)]
 pub(crate) struct Collected {
     pub problems: Vec<Problem>,
+    /// Files that got a number, as [`crate::Report::numbered`] says.
+    pub numbered: Vec<String>,
     /// Files to copy, by where they go: relative to the document's folder, the
     /// same as relative to the vault.
     pub copies: BTreeMap<String, Copy>,
