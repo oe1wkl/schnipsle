@@ -891,8 +891,8 @@ fn collect(dir: &Path, prefix: &str, out: &mut Vec<NoteEntry>, is_root: bool) ->
     Ok(())
 }
 
-/// Title per format.md §5.2: the first level-1 ATX heading if it is the first
-/// non-empty block, else the first non-empty line (max. 120 characters), else
+/// Title per format.md §5.2: the text of an ATX heading of any level if it is the
+/// first non-empty block, else the first non-empty line (max. 120 characters), else
 /// the file name without extension. Front matter is skipped.
 #[must_use]
 pub fn title_of(text: &str, file_stem: &str) -> String {
@@ -900,15 +900,21 @@ pub fn title_of(text: &str, file_stem: &str) -> String {
     let Some(first) = body.lines().map(str::trim).find(|l| !l.is_empty()) else {
         return file_stem.to_owned();
     };
-    let line = first
-        .strip_prefix("# ")
-        .or_else(|| (first == "#").then_some(""))
-        .map_or(first, |h| h.trim().trim_end_matches('#').trim_end());
+    let line = heading_text(first).unwrap_or(first);
     if line.is_empty() {
         file_stem.to_owned()
     } else {
         line.chars().take(120).collect()
     }
+}
+
+/// The text of `line` if it is an ATX heading: one to six `#`, then a space or
+/// nothing. `#tag` and `####### seven` are not headings.
+fn heading_text(line: &str) -> Option<&str> {
+    let rest = line.trim_start_matches('#');
+    let level = line.len() - rest.len();
+    let is_heading = (1..=6).contains(&level) && (rest.is_empty() || rest.starts_with([' ', '\t']));
+    is_heading.then(|| rest.trim().trim_end_matches('#').trim_end())
 }
 
 fn skip_front_matter(text: &str) -> &str {
@@ -1105,9 +1111,26 @@ mod tests {
             title_of("---\nid: 1\n---\n# Real title\n", "x"),
             "Real title"
         );
-        assert_eq!(title_of("## Second level\n", "x"), "## Second level");
+        assert_eq!(title_of("## Second level\n", "x"), "Second level");
+        assert_eq!(title_of("###### Sixth ###\n", "x"), "Sixth");
+        assert_eq!(title_of("####### Seven\n", "x"), "####### Seven");
+        assert_eq!(title_of("#tag and text\n", "x"), "#tag and text");
+        assert_eq!(title_of("##\n", "fallback"), "fallback");
         assert_eq!(title_of("# Closed heading ##\n", "x"), "Closed heading");
         assert_eq!(title_of(&"a".repeat(200), "x").chars().count(), 120);
+    }
+
+    #[test]
+    fn titles_of_the_conformance_cases() {
+        let cases = include_str!("../../../tests/fixtures/format/5.2-title/titles.tsv");
+        for line in cases
+            .lines()
+            .filter(|l| !l.starts_with('#') || l.contains('\t'))
+        {
+            let (text, title) = line.split_once('\t').unwrap();
+            let text = text.replace("\\n", "\n");
+            assert_eq!(title_of(&text, "file-name"), title, "{line}");
+        }
     }
 
     #[test]

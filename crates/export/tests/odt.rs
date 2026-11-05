@@ -400,10 +400,11 @@ fn pictures_fit_the_page_and_the_cell_and_are_stored_once() {
     let vault = Vault::create(&root).unwrap();
     fs::write(root.join("notes/wide.png"), png_header(4000, 1000)).unwrap();
     fs::write(root.join("notes/small.png"), png_header(96, 48)).unwrap();
+    fs::write(root.join("notes/tall.png"), png_header(2000, 8000)).unwrap();
     vault
         .create_note(
             "pictures.md",
-            "![](small.png)\n\n![](wide.png)\n\n![](wide.png)\n\n| a | b |\n| - | - |\n| ![](wide.png) | x |\n",
+            "![](small.png)\n\n![](wide.png)\n\n![](wide.png)\n\n![](tall.png)\n\n| a | b |\n| - | - |\n| ![](wide.png) | x |\n",
         )
         .unwrap();
     let to = dir.path().join("a.odt");
@@ -428,11 +429,16 @@ fn pictures_fit_the_page_and_the_cell_and_are_stored_once() {
         content.contains("svg:width=\"8.200cm\" svg:height=\"2.050cm\""),
         "{content}"
     );
-    assert_eq!(content.matches("<draw:frame ").count(), 4, "{content}");
+    // Taller than the page, an office program would cut it off.
+    assert!(
+        content.contains("svg:width=\"6.425cm\" svg:height=\"25.700cm\""),
+        "{content}"
+    );
+    assert_eq!(content.matches("<draw:frame ").count(), 5, "{content}");
     let names: Vec<String> = parts(&to).into_iter().map(|(name, _)| name).collect();
     assert_eq!(
         names.iter().filter(|n| n.starts_with("Pictures/")).count(),
-        2
+        3
     );
 }
 

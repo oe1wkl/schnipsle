@@ -35,7 +35,7 @@ use crate::tags::{Tag, extract_tags, parse_options};
 use crate::vault::{title_of, title_sort_key};
 
 /// Version of the tables below; a file with another version is rebuilt.
-pub const SCHEMA_VERSION: i64 = 4;
+pub const SCHEMA_VERSION: i64 = 5;
 
 const SCHEMA: &str = "
 CREATE TABLE notes (

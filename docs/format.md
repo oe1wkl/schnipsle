@@ -1,9 +1,9 @@
 # Vault File Format Specification
 
 - Format version: **1** (draft)
-- Spec revision: 0.13, 2026-10-31 (§12.4 rule 4 notes an undo cannot change; 0.12: §12.1 rule 7 the source's title as a heading; 0.11: §12.1 rule 6 notes from the source's trash; 0.10: §12 imported notes, import log, re-import and undo; 0.9: §9 reading and writing smart folders; 0.8: §7 retention settings; 0.7: §5.5 relative links are kept working when a note moves; 0.6: §8 `original_path` is relative to the vault root; 0.5: §8 trash names for notes without `id` and for collisions; 0.4: §5.3 refined by the first implementation, §5.6 music notation, §5.7 lyrics with chords)
+- Spec revision: 0.14, 2026-11-05 (§5.2 a first heading of any level gives the title; 0.13: §12.4 rule 4 notes an undo cannot change; 0.12: §12.1 rule 7 the source's title as a heading; 0.11: §12.1 rule 6 notes from the source's trash; 0.10: §12 imported notes, import log, re-import and undo; 0.9: §9 reading and writing smart folders; 0.8: §7 retention settings; 0.7: §5.5 relative links are kept working when a note moves; 0.6: §8 `original_path` is relative to the vault root; 0.5: §8 trash names for notes without `id` and for collisions; 0.4: §5.3 refined by the first implementation, §5.6 music notation, §5.7 lyrics with chords)
 - Status: Draft — becomes normative when M1 ships
-- Related: ADR-0004, ADR-0008, ADR-0009, ADR-0011, ADR-0013, ADR-0014, ADR-0012, ADR-0016, ADR-0017, ADR-0018, ADR-0019, ADR-0020
+- Related: ADR-0004, ADR-0008, ADR-0009, ADR-0011, ADR-0013, ADR-0014, ADR-0012, ADR-0016, ADR-0017, ADR-0018, ADR-0019, ADR-0020, ADR-0026
 
 The key words MUST, MUST NOT, SHOULD, SHOULD NOT and MAY are used as described in RFC 2119.
 
@@ -84,7 +84,7 @@ Raw HTML is stored as is but rendered through a sanitizer.
 
 ### 5.2 Title
 
-The title is the text of the first ATX heading of level 1 (`# Title`) if it is the first non-empty block; otherwise the first line of the body, trimmed to 120 characters; otherwise the file name without extension.
+The title is the text of an ATX heading of any level (`# Title`, `## Title`) if it is the first non-empty block; otherwise the first line of the body, trimmed to 120 characters; otherwise the file name without extension.
 
 ### 5.3 Tags
 

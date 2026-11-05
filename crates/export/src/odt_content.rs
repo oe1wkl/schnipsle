@@ -55,6 +55,8 @@ pub(crate) struct Content {
     /// Pictures by their URL, each one stored once.
     known: HashMap<String, usize>,
     text_width: f64,
+    /// The highest a picture can be, in cm: taller than this, an office program cuts it off.
+    text_height: f64,
     notes: usize,
     tables: usize,
     frames: usize,
@@ -69,12 +71,13 @@ pub(crate) struct Content {
 }
 
 impl Content {
-    pub fn new(text_width: f64) -> Self {
+    pub fn new((text_width, text_height): (f64, f64)) -> Self {
         Self {
             body: String::new(),
             pictures: Vec::new(),
             known: HashMap::new(),
             text_width,
+            text_height,
             notes: 0,
             tables: 0,
             frames: 0,
@@ -376,15 +379,14 @@ impl Content {
         };
         self.frames += 1;
         let picture = &self.pictures[index];
-        let size = match picture.size {
-            Some((width, height)) if width > place.width => {
-                (place.width, height * place.width / width)
-            }
-            Some(size) => size,
-            None => {
-                let width = UNKNOWN_WIDTH.min(place.width);
-                (width, width)
-            }
+        let size = if let Some((width, height)) = picture.size {
+            let scale = (place.width / width)
+                .min(self.text_height / height)
+                .min(1.0);
+            (width * scale, height * scale)
+        } else {
+            let width = UNKNOWN_WIDTH.min(place.width);
+            (width, width)
         };
         let _ = write!(
             self.body,

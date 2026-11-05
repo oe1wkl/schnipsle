@@ -221,6 +221,7 @@ export type ExportProblemKind =
   | "noteNotRead"
   | "pictureMissing"
   | "webPictureAsLink"
+  | "pictureNotConverted"
   | "attachmentNotIncluded"
   | "noteNotExported"
   | "noteInOtherFile";

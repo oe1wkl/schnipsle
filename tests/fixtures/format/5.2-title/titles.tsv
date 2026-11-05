@@ -1,0 +1,11 @@
+# Titles (format.md §5.2): the text of the note, with \n for a line break, a tab, and its title.
+# The file name of every case is "file-name".
+# Level one\n\nText	Level one
+## Level two\n\nText	Level two
+###### Level six ###	Level six
+####### Not a heading	####### Not a heading
+#tag at the start	#tag at the start
+---\nid: 1\n---\n\n## After front matter	After front matter
+\n\nFirst line\nSecond line	First line
+##	file-name
+	file-name

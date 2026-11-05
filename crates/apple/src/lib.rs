@@ -7,6 +7,8 @@
 //! `NSFilePresenter` on the vault folder that reports changes made elsewhere, and
 //! [`ICloudVersions`] lists and resolves iCloud conflict versions (ADR-0006).
 //! On macOS, [`print_pdf`] turns an HTML page into a PDF with real pages (ADR-0022).
+//! [`convert_picture`] turns a picture many programs cannot show into one they can
+//! (ADR-0027).
 //!
 //! This is one of two crates allowed to use `unsafe`. Every `unsafe` block carries
 //! a `// SAFETY:` comment, and the public API is safe. On other platforms the
@@ -18,6 +20,8 @@ mod coordinator;
 #[cfg(target_os = "macos")]
 mod pdf;
 #[cfg(any(target_os = "macos", target_os = "ios"))]
+mod picture;
+#[cfg(any(target_os = "macos", target_os = "ios"))]
 mod presenter;
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 mod versions;
@@ -26,6 +30,8 @@ mod versions;
 pub use coordinator::FileCoordinator;
 #[cfg(target_os = "macos")]
 pub use pdf::{PdfPage, print_pdf};
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+pub use picture::{ConvertedPicture, convert_picture};
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 pub use presenter::VaultPresenter;
 #[cfg(any(target_os = "macos", target_os = "ios"))]

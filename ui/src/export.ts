@@ -35,6 +35,7 @@ const PROBLEM_LABELS: Record<ExportProblemKind, (target: string) => string> = {
   noteNotRead: () => "Could not be read, perhaps not downloaded yet, so it is not in the export",
   pictureMissing: (t) => `Picture not found, its description is shown instead: ${t}`,
   webPictureAsLink: (t) => `Picture on the web, shown as a link: ${t}`,
+  pictureNotConverted: (t) => `Picture left as it is, which many programs cannot show: ${t}`,
   attachmentNotIncluded: (t) => `Attachment not included, only the text of its link: ${t}`,
   noteNotExported: (t) => `Link to a note not in this export; only its text stays: ${t}`,
   noteInOtherFile: (t) => `Link to a note in another file; only its text stays: ${t}`,

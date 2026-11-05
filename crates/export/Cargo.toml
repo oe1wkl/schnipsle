@@ -20,6 +20,10 @@ unicode-normalization.workspace = true
 tempfile.workspace = true
 zip.workspace = true
 
+# Pictures many programs cannot show are converted (ADR-0027).
+[target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
+schnipsle-apple.workspace = true
+
 [dev-dependencies]
 serde_json.workspace = true
 

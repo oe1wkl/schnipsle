@@ -39,3 +39,5 @@ This folder records every significant architectural decision of the project, one
 | [0023](0023-links-between-pdf-files.md) | Links between separate PDF files become text | Accepted | 2026-11-03 |
 | [0024](0024-pdf-dates-in-the-file.md) | PDF dates are corrected in the file | Accepted | 2026-11-04 |
 | [0025](0025-docx-and-epub-through-pandoc.md) | DOCX and EPUB through Pandoc | Accepted | 2026-11-05 |
+| [0026](0026-a-heading-of-any-level-gives-the-title.md) | A first heading of any level gives the title | Accepted | 2026-11-05 |
+| [0027](0027-pictures-converted-for-an-export.md) | Pictures few programs show are converted for an export | Accepted | 2026-11-05 |

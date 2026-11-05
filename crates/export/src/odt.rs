@@ -74,7 +74,7 @@ fn one_document(
     collected: &mut Collected,
 ) -> Result<Option<String>> {
     let (anchors, rules) = document::rules_of_one_document(vault, notes, options, false, false);
-    let mut content = Content::new(text_width(options.paper));
+    let mut content = Content::new(text_size(options.paper));
     for (index, (note, anchor)) in notes.iter().zip(&anchors).enumerate() {
         let arena = Arena::new();
         let root = document::prepare(&arena, note, anchor, &rules, collected);
@@ -129,7 +129,7 @@ fn file_per_note(
         let anchor = format!("note-{}", slug(&note.title));
         let arena = Arena::new();
         let root = document::prepare(&arena, note, &anchor, &rules, collected);
-        let mut content = Content::new(text_width(options.paper));
+        let mut content = Content::new(text_size(options.paper));
         content.note(root, &anchor, false);
         let odt = package(&content, &note.title, Some(note), options.paper)?;
         output::write_new(&to.join(&name), &odt)?;
@@ -146,8 +146,9 @@ fn paper_size(paper: Paper) -> (f64, f64) {
     }
 }
 
-fn text_width(paper: Paper) -> f64 {
-    paper_size(paper).0 - 2.0 * MARGIN
+fn text_size(paper: Paper) -> (f64, f64) {
+    let (width, height) = paper_size(paper);
+    (width - 2.0 * MARGIN, height - 2.0 * MARGIN)
 }
 
 /// The zipped file. Its entries carry no time, so an export does not differ by when it ran.
@@ -183,7 +184,7 @@ fn package(
 }
 
 fn content_xml(body: &str, paper: Paper) -> String {
-    let width = text_width(paper);
+    let (width, _) = text_size(paper);
     format!(
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<office:document-content xmlns:office=\"urn:oasis:names:tc:opendocument:xmlns:office:1.0\" xmlns:style=\"urn:oasis:names:tc:opendocument:xmlns:style:1.0\" xmlns:fo=\"urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0\" xmlns:text=\"urn:oasis:names:tc:opendocument:xmlns:text:1.0\" xmlns:table=\"urn:oasis:names:tc:opendocument:xmlns:table:1.0\" xmlns:draw=\"urn:oasis:names:tc:opendocument:xmlns:drawing:1.0\" xmlns:svg=\"urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" office:version=\"1.2\">\n<office:automatic-styles>\n<style:style style:name=\"Table\" style:family=\"table\"><style:table-properties style:width=\"{width}cm\" table:align=\"margins\" fo:margin-top=\"0.1cm\" fo:margin-bottom=\"0.3cm\"/></style:style>\n<style:style style:name=\"Row\" style:family=\"table-row\"><style:table-row-properties fo:keep-together=\"always\"/></style:style>\n<style:style style:name=\"Cell\" style:family=\"table-cell\"><style:table-cell-properties fo:padding=\"0.1cm\" fo:border=\"0.5pt solid #d2d2d7\"/></style:style>\n<style:style style:name=\"Heading_20_Cell\" style:family=\"table-cell\"><style:table-cell-properties fo:padding=\"0.1cm\" fo:border=\"0.5pt solid #d2d2d7\" fo:background-color=\"#f5f5f7\"/></style:style>\n</office:automatic-styles>\n<office:body>\n<office:text>\n{body}</office:text>\n</office:body>\n</office:document-content>\n"
     )
