@@ -244,9 +244,12 @@ fn copy_attachments(
         let file = target
             .split('/')
             .fold(to.to_owned(), |full, part| full.join(part));
-        let copied = match vault.read_linked_file(&copy.path, &copy.link) {
-            Ok(bytes) => output::copy_new(&file, &bytes)?,
-            Err(_) => false,
+        let copied = match &copy.converted {
+            Some(bytes) => output::copy_new(&file, bytes)?,
+            None => match vault.read_linked_file(&copy.path, &copy.link) {
+                Ok(bytes) => output::copy_new(&file, &bytes)?,
+                Err(_) => false,
+            },
         };
         if copied {
             report.files.push(target.clone());

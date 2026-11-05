@@ -1,6 +1,6 @@
 # ADR-0021: What an exported note looks like
 
-- Status: Accepted; links between separate PDF files (rule 7) amended by [ADR-0023](0023-links-between-pdf-files.md), between separate EPUB files by [ADR-0025](0025-docx-and-epub-through-pandoc.md)
+- Status: Accepted; links between separate PDF files (rule 7) amended by [ADR-0023](0023-links-between-pdf-files.md), between separate EPUB files by [ADR-0025](0025-docx-and-epub-through-pandoc.md); the section heading of a note in one document (rule 3) by [ADR-0026](0026-a-heading-of-any-level-gives-the-title.md); pictures (rule 5) by [ADR-0027](0027-pictures-converted-for-an-export.md)
 - Date: 2026-11-01
 - Deciders: Willi Kraml
 - Related: F-06, F-13, ADR-0008, ADR-0010, ADR-0013, ADR-0014, [format.md §4–§6](../format.md#4-front-matter)

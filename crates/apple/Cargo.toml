@@ -34,10 +34,21 @@ objc2-foundation = { version = "0.3", default-features = false, features = [
   "NSValue",
 ] }
 
+# Pictures for an export (ADR-0027). Already in the lock file through objc2.
+objc2-core-foundation = { version = "0.3", default-features = false, features = [
+  "std",
+  "CFBase",
+  "CFData",
+  "CFDictionary",
+  "CFNumber",
+  "CFString",
+] }
+
 # PDF through the print path (ADR-0022).
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2-app-kit = { version = "0.3", default-features = false, features = [
   "std",
+  "objc2-core-foundation",
   "NSGraphics",
   "NSPrintInfo",
   "NSPrintOperation",
@@ -47,6 +58,7 @@ objc2-app-kit = { version = "0.3", default-features = false, features = [
 ] }
 objc2-web-kit = { version = "0.3", default-features = false, features = [
   "std",
+  "objc2-core-foundation",
   "block2",
   "objc2-app-kit",
   "WKNavigation",

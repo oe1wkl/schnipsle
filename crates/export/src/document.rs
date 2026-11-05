@@ -145,6 +145,8 @@ pub(crate) struct Copy {
     pub path: String,
     pub title: String,
     pub link: String,
+    /// What to write instead of the file: the picture converted (ADR-0027).
+    pub converted: Option<Vec<u8>>,
 }
 
 /// What preparing notes collected.
@@ -236,19 +238,19 @@ fn name_footnotes<'a>(root: &'a AstNode<'a>, anchor: &str) {
 }
 
 /// Makes the note start with a level-1 heading with its title (ADR-0021 rule
-/// 3). A first paragraph of one line is the title, so it becomes the heading
-/// rather than repeating it.
+/// 3). A first heading of any level or a first paragraph of one line is the
+/// title (format.md §5.2), so it becomes that heading rather than repeating it.
 fn start_with_title<'a>(arena: &'a Arena<'a>, root: &'a AstNode<'a>, title: &str) {
     let heading = NodeValue::Heading(NodeHeading {
         level: 1,
         setext: false,
         closed: false,
     });
-    if let Some(first) = root.first_child() {
-        let value = &first.data().value;
-        if matches!(value, NodeValue::Heading(h) if h.level == 1) {
-            return;
-        }
+    if let Some(first) = root.first_child()
+        && let NodeValue::Heading(existing) = &mut first.data_mut().value
+    {
+        existing.level = 1;
+        return;
     }
     if let Some(first) = root.first_child()
         && is_one_line_title(first)
@@ -436,6 +438,7 @@ impl<'a> Preparer<'a, '_> {
                 path: self.note.path.clone(),
                 title: self.note.title.clone(),
                 link: url.to_owned(),
+                converted: None,
             });
     }
 
@@ -497,17 +500,45 @@ impl<'a> Preparer<'a, '_> {
             self.link_to_file(node, path, url);
             return;
         };
-        if self.rules.copy_attachments {
+        let copying = self.rules.copy_attachments;
+        if copying && !needs_converting(mime) {
             self.copy(path, url);
             set_url(node, &href_of(path));
             return;
         }
-        match self.rules.vault.read_linked_file(&self.note.path, url) {
-            Ok(bytes) => {
-                let data = base64::engine::general_purpose::STANDARD.encode(bytes);
-                set_url(node, &format!("data:{mime};base64,{data}"));
+        let Ok(bytes) = self.rules.vault.read_linked_file(&self.note.path, url) else {
+            if copying {
+                // The copy finds out and reports it.
+                self.copy(path, url);
+                set_url(node, &href_of(path));
+            } else {
+                self.picture_missing(node, url, description);
             }
-            Err(_) => self.picture_missing(node, url, description),
+            return;
+        };
+        let converted = needs_converting(mime)
+            .then(|| convert_picture(&bytes))
+            .flatten();
+        if needs_converting(mime) && converted.is_none() {
+            self.problem(ProblemKind::PictureNotConverted, url);
+        }
+        match (converted, copying) {
+            (Some(picture), true) => {
+                let target = format!("{path}.{}", picture.extension);
+                set_url(node, &href_of(&target));
+                self.collected.copies.entry(target).or_insert_with(|| Copy {
+                    path: self.note.path.clone(),
+                    title: self.note.title.clone(),
+                    link: url.to_owned(),
+                    converted: Some(picture.bytes),
+                });
+            }
+            (Some(picture), false) => set_data_url(node, picture.media_type, &picture.bytes),
+            (None, true) => {
+                self.copy(path, url);
+                set_url(node, &href_of(path));
+            }
+            (None, false) => set_data_url(node, mime, &bytes),
         }
     }
 
@@ -547,6 +578,11 @@ impl<'a> Preparer<'a, '_> {
             }
         }
     }
+}
+
+fn set_data_url<'a>(node: &'a AstNode<'a>, mime: &str, bytes: &[u8]) {
+    let data = base64::engine::general_purpose::STANDARD.encode(bytes);
+    set_url(node, &format!("data:{mime};base64,{data}"));
 }
 
 pub(crate) fn set_url<'a>(node: &'a AstNode<'a>, url: &str) {
@@ -598,6 +634,28 @@ fn math<'a>(node: &'a AstNode<'a>, display: bool, literal: &str) {
         num_backticks: 1,
         literal: format!("{delimiter}{literal}{delimiter}"),
     });
+}
+
+/// Pictures of this type show in hardly any program but Apple's (ADR-0027).
+fn needs_converting(mime: &str) -> bool {
+    matches!(mime, "image/heic" | "image/heif" | "image/tiff")
+}
+
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+use schnipsle_apple::convert_picture;
+
+/// No system converter here, so the picture stays as it is and is reported.
+#[cfg(not(any(target_os = "macos", target_os = "ios")))]
+fn convert_picture(_bytes: &[u8]) -> Option<Converted> {
+    None
+}
+
+/// What [`convert_picture`] gives on the platforms that have one.
+#[cfg(not(any(target_os = "macos", target_os = "ios")))]
+struct Converted {
+    bytes: Vec<u8>,
+    media_type: &'static str,
+    extension: &'static str,
 }
 
 /// The media type of a picture file by its extension, for a `data:` URL.

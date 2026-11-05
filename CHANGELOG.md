@@ -7,8 +7,8 @@ All notable changes to this project are documented here. The format follows [Kee
 ### Added
 
 - Repository foundation: Cargo workspace (`schnipsle-core`, `-import`, `-export`, Tauri 2 shell), TypeScript UI, CI, dependency licence checks, macOS bootstrap script.
-- Architecture decision records ADR-0001 to ADR-0025.
-- Vault format specification, draft revision 0.12 (notes, front matter, tags, links, attachments, music in ABC, song sheets in ChordPro, history, trash, smart folders, imported notes and the import log).
+- Architecture decision records ADR-0001 to ADR-0027.
+- Vault format specification, draft revision 0.14 (notes, front matter, tags, links, attachments, music in ABC, song sheets in ChordPro, history, trash, smart folders, imported notes and the import log).
 - Hashtag extraction in `schnipsle-core` following format.md §5.3, with the specification examples as tests.
 - Vault access in `schnipsle-core`: list notes (with iCloud placeholders), read, atomic write with conflict detection, create (spike, see docs/spikes/ios-vault.md).
 - `tauri-plugin-vault-access`: iOS folder picker with security-scoped bookmarks and iCloud download requests (spike).
@@ -38,6 +38,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - Song sheets (` ```chordpro ` blocks, format.md §5.7) are searchable by their lyrics without the chord brackets and by title, subtitle, artist, composer and lyricist; ChordPro comments and tablature are left out. `has:chord` finds notes with chords, `chord:Am` notes with that chord. The index rebuilds itself once more.
 - Smart folders in the core (format.md 0.9 §9, ADR-0018): saved searches in `.notesapp/smart-folders.yaml` can be added, renamed, changed, removed, reordered and nested; keys and entries other tools wrote are kept, and a change made on another device at the same moment is not lost. Results follow each folder's sort order.
 - Smart folders in the app: a "Smart folders" section above Tags (on the phone in the Tags view) lists the saved searches, nested. "Save" next to the search field keeps the current search as a folder; the ✎ button edits name, search, parent folder and order, or deletes the folder after asking (its subfolders move up, no notes are touched). Drag a folder by its ≡ handle to reorder it or drop it onto another folder to nest it; with the keyboard, the arrow keys on the handle do the same. Changes made on another device show up by themselves.
+- Exports convert HEIC, HEIF and TIFF pictures to JPEG, or PNG where they have transparency (ADR-0027), as most programs other than Apple's show them as broken or not at all. The vault is not touched; a picture that cannot be converted stays as it is and is named in the report. In ODT a picture taller than the page is made to fit, instead of being cut off.
 - DOCX and EPUB export through Pandoc (ADR-0010, ADR-0025): when Pandoc is installed, File › Export… offers both and shows its version. Footnotes are real footnotes, pictures are inside the file, each note starts a new page in DOCX and a chapter in EPUB, and what Pandoc warns about goes into the report. Pandoc is never bundled.
 - File › Export… (desktop): export the open note or the notes in the list as HTML, PDF (macOS) or ODT, as one document or one file per note, on A4 or Letter, with or without the final line of tags. The open note is saved first. The report lists what is different from the notes, each note openable from it, and which files got a number because their name was already taken in the folder, where nothing is ever replaced. The result can be shown in Finder. An export into the vault is refused.
 - ODT export in `schnipsle-export` (ADR-0010, ADR-0021): one file of one note or several with a new page per note, or a file per note that link to each other, on A4 or Letter. Pictures are inside the file, footnotes are real footnotes, and a note's title and dates go into the document's properties. Attachments stay behind and are reported. LibreOffice opens and converts every sample in CI.
@@ -57,6 +58,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Changed
 
+- A note that starts with a heading of any level, such as `## Title`, now takes its title from that heading without the `#` marks (format.md 0.14 §5.2, ADR-0026): in the note list, in links, and in the names and titles of exports. The search index rebuilds itself once.
 - Search results show a snippet of the note's text with the hits marked, even when the hit is in the title; before, a title hit showed the title a second time, which looked like a second result.
 - Apple Notes import tells apart several notes with the same title also when they have tags: the metadata shows Notes' tags as placeholders, so the text is compared with and without its hashtags. A note matched only by title used to keep the time of the export and was updated by every re-import.
 - iOS remembers the vault folder in a file in the app's Application Support folder instead of `UserDefaults`, excluded from backups since it only works on the device that made it. The folder picked with an earlier build is taken over automatically.

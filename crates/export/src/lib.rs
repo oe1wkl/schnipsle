@@ -148,6 +148,9 @@ pub enum ProblemKind {
     PictureMissing,
     /// A picture on the web is shown as a link, as the export works offline.
     WebPictureAsLink,
+    /// A picture of a kind few programs show could not be converted, so it stays
+    /// as it is (ADR-0027).
+    PictureNotConverted,
     /// The attachment is not in this export; the text of its link stays.
     AttachmentNotIncluded,
     /// The note linked to is not in this export; the text of its link stays.
