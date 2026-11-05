@@ -852,7 +852,7 @@ pub fn run() {
             keep_both,
             download_note,
             extract_tags,
-            exporting::export_formats,
+            exporting::export_choices,
             exporting::pick_export,
             exporting::export_notes,
             exporting::reveal_export,

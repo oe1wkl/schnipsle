@@ -300,7 +300,10 @@
             Format
             <select id="export-format"></select>
           </label>
-          <fieldset>
+          <p id="export-no-pandoc" class="muted" hidden>
+            Word and EPUB appear here once Pandoc is installed.
+          </p>
+          <fieldset id="export-files">
             <legend>Files</legend>
             <label>
               <input id="export-layout-one" type="radio" name="export-layout" value="singleFile" />
@@ -336,6 +339,7 @@
         <section id="export-report" class="import-report" aria-live="polite" hidden>
           <p id="export-summary" class="import-summary"></p>
           <p id="export-numbered" class="import-summary" hidden></p>
+          <ul id="export-warnings" class="import-notices" hidden></ul>
           <table id="export-problems-table" class="import-items">
             <thead>
               <tr>

@@ -6,21 +6,45 @@
 use std::path::Path;
 
 use schnipsle_export::{
-    Exporter as _, Format, HtmlExporter, Input, Layout, OdtExporter, Options, Report,
+    Exporter as _, Format, HtmlExporter, Input, Layout, OdtExporter, Options, Pandoc,
+    PandocExporter, Report,
 };
+use serde::Serialize;
 use tauri::{AppHandle, State};
 
 use crate::{AppState, CmdResult, with_vault};
 
-/// The formats this platform can write, for the dialog to offer.
+/// What the dialog can offer on this computer.
+#[derive(Serialize)]
+pub struct ExportChoices {
+    formats: Vec<Format>,
+    /// The version of the Pandoc found, on desktop (ADR-0010).
+    pandoc: Option<String>,
+}
+
+/// The formats this computer can write. Looks for Pandoc each time, so one
+/// installed meanwhile counts.
 #[tauri::command]
-pub async fn export_formats() -> Vec<Format> {
+pub async fn export_choices() -> ExportChoices {
     let mut formats = vec![Format::Html];
     if cfg!(target_os = "macos") {
         formats.push(Format::Pdf);
     }
     formats.push(Format::Odt);
-    formats
+    let pandoc = find_pandoc().map(|pandoc| pandoc.version().to_owned());
+    if pandoc.is_some() {
+        formats.extend([Format::Docx, Format::Epub]);
+    }
+    ExportChoices { formats, pandoc }
+}
+
+/// iOS and Android start no other programs.
+fn find_pandoc() -> Option<Pandoc> {
+    if cfg!(any(target_os = "ios", target_os = "android")) {
+        None
+    } else {
+        Pandoc::find()
+    }
 }
 
 /// Asks where the export goes: a file for one document, which the save dialog
@@ -71,6 +95,8 @@ const fn filter_name(format: Format) -> &'static str {
         Format::Html => "HTML page",
         Format::Pdf => "PDF document",
         Format::Odt => "OpenDocument text",
+        Format::Docx => "Word document",
+        Format::Epub => "EPUB e-book",
     }
 }
 
@@ -116,6 +142,11 @@ pub async fn export_notes(
             Format::Html => HtmlExporter.export(vault, &input, &options, to)?,
             Format::Odt => OdtExporter.export(vault, &input, &options, to)?,
             Format::Pdf => export_pdf(&app, vault, &input, options, to)?,
+            Format::Docx | Format::Epub => {
+                let pandoc = find_pandoc()
+                    .ok_or_else(|| crate::CommandError::other("Pandoc is not there any more"))?;
+                PandocExporter::new(format, pandoc).export(vault, &input, &options, to)?
+            }
         })
     })
 }

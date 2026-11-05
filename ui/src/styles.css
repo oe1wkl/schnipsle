@@ -591,7 +591,8 @@ button.danger {
   margin-bottom: 4px;
   padding: 0;
 }
-.export-choose .import-box {
+.export-choose .import-box,
+.export-choose .muted {
   margin: 0;
 }
 .import-help {

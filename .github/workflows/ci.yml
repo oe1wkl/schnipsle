@@ -63,6 +63,21 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo test -p schnipsle-export --locked --test odt -- --ignored --nocapture
 
+  pandoc:
+    name: DOCX and EPUB in Pandoc (ADR-0025)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Pandoc
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends pandoc
+      - name: Toolchain from rust-toolchain.toml
+        run: rustup toolchain install && rustup show active-toolchain
+      - uses: Swatinem/rust-cache@v2
+      - run: pandoc --version
+      - run: cargo test -p schnipsle-export --locked --test pandoc -- --ignored --nocapture
+
   ui:
     name: UI (TypeScript)
     runs-on: ubuntu-latest

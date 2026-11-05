@@ -205,7 +205,13 @@ export interface ImportOutcome {
 }
 
 /** A format `export_formats` offers (schnipsle-export `Format`). */
-export type ExportFormat = "html" | "pdf" | "odt";
+export type ExportFormat = "html" | "pdf" | "odt" | "docx" | "epub";
+/** What `export_choices` returns. */
+export interface ExportChoices {
+  formats: ExportFormat[];
+  /** The version of the Pandoc found, if any. */
+  pandoc: string | null;
+}
 /** Where the notes go (schnipsle-export `Layout`). */
 export type ExportLayout = "singleFile" | "folder" | "filePerNote";
 /** The paper of a format with pages (schnipsle-export `Paper`). */
@@ -230,5 +236,7 @@ export interface ExportReport {
   files: string[];
   /** Those of `files` that got a number, as their name was already taken. */
   numbered: string[];
+  /** What a converter said while it worked. */
+  warnings: string[];
   problems: ExportProblem[];
 }

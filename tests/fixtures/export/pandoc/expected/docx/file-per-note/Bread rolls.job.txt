@@ -1,0 +1,5 @@
+format: docx
+title: Bread rolls
+created: Some("2026-10-01T07:00:00Z")
+modified: Some(1792513800000)
+picture: picture-1.jpg 4411
