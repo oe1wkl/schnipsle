@@ -17,11 +17,11 @@ percent-encoding.workspace = true
 schnipsle-core.workspace = true
 serde.workspace = true
 unicode-normalization.workspace = true
+tempfile.workspace = true
 zip.workspace = true
 
 [dev-dependencies]
 serde_json.workspace = true
-tempfile.workspace = true
 
 [lints]
 workspace = true

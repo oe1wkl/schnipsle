@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 // Export (ADR-0010, ADR-0021), desktop only: File › Export… asks for the open
-// note or the notes in the list, the format, one document or one file per
-// note, the page size and whether to keep the line of tags; then a save dialog
-// or folder picker. The report says what is different in the export, each note
+// note or the notes in the list, the format (Word and EPUB if Pandoc is there),
+// one document or one file per note, the page size and whether to keep the line
+// of tags; then a save dialog or folder picker. The report says what is different in the export, each note
 // openable from it, and the result can be shown in Finder.
 import { invoke } from "@tauri-apps/api/core";
 
 import { asError, el } from "./dom";
 import type {
+  ExportChoices,
   ExportFormat,
   ExportLayout,
   ExportPaper,
@@ -20,16 +21,23 @@ const FORMAT_LABELS: Record<ExportFormat, string> = {
   html: "HTML",
   pdf: "PDF",
   odt: "OpenDocument text (ODT)",
+  docx: "Word (DOCX)",
+  epub: "EPUB",
 };
+
+/** Only a folder export to HTML copies attachments (ADR-0021 rule 6). */
+const COPIES_ATTACHMENTS: ExportFormat = "html";
+
+/** Formats whose documents have pages of a chosen size. */
+const WITH_PAGES: readonly ExportFormat[] = ["pdf", "odt", "docx"];
 
 const PROBLEM_LABELS: Record<ExportProblemKind, (target: string) => string> = {
   noteNotRead: () => "Could not be read, perhaps not downloaded yet, so it is not in the export",
   pictureMissing: (t) => `Picture not found, its description is shown instead: ${t}`,
   webPictureAsLink: (t) => `Picture on the web, shown as a link: ${t}`,
-  attachmentNotIncluded: (t) =>
-    `Attachment not included, only the text of its link. An export to a folder copies it: ${t}`,
+  attachmentNotIncluded: (t) => `Attachment not included, only the text of its link: ${t}`,
   noteNotExported: (t) => `Link to a note not in this export; only its text stays: ${t}`,
-  noteInOtherFile: (t) => `Link to a note in another PDF file; only its text stays: ${t}`,
+  noteInOtherFile: (t) => `Link to a note in another file; only its text stays: ${t}`,
 };
 
 const SETTINGS_KEY = "schnipsle.export";
@@ -48,6 +56,8 @@ const layoutOne = el("export-layout-one") as HTMLInputElement;
 const layoutMany = el("export-layout-many") as HTMLInputElement;
 const oneLabel = el("export-one-label");
 const manyLabel = el("export-many-label");
+const filesBox = el("export-files");
+const noPandoc = el("export-no-pandoc");
 const paperRow = el("export-paper-row");
 const paperSelect = el("export-paper") as HTMLSelectElement;
 const keepTags = el("export-keep-tags") as HTMLInputElement;
@@ -57,6 +67,7 @@ const progressText = el("export-progress-text");
 const report = el("export-report");
 const summary = el("export-summary");
 const numberedText = el("export-numbered");
+const warningsList = el("export-warnings");
 const problemsTable = el("export-problems-table");
 const problems = el("export-problems");
 const errorText = el("export-error");
@@ -134,8 +145,13 @@ export function createExport(hooks: ExportHooks): { open(): Promise<void> } {
     return formatSelect.value as ExportFormat;
   }
 
+  /** A folder gives a single note nothing unless its attachments come along. */
+  function layoutMatters(): boolean {
+    return chosenNotes().length > 1 || format() === COPIES_ATTACHMENTS;
+  }
+
   function layout(): ExportLayout {
-    return layoutMany.checked ? "filePerNote" : "singleFile";
+    return layoutMany.checked && layoutMatters() ? "filePerNote" : "singleFile";
   }
 
   /** The notes chosen, by path. */
@@ -167,11 +183,17 @@ export function createExport(hooks: ExportHooks): { open(): Promise<void> } {
     if (whatList.disabled) whatNote.checked = true;
 
     const several = chosenNotes().length > 1;
+    const copies = format() === COPIES_ATTACHMENTS;
+    filesBox.hidden = !layoutMatters();
     oneLabel.textContent = several ? "One document" : "One file";
-    manyLabel.textContent = several
-      ? "One file per note, in a folder with copies of their attachments"
-      : "In a folder, with copies of its attachments";
-    paperRow.hidden = format() === "html";
+    if (several) {
+      manyLabel.textContent = copies
+        ? "One file per note, in a folder with copies of their attachments"
+        : "One file per note, in a folder";
+    } else {
+      manyLabel.textContent = "In a folder, with copies of its attachments";
+    }
+    paperRow.hidden = !WITH_PAGES.includes(format());
 
     const chosen = chosenNotes();
     const unsaved = note?.unsaved === true && chosen.includes(note.path);
@@ -185,7 +207,7 @@ export function createExport(hooks: ExportHooks): { open(): Promise<void> } {
   function saveSettings(): void {
     const settings: Settings = {
       format: format(),
-      layout: layout(),
+      layout: layoutMany.checked ? "filePerNote" : "singleFile",
       paper: paperSelect.value as ExportPaper,
       keepTagLine: keepTags.checked,
     };
@@ -221,8 +243,8 @@ export function createExport(hooks: ExportHooks): { open(): Promise<void> } {
       return;
     }
     try {
-      const [formats, selected] = await Promise.all([
-        invoke<ExportFormat[]>("export_formats"),
+      const [{ formats, pandoc }, selected] = await Promise.all([
+        invoke<ExportChoices>("export_choices"),
         hooks.selection(),
       ]);
       selection = selected;
@@ -231,10 +253,14 @@ export function createExport(hooks: ExportHooks): { open(): Promise<void> } {
         ...formats.map((value) => {
           const option = document.createElement("option");
           option.value = value;
-          option.textContent = FORMAT_LABELS[value];
+          const through = (value === "docx" || value === "epub") && pandoc !== null;
+          option.textContent = through
+            ? `${FORMAT_LABELS[value]}, through Pandoc ${pandoc}`
+            : FORMAT_LABELS[value];
           return option;
         }),
       );
+      noPandoc.hidden = pandoc !== null;
       if (settings.format && formats.includes(settings.format)) {
         formatSelect.value = settings.format;
       }
@@ -328,6 +354,14 @@ export function createExport(hooks: ExportHooks): { open(): Promise<void> } {
     }
     numberedText.hidden = result.numbered.length === 0;
     numberedText.textContent = numberedSentence(result.numbered);
+    warningsList.hidden = result.warnings.length === 0;
+    warningsList.replaceChildren(
+      ...result.warnings.map((warning) => {
+        const item = document.createElement("li");
+        item.textContent = warning;
+        return item;
+      }),
+    );
     const count = result.problems.length;
     if (count > 0 && written > 0) {
       summary.textContent += ` ${plural(count, "thing is", "things are")} different from the notes:`;

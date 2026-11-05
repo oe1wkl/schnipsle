@@ -153,6 +153,8 @@ pub(crate) struct Collected {
     pub problems: Vec<Problem>,
     /// Files that got a number, as [`crate::Report::numbered`] says.
     pub numbered: Vec<String>,
+    /// What a converter said, as [`crate::Report::warnings`] says.
+    pub warnings: Vec<String>,
     /// Files to copy, by where they go: relative to the document's folder, the
     /// same as relative to the vault.
     pub copies: BTreeMap<String, Copy>,
@@ -547,7 +549,7 @@ impl<'a> Preparer<'a, '_> {
     }
 }
 
-fn set_url<'a>(node: &'a AstNode<'a>, url: &str) {
+pub(crate) fn set_url<'a>(node: &'a AstNode<'a>, url: &str) {
     if let NodeValue::Link(link) | NodeValue::Image(link) = &mut node.data_mut().value {
         url.clone_into(&mut link.url);
     }

@@ -1,6 +1,6 @@
 # ADR-0010: Export engines: Pandoc on desktop, built-in on iOS
 
-- Status: Accepted; PDF on macOS amended by [ADR-0022](0022-pdf-through-the-print-path.md)
+- Status: Accepted; PDF on macOS amended by [ADR-0022](0022-pdf-through-the-print-path.md); how Pandoc gets a note and finishes DOCX decided by [ADR-0025](0025-docx-and-epub-through-pandoc.md)
 - Date: 2026-10-13
 - Deciders: Willi Kraml
 - Related: F-06, F-13, ADR-0002, ADR-0005

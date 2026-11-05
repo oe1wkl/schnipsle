@@ -1,0 +1,6 @@
+format: docx
+title: Samples
+created: None
+modified: None
+picture: picture-1.png 708
+picture: picture-2.jpg 4411

@@ -5,13 +5,16 @@
 //! [ADR-0021](../../docs/adr/0021-what-an-exported-note-looks-like.md) for what
 //! an exported note contains. The rules live in `document`, which turns a note
 //! into a syntax tree every format can write: [`HtmlExporter`] writes HTML,
-//! [`PdfExporter`] has that HTML printed, and [`OdtExporter`] writes ODT.
+//! [`PdfExporter`] has that HTML printed, [`OdtExporter`] writes ODT, and
+//! [`PandocExporter`] has Markdown converted to DOCX and EPUB.
 
 mod document;
+mod docx_package;
 mod html;
 mod odt;
 mod odt_content;
 mod output;
+mod pandoc;
 mod pdf;
 mod pdf_dates;
 mod raw_html;
@@ -24,6 +27,7 @@ use serde::{Deserialize, Serialize};
 pub use html::HtmlExporter;
 pub use odt::OdtExporter;
 pub use output::{check_target, suggested_file_name};
+pub use pandoc::{ConversionJob, Converted, Converter, JobPicture, Pandoc, PandocExporter};
 pub use pdf::{PdfExporter, PrintJob, Printer};
 
 /// A format an [`Exporter`] writes.
@@ -36,6 +40,10 @@ pub enum Format {
     Pdf,
     /// `OpenDocument` text.
     Odt,
+    /// Word, through Pandoc.
+    Docx,
+    /// An e-book, through Pandoc.
+    Epub,
 }
 
 impl Format {
@@ -46,6 +54,8 @@ impl Format {
             Self::Html => "html",
             Self::Pdf => "pdf",
             Self::Odt => "odt",
+            Self::Docx => "docx",
+            Self::Epub => "epub",
         }
     }
 }
@@ -108,6 +118,8 @@ pub struct Report {
     /// Those of `files` that got a number, as their name was already taken: by
     /// something in the folder, which stays, or by another note of this export.
     pub numbered: Vec<String>,
+    /// What a converter said while it worked, such as a picture it could not convert.
+    pub warnings: Vec<String>,
     /// What did not make it into the export as it is in the vault.
     pub problems: Vec<Problem>,
 }
@@ -140,8 +152,8 @@ pub enum ProblemKind {
     AttachmentNotIncluded,
     /// The note linked to is not in this export; the text of its link stays.
     NoteNotExported,
-    /// The note linked to is in another file of this export, which a PDF cannot
-    /// link to; the text of its link stays.
+    /// The note linked to is in another file of this export, which a PDF or an
+    /// EPUB cannot link to; the text of its link stays.
     NoteInOtherFile,
 }
 
@@ -189,7 +201,14 @@ mod tests {
 
     #[test]
     fn formats_are_named_as_the_dialog_expects() {
-        let names = serde_json::to_string(&[Format::Html, Format::Pdf, Format::Odt]).unwrap();
-        assert_eq!(names, r#"["html","pdf","odt"]"#);
+        let names = serde_json::to_string(&[
+            Format::Html,
+            Format::Pdf,
+            Format::Odt,
+            Format::Docx,
+            Format::Epub,
+        ])
+        .unwrap();
+        assert_eq!(names, r#"["html","pdf","odt","docx","epub"]"#);
     }
 }

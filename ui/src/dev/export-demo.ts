@@ -3,7 +3,8 @@
 // Tauri: the app's page is loaded for its elements, and a stand-in for Tauri's
 // IPC answers the export commands. Parameters: `?clean` for an export without
 // problems, `?failed` for one that stops with an error, `?nothing` for one with
-// no note readable, `?numbered` for files with names already taken, `?unsaved` for an open note with unsaved changes, `?nonote`
+// no note readable, `?numbered` for files with names already taken, `?warnings`
+// for what a converter said, `?nopandoc` without Pandoc, `?unsaved` for an open note with unsaved changes, `?nonote`
 // with no note open.
 import type { ExportProblem, ExportReport } from "../types";
 
@@ -29,8 +30,10 @@ const PROBLEMS = [
 
 async function answer(cmd: string, args?: Record<string, unknown>): Promise<unknown> {
   switch (cmd) {
-    case "export_formats":
-      return ["html", "pdf", "odt"];
+    case "export_choices":
+      return params.has("nopandoc")
+        ? { formats: ["html", "pdf", "odt"], pandoc: null }
+        : { formats: ["html", "pdf", "odt", "docx", "epub"], pandoc: "3.12.1" };
     case "pick_export":
       await wait(300);
       return args?.layout === "singleFile"
@@ -40,10 +43,15 @@ async function answer(cmd: string, args?: Record<string, unknown>): Promise<unkn
       await wait(1200);
       if (params.has("failed")) throw new Error("The disk is full");
       const report: ExportReport = params.has("nothing")
-        ? { files: [], numbered: [], problems: PROBLEMS.slice(4) }
+        ? { files: [], numbered: [], warnings: [], problems: PROBLEMS.slice(4) }
         : {
             files: ["one-2.pdf", "two-2.pdf"],
             numbered: params.has("numbered") ? ["one-2.pdf", "two-2.pdf"] : [],
+            warnings: params.has("warnings")
+              ? [
+                  "Bread rolls: Could not convert image picture-1.svg: check that rsvg-convert is in path.",
+                ]
+              : [],
             problems: params.has("clean") ? [] : PROBLEMS,
           };
       return report;
