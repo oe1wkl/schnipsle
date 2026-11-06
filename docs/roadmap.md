@@ -1,7 +1,7 @@
 # Roadmap and status
 
 - Updated: 2026-11-06
-- Current milestone: **M6 – Release 1.0**
+- Current milestone: **M6 – Music**
 
 Each milestone ends in a usable build. Scope can move between milestones; the order should not.
 
@@ -13,8 +13,9 @@ Each milestone ends in a usable build. Scope can move between milestones; the or
 | M3 – Smart folders | Query language, saved searches | Done 2026-10-28 |
 | M4 – Import | Apple Notes (macOS 26 Markdown export), Simplenote, HTML, Markdown folders | Done 2026-11-01 |
 | M5 – Export | HTML, PDF, ODT built in; Pandoc formats on desktop (desktop first) | Done 2026-11-06 |
-| M6 – Release 1.0 | Export on iOS, manual, packaging and signing, performance and data-safety tests | |
-| Later | Note links, music rendering and playback (ABC), ChordPro, extras | |
+| M6 – Music | ABC scores rendered and played, ChordPro song sheets rendered and transposed, both in exports | |
+| M7 – Release 1.0 | Export on iOS, manual, packaging and signing, performance and data-safety tests | |
+| Later | Note links, extras | |
 
 ## M0 results
 
@@ -30,6 +31,56 @@ Each milestone ends in a usable build. Scope can move between milestones; the or
 - Format spec at draft revision 0.8; ADR-0016 and ADR-0017 added. Tested on macOS and on the iPhone (iOS 27).
 - Moved to later milestones: loading the editor on demand (bundle ~530 kB), inline formatting inside table cells, a settings view.
 
+## M6 backlog
+
+Draft, to be agreed. Goal: music in notes as the HLD asks for 1.0: ABC scores engraved in the editor and in exports, played back for practice (F-16, F-17; ADR-0013), and ChordPro song sheets with chords over their syllables, transposed, in German or English names, lyrics only on request (F-18; ADR-0014). Both follow format.md §5.6 and §5.7; the file is never rewritten except by an explicit "Apply transposition". Order: core first (indexing, ChordPro model), editor, playback, exports, then a check with real songs on the Mac and the iPhone.
+
+To decide first:
+
+- [ ] How exports get the engraved ABC: abcjs runs in the web view, the exporters in Rust. Likely the app renders the SVG and hands it to the export (as the PDF path already uses the web view); on iOS the same. A spike, then an ADR amending rule 8 of ADR-0021 (music as source until now)
+- [x] Playback (F-17, a should) is part of M6 (2026-11-06)
+
+Work:
+
+- [ ] ABC indexing (format.md §5.6 rule 5, a MUST not yet built): `T:`, `C:`, `w:` and `W:` into the full-text index, the rest not; fixtures in `tests/fixtures/format/5.6-index/` (fragment without `X:`, several voices, lyrics, `#` inside the block), as format.md §11 promises; index schema bump
+- [ ] ChordPro renderer in `schnipsle-core` (ADR-0014): the parser of M3 gives a model of lines with chords and syllables, sections and directives; a transposer with English and German names and sharps or flats by key; `{transpose}`, the info-string options of §5.7 rule 7 and the vault default of rule 6 in `settings.yaml`; golden files of rendering and transposition
+- [ ] ChordPro in the editor: chords over syllables in the live preview, the source while the cursor is in the block; transpose control, notation and lyrics only per block as a view setting; "Apply transposition" rewrites the block after a history snapshot (§5.7 rule 5)
+- [ ] ABC in the editor: abcjs (MIT; through `scripts/check-npm-licenses.mjs`) engraves the block in the live preview, the source while the cursor is in it, errors shown without losing text; `transpose=` and `nosource`; loaded only when a note has music, as abcjs is large
+- [ ] Playback (F-17): abcjs's synthesizer per block, play and stop, tempo, mute and solo per voice; checked on the iPhone with the silent switch on
+- [ ] Music in exports: song sheets rendered from the core model in HTML, PDF, ODT, DOCX and EPUB, chords over syllables; scores as SVG as decided above, with the option of ADR-0013 to add the ABC source; golden files
+- [ ] A small snippet menu for ABC (key, metre, voices; ADR-0013), and a manual page on music with a link to the ABC standard
+- [ ] Check with real songs: a choir piece with several voices, song sheets with German names, on the Mac and the iPhone (iOS 27); typing in a long score stays smooth
+
+Not in M6: chord diagrams (`{define}`) and multi-column song sheets (later extension of format.md); MusicXML, MIDI or LilyPond rendered inline (§5.6 rule 7).
+
+## M7 backlog
+
+Draft, to be agreed. Goal: a 1.0 people can install and trust on the Mac and the iPhone, with everything the HLD marks as a must (M) or settled as out of 1.0. Desktop builds are signed and notarized, the iPhone app goes through TestFlight to the App Store. Order: decisions, export on iOS, what the requirements still lack, data safety and performance on devices, then manual, packaging and release.
+
+To decide first:
+
+- [ ] Ways to install (ADR): Developer ID with notarization from GitHub, the Mac App Store (sandbox, see ADR-0022), or both; the App Store for iOS. Updates on the desktop: Tauri's updater or none
+- [ ] German in 1.0 (N-06: English and German first), or English only with the strings ready for it
+- [ ] What else joins 1.0: import on the iPhone (Markdown folders and the Simplenote zip from Files); a settings view (history retention, Pandoc, later the reading view); renaming and merging tags (F-11)
+
+Work:
+
+- [ ] PDF on iOS: a spike of `UIPrintPageRenderer` with the web view's print formatter (`docs/spikes/pdf-print.md`), then an ADR for the iOS path of ADR-0022, page numbers and table of contents included (ADR-0029)
+- [ ] Export on iOS (F-06): HTML, PDF and ODT from the note or the notes in the list, handed to the share sheet or saved to Files; the report as on the desktop. DOCX and EPUB stay desktop only (ADR-0025)
+- [ ] History: compare two versions of a note, or a version with the note (F-14 "browse, compare, restore"; browsing and restoring exist)
+- [ ] Localisation and access (N-06), as decided: UI strings in one place, German if chosen; every view usable by keyboard on the Mac and with VoiceOver on both
+- [ ] Data-safety tests (N-04): a long run of random edits, renames, deletes, restores and outside changes against a model of the vault, which must never lose text; the app killed while saving; a full disk and a read-only vault; C7 and C8 (two devices, offline) again with the release build
+- [ ] Performance on devices (N-03): 10,000 notes on the oldest iPhone we support and on an Intel Mac if we build for it; start time, memory, search and export times written down; the editor loaded on demand if start time needs it (bundle ~530 kB)
+- [ ] Manual (`docs/manual/`): getting started, vaults and their files, tags and smart folders, search (exists), import, export, history and trash, sync with iCloud; reachable from the Help menu
+- [ ] Licences: the legal check of how Pandoc is called (ADR-0005, ADR-0025); a list of third-party licences in the app and next to the download
+- [ ] macOS packaging: version 1.0.0 everywhere, hardened runtime with the Apple Events entitlement for the Notes import, Developer ID signing and notarization in a CI release job, a DMG; Apple silicon only or universal
+- [ ] iOS packaging: App Store Connect record, privacy manifest (`PrivacyInfo.xcprivacy`) with the reasons for the APIs used, export compliance, icon and screenshots, TestFlight; the iOS `Info.plist` without the desktop-only `NSAppleEventsUsageDescription` the build adds
+- [ ] Reproducible builds (N-07): what can be rebuilt bit for bit and what cannot (signing, Xcode), documented in `docs/dev-setup.md`
+- [ ] Beta: a few weeks of everyday use on the Mac and the iPhone, with others on TestFlight; fixes
+- [ ] Release: CHANGELOG section 1.0.0, tag, GitHub release with the DMG and notes, App Store submission
+
+Not in M7, unless decided otherwise above: Linux and Windows builds (N-05 keeps them possible), Android, note links and backlinks (F-12), the importers of F-13, fonts as a choice.
+
 ## M5 results
 
 - Export on the desktop (File › Export…) of the open note or the notes in the list: HTML, PDF (macOS) and ODT built in, DOCX and EPUB when Pandoc is installed (ADR-0010, ADR-0021, ADR-0025). One document, or one file per note; A4 or Letter; with or without the final tag line; optionally a table of contents and page numbers (ADR-0029).
@@ -37,11 +88,11 @@ Each milestone ends in a usable build. Scope can move between milestones; the or
 - Pictures that most programs do not show (HEIC, HEIF, TIFF) are converted (ADR-0027), and photos turned only by their orientation are upright in DOCX and ODT (ADR-0028). A first heading of any level gives the title (ADR-0026).
 - Nothing is ever replaced: a taken name gets a number, an export into the vault is refused, and the report says what differs from the notes.
 - Checked with all 538 notes of the M4 import in every format, no text lost, and by hand in LibreOffice, WordCraft and Books. Word itself is not checked.
-- Moved on: export on iOS (M6, with page numbers for printing there); rendered music and song sheets in exports (music milestone); fonts as a choice (below); a table of contents of the headings of one long note, if wanted; exports on Linux and Windows.
+- Moved on: export on iOS (M7, with page numbers for printing there); rendered music and song sheets in exports (M6, music); fonts as a choice (below); a table of contents of the headings of one long note, if wanted; exports on Linux and Windows.
 
 ## M5 backlog
 
-Goal: export a note, or the notes of a tag folder, search or smart folder, to HTML, PDF and ODT (F-06), plus DOCX and EPUB through Pandoc when it is installed (F-13, desktop). Decisions: ADR-0010 (built-in engines, Pandoc optional and never bundled). Several notes become, by choice in the dialog, one document with a section per note (a page break between notes in PDF and ODT) or one file per note in a folder. The final tag line of a note is left out by default; tags inside the text stay as text. Desktop first; export on iOS (share sheet) moves to M6, since F-06 is a must for 1.0. Order: export rules and fixtures, HTML, PDF spike, PDF, ODT, export UI, Pandoc, check with real notes.
+Goal: export a note, or the notes of a tag folder, search or smart folder, to HTML, PDF and ODT (F-06), plus DOCX and EPUB through Pandoc when it is installed (F-13, desktop). Decisions: ADR-0010 (built-in engines, Pandoc optional and never bundled). Several notes become, by choice in the dialog, one document with a section per note (a page break between notes in PDF and ODT) or one file per note in a folder. The final tag line of a note is left out by default; tags inside the text stay as text. Desktop first; export on iOS (share sheet) moves to M7 (then called M6), since F-06 is a must for 1.0. Order: export rules and fixtures, HTML, PDF spike, PDF, ODT, export UI, Pandoc, check with real notes.
 
 - [x] Export rules and test data: ADR-0021 (front matter into the document's metadata, a single note as written, sections with their titles in one document, the final tag line left out unless kept, pictures embedded or copied, other attachments only in a folder export, links to notes only to notes exported too, music and math as source until the music milestone, raw HTML through an allowlist, no notes from the trash, a report at the end); the sample vault `tests/fixtures/export/vault/` (six notes, three attachments, one note in the trash) with a README of what each note covers, checked by `crates/export/tests/sample_vault.rs`
 - [x] HTML exporter in `schnipsle-export`: the rules of ADR-0021 in one step all formats share (`document.rs`, `raw_html.rs`), comrak's HTML with a CSS theme close to the editor's preview; a single file with pictures as `data:` URLs, one document in a folder with an `attachments/` copy, or a document per note; a folder export never replaces what is there; golden files in `tests/fixtures/export/html/expected/`
@@ -58,7 +109,7 @@ Fonts, for later: notes carry no fonts, and that stays so (code is always monosp
 - Reading view in the app: serif or sans-serif, for headings and for text apart, and larger or smaller text. A setting of the device, never in the vault.
 - Export: the same serif or sans-serif choice, with basic fonts per format. PDF embeds what it uses, so it can take the Mac's own (San Francisco, New York, SF Mono). ODT and DOCX carry no fonts, so they name ones nearly every computer has (Arial, Times New Roman, Courier New; LibreOffice on Linux puts in the Liberation fonts of the same widths); fonts are not embedded, for their licences and size. EPUB names only the family, as readers let their users choose. Until then DOCX names Pandoc's Aptos and Consolas, which only Microsoft Office brings; ODT has Arial and Courier New. This needs an ADR.
 
-Not in M5: export on iOS (M6); rendered music and song sheets in exports (music milestone; until then they export as code blocks); multi-select in the note list.
+Not in M5: export on iOS (M7, then called M6); rendered music and song sheets in exports (music milestone; until then they export as code blocks); multi-select in the note list.
 
 ## M4 results
 
@@ -77,7 +128,7 @@ Goal: bring notes over from Apple Notes and Simplenote (F-03, F-04), plus HTML f
 - [x] Pipeline in `schnipsle-import` (ADR-0012, format.md §12): adapters hand over a `Batch` of `ImportedNote`s; `plan` is the dry run (new, updated, skipped with reason, problems per note, notices) and writes nothing; `apply` stores attachments (§6, links rewritten), writes each note as planned (front matter with `id`, dates from the source, `source`/`source_id`; folder and source tags on a final line; NFC and LF), atomically and coordinated, with a history snapshot before each update, and the import log ahead of the notes it lists. Re-import follows §12.3 (unchanged here and newer in the source); a note changed between dry run and import is left alone. Core gained exact-text note writes, `free_note_path`, `find_note` and `import_log`. Golden-file tests in `tests/fixtures/import/pipeline/` (`SCHNIPSLE_BLESS=1` rewrites them). Source-specific clean-up comes with each adapter; the search index update for the written notes comes with the import UI
 - [x] Apple Notes metadata script: `scripts/apple-notes-metadata.js` writes `apple-notes-metadata.json` (id, folder, smart folders, dates, snippet) into the export folder (ADR-0019); tested on your Notes (679 notes, 17 s); a prototype matched 132 of 137 exported files without doubt
 - [x] Apple Notes adapter (`apple_notes.rs`; golden files in `tests/fixtures/import/apple-notes/expected/`): the Markdown export as it really is (title in the first line, with or without `#`; line breaks as two trailing spaces; stray U+2028; `++underline++`; `Attachments/<UUID>.<ext>` linked as images, PDFs too, with recognized text as alt text; tables; checklists) matched to `apple-notes-metadata.json` (ADR-0019) for `source_id` and dates; the note's real Notes folder (from the metadata) gives placement and `#<Folder>`, the export folder only for unmatched files; unmatched files, notes the export dropped (same title in one folder) and missing metadata are listed in the report. Two spaces at a line end are kept only where they break a line inside a paragraph; U+2028 at a line end is dropped, inside a line it becomes a line break; PDFs and other non-pictures become links; `++underline++` stays as written (Markdown has no underline). A damaged or newer metadata file stops the import rather than importing with export times, as a later import with it would add every note again. The pipeline now also reports lines like `#define X` that become tags
-- [x] Import UI (desktop; `ui/src/import.ts`, `src-tauri/src/importing.rs`): File › Import… with the source, a file or folder picker (for Apple Notes with the two export steps explained, and the metadata script run on request), the dry-run report, then Import with progress and a result summary listing new, updated and skipped notes, each one openable. Import writes exactly the plan of the dry run the user saw (kept in the app, never planned afresh) and updates the search index for the notes written. The metadata script is built into the app and run with `osascript`; `src-tauri/Info.plist` explains to macOS why Schnipsle asks to control Notes. Signing with the hardened runtime (M6) needs the entitlement `com.apple.security.automation.apple-events` as well. Sources other than Apple Notes appear as their adapters arrive. Playground without Tauri: `/dev/import.html`
+- [x] Import UI (desktop; `ui/src/import.ts`, `src-tauri/src/importing.rs`): File › Import… with the source, a file or folder picker (for Apple Notes with the two export steps explained, and the metadata script run on request), the dry-run report, then Import with progress and a result summary listing new, updated and skipped notes, each one openable. Import writes exactly the plan of the dry run the user saw (kept in the app, never planned afresh) and updates the search index for the notes written. The metadata script is built into the app and run with `osascript`; `src-tauri/Info.plist` explains to macOS why Schnipsle asks to control Notes. Signing with the hardened runtime (M7) needs the entitlement `com.apple.security.automation.apple-events` as well. Sources other than Apple Notes appear as their adapters arrive. Playground without Tauri: `/dev/import.html`
 - [x] Simplenote adapter (`simplenote.rs`; golden files in `tests/fixtures/import/simplenote/expected/`): reads `source/notes.json` from the zip Simplenote exports (crate `zip`, reading only, deflate through zlib-rs), from `notes.json` itself or from the unpacked folder; the zip's `.txt` files, some with names that are not UTF-8, are ignored. Title from the first line; CRLF to LF and NFC; tags as hashtags on a final line unless already in the text; `id`, `creationDate`, `lastModified`, `pinned` kept; the text stays as written whether or not Simplenote marked it as Markdown. Trashed notes are imported and moved to the trash (format.md 0.11 §12.1 rule 6); a note imported before and trashed in Simplenote since is updated as usual, never trashed, and the report says so. File › Import… offers Simplenote with a zip file picker
 - [x] HTML adapter (`html.rs`; golden files in `tests/fixtures/import/html/expected/`): converter `htmd` (Apache-2.0, on html5ever) with rules of its own for `<title>`, `data:` pictures, strikethrough, checkboxes and `---`; a single `.html`/`.htm` file or a folder at any depth, skipping hidden entries and the `<page>_files` folders browsers save pictures in; folders below the chosen one become the note's folders and tags. The title is the page's leading level-1 heading, otherwise its `<title>`, which then becomes that heading so the note shows the title it is named by (format.md §5.2). Pictures embedded as `data:` URLs and local files that pictures and links point to inside the chosen folder go into `attachments/`; links to other pages, the web and missing files stay as written, missing ones reported. Text that is not UTF-8 is read as Windows-1252 unless the page declares another encoding, which is reported and not imported. Dates are the file's modification time, so a re-import updates changed pages. File › Import… offers HTML with a folder and a file picker
 - [x] Markdown folders adapter (`markdown.rs`; golden files in `tests/fixtures/import/markdown/expected/`): `.md`, `.markdown`, `.mdown`, `.mkd`, `.mkdn` files from a folder at any depth or a single file, hidden entries (`.obsidian`, `.git`) left out; the text kept as written, front matter of other tools included (§4), named after its leading heading, otherwise a front-matter `title`, which then becomes that heading (§12.1 rule 7, ADR-0020), otherwise the file; relative links to pictures and files inside the chosen folder moved into `attachments/` and rewritten (shared with the HTML adapter in `files.rs`), missing ones reported; text that is not UTF-8 read as Windows-1252 and reported. ChordPro files (`.cho`, `.crd`, `.chopro`, `.chordpro`) become a note with the `{title}` (or the file name) as a level-1 heading and the file in one `chordpro` block, fenced longer than any backtick run in it (§5.7 rule 9). Dates from the file times; a front-matter `created` is kept. The pipeline now replaces an `id` that a source's front matter brings along (§12.1 rule 1) and reports it, and an import from inside the open vault, or from a folder that contains it, is refused. File › Import… offers Markdown with a folder and a file picker

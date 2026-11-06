@@ -89,5 +89,5 @@ Not needed, tested by leaving them out: setting the frame of the print view, and
 ## Open
 
 - **Sandbox:** the app is not sandboxed today. A Mac App Store build may need the print entitlement (`com.apple.security.print`) and access to the target; to be tested when sandboxing comes.
-- **iOS (M6):** `NSPrintOperation` does not exist there, and `createPDF` should have the same one-page limit. The likely path is `UIPrintPageRenderer` with the web view's print formatter. Not tested.
+- **iOS (M7):** `NSPrintOperation` does not exist there, and `createPDF` should have the same one-page limit. The likely path is `UIPrintPageRenderer` with the web view's print formatter. Not tested.
 - **Page numbers:** the print path adds no headers or footers. Not asked for by ADR-0021, so left out at first; ADR-0029 draws them onto the printed pages afterwards, with `lopdf`.
