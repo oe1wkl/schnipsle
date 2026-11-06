@@ -6,9 +6,7 @@
 use std::fs;
 
 use schnipsle_core::vault::Vault;
-use schnipsle_export::{
-    Exporter as _, HtmlExporter, Input, Layout, OdtExporter, Options, Paper, ProblemKind,
-};
+use schnipsle_export::{Exporter as _, HtmlExporter, Input, Layout, Options, Paper, ProblemKind};
 
 fn options(layout: Layout) -> Options {
     Options {
@@ -75,6 +73,7 @@ fn other_pictures_are_left_alone() {
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 mod with_a_converter {
     use super::*;
+    use schnipsle_export::OdtExporter;
 
     /// One white pixel as an uncompressed little-endian TIFF.
     fn tiff() -> Vec<u8> {
