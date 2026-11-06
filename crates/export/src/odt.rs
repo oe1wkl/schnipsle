@@ -73,15 +73,30 @@ fn one_document(
     to: &Path,
     collected: &mut Collected,
 ) -> Result<Option<String>> {
-    let (anchors, rules) = document::rules_of_one_document(vault, notes, options, false, false);
+    let (anchors, mut rules) = document::rules_of_one_document(vault, notes, options, false, false);
+    rules.upright_pictures = true;
+    let contents = document::has_contents(options, notes);
+    let pages = Pages {
+        paper: options.paper,
+        numbered: document::numbers_pages(options, notes),
+        contents,
+    };
     let mut content = Content::new(text_size(options.paper));
+    if contents {
+        let entries: Vec<(&str, &str)> = notes
+            .iter()
+            .zip(&anchors)
+            .map(|(note, anchor)| (note.title.as_str(), anchor.as_str()))
+            .collect();
+        content.contents(&entries);
+    }
     for (index, (note, anchor)) in notes.iter().zip(&anchors).enumerate() {
         let arena = Arena::new();
         let root = document::prepare(&arena, note, anchor, &rules, collected);
-        content.note(root, anchor, index > 0);
+        content.note(root, anchor, index > 0 || contents);
     }
     let (title, note) = document::title_of_one_document(notes, input);
-    let odt = package(&content, &title, note, options.paper)?;
+    let odt = package(&content, &title, note, pages)?;
     if options.layout == Layout::SingleFile {
         output::replace_file(to, &odt)?;
         return Ok(to.file_name().map(|n| n.to_string_lossy().into_owned()));
@@ -124,6 +139,12 @@ fn file_per_note(
         web_pictures: false,
         keep_tag_line: options.keep_tag_line,
         sections: false,
+        upright_pictures: true,
+    };
+    let pages = Pages {
+        paper: options.paper,
+        numbered: options.page_numbers,
+        contents: false,
     };
     for (note, name) in notes.iter().zip(files) {
         let anchor = format!("note-{}", slug(&note.title));
@@ -131,11 +152,21 @@ fn file_per_note(
         let root = document::prepare(&arena, note, &anchor, &rules, collected);
         let mut content = Content::new(text_size(options.paper));
         content.note(root, &anchor, false);
-        let odt = package(&content, &note.title, Some(note), options.paper)?;
+        let odt = package(&content, &note.title, Some(note), pages)?;
         output::write_new(&to.join(&name), &odt)?;
         report.files.push(name);
     }
     Ok(())
+}
+
+/// How the pages of a document look.
+#[derive(Debug, Clone, Copy)]
+struct Pages {
+    paper: Paper,
+    /// A page number at the foot of every page.
+    numbered: bool,
+    /// The document starts with a table of contents.
+    contents: bool,
 }
 
 /// Width and height of the paper in cm.
@@ -156,7 +187,7 @@ fn package(
     content: &Content,
     title: &str,
     note: Option<&Source>,
-    paper: Paper,
+    pages: Pages,
 ) -> io::Result<Vec<u8>> {
     let mut zip = ZipWriter::new(Cursor::new(Vec::new()));
     let stored = SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
@@ -166,8 +197,8 @@ fn package(
         .map_err(io::Error::other)?;
     zip.write_all(MEDIA_TYPE.as_bytes())?;
     let parts = [
-        ("content.xml", content_xml(&content.body, paper)),
-        ("styles.xml", styles_xml(paper)),
+        ("content.xml", content_xml(&content.body, pages.paper)),
+        ("styles.xml", styles_xml(pages)),
         ("meta.xml", meta_xml(title, note)),
         ("META-INF/manifest.xml", manifest_xml(&content.pictures)),
     ];
@@ -190,12 +221,53 @@ fn content_xml(body: &str, paper: Paper) -> String {
     )
 }
 
-fn styles_xml(paper: Paper) -> String {
-    let (width, height) = paper_size(paper);
+fn styles_xml(pages: Pages) -> String {
+    let mut styles = list_styles();
+    if pages.numbered {
+        styles.push('\n');
+        styles.push_str(FOOTER_STYLE);
+    }
+    if pages.contents {
+        let (width, _) = text_size(pages.paper);
+        styles.push('\n');
+        styles.push_str(&CONTENTS_STYLES.replace("{TEXT_WIDTH}", &format!("{width:.2}")));
+    }
     STYLES
-        .replace("{PAGE_WIDTH}", &width.to_string())
-        .replace("{PAGE_HEIGHT}", &height.to_string())
-        .replace("{LIST_STYLES}", &list_styles())
+        .replace("{LIST_STYLES}", &styles)
+        .replace("{PAGE_LAYOUT}", &page_layout(pages))
+        .replace("{MASTER_PAGE}", &master_page(pages.numbered))
+}
+
+/// A page number, centred and small, at the foot of a page.
+const FOOTER_STYLE: &str = "<style:style style:name=\"Footer\" style:family=\"paragraph\" style:parent-style-name=\"Standard\" style:class=\"extra\"><style:paragraph-properties fo:text-align=\"center\"/><style:text-properties fo:font-size=\"9pt\" fo:color=\"#6e6e73\"/></style:style>";
+
+/// The heading of a table of contents and its entries, whose page numbers stand
+/// at the right margin after a row of dots, and their links, which look like text.
+const CONTENTS_STYLES: &str = "<style:style style:name=\"Contents_20_Heading\" style:display-name=\"Contents Heading\" style:family=\"paragraph\" style:parent-style-name=\"Standard\" style:next-style-name=\"Contents_20_1\" style:class=\"index\"><style:paragraph-properties fo:margin-top=\"0cm\" fo:margin-bottom=\"0.4cm\"/><style:text-properties fo:font-size=\"16pt\" fo:font-weight=\"bold\" style:font-weight-asian=\"bold\" style:font-weight-complex=\"bold\"/></style:style>\n<style:style style:name=\"Contents_20_1\" style:display-name=\"Contents 1\" style:family=\"paragraph\" style:parent-style-name=\"Standard\" style:class=\"index\"><style:paragraph-properties fo:margin-top=\"0cm\" fo:margin-bottom=\"0.15cm\"><style:tab-stops><style:tab-stop style:position=\"{TEXT_WIDTH}cm\" style:type=\"right\" style:leader-style=\"dotted\" style:leader-text=\".\"/></style:tab-stops></style:paragraph-properties></style:style>\n<style:style style:name=\"Index_20_Link\" style:display-name=\"Index Link\" style:family=\"text\"/>";
+
+/// The page's size and margins. With page numbers the footer takes the lower half
+/// of the bottom margin, so the text has as much room as without.
+fn page_layout(pages: Pages) -> String {
+    let (width, height) = paper_size(pages.paper);
+    let (bottom, footer) = if pages.numbered {
+        (
+            MARGIN / 2.0,
+            "<style:footer-style><style:header-footer-properties fo:min-height=\"0.6cm\" fo:margin-top=\"0.4cm\"/></style:footer-style>",
+        )
+    } else {
+        (MARGIN, "")
+    };
+    format!(
+        "<style:page-layout style:name=\"Page\"><style:page-layout-properties fo:page-width=\"{width}cm\" fo:page-height=\"{height}cm\" style:print-orientation=\"portrait\" fo:margin-top=\"{MARGIN}cm\" fo:margin-bottom=\"{bottom}cm\" fo:margin-left=\"{MARGIN}cm\" fo:margin-right=\"{MARGIN}cm\"/>{footer}</style:page-layout>"
+    )
+}
+
+fn master_page(numbered: bool) -> String {
+    if numbered {
+        "<style:master-page style:name=\"Standard\" style:page-layout-name=\"Page\"><style:footer><text:p text:style-name=\"Footer\"><text:page-number text:select-page=\"current\">1</text:page-number></text:p></style:footer></style:master-page>".to_owned()
+    } else {
+        "<style:master-page style:name=\"Standard\" style:page-layout-name=\"Page\"/>".to_owned()
+    }
 }
 
 /// The bullets, the numbers, and tasks, whose ☐ or ☑ is in their text.

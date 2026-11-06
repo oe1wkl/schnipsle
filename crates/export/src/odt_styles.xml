@@ -40,9 +40,9 @@
 <text:notes-configuration text:note-class="footnote" style:num-format="1" style:num-suffix=" " text:start-value="0" text:footnotes-position="page" text:start-numbering-at="document"/>
 </office:styles>
 <office:automatic-styles>
-<style:page-layout style:name="Page"><style:page-layout-properties fo:page-width="{PAGE_WIDTH}cm" fo:page-height="{PAGE_HEIGHT}cm" style:print-orientation="portrait" fo:margin-top="2cm" fo:margin-bottom="2cm" fo:margin-left="2cm" fo:margin-right="2cm"/></style:page-layout>
+{PAGE_LAYOUT}
 </office:automatic-styles>
 <office:master-styles>
-<style:master-page style:name="Standard" style:page-layout-name="Page"/>
+{MASTER_PAGE}
 </office:master-styles>
 </office:document-styles>

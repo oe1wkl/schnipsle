@@ -68,6 +68,8 @@ fn options(layout: Layout) -> Options {
         layout,
         keep_tag_line: false,
         paper: Paper::A4,
+        contents: false,
+        page_numbers: false,
     }
 }
 
@@ -553,6 +555,12 @@ fn pandoc_writes_epub() {
     assert!(first.contains("&lt;b&gt;kept as code"), "{first}");
     assert!(first.contains("href=\"ch002.xhtml#note-andere-"), "{first}");
     assert!(second.contains("href=\"ch001.xhtml#note-gr"), "{second}");
+    // Our rules for the pages of a reader come after Pandoc's stylesheet.
+    let ours = first.find("max-height: 90vh").expect("our stylesheet");
+    assert!(
+        first.find("stylesheet1.css").is_some_and(|at| at < ours),
+        "{first}"
+    );
 
     // A note's dates and picture.
     let samples = self::vault();
@@ -586,5 +594,77 @@ fn pandoc_writes_epub() {
             .iter()
             .any(|p| p.kind == ProblemKind::NoteInOtherFile)
     );
+    keep(&out);
+}
+
+#[test]
+#[ignore = "needs Pandoc"]
+fn an_svg_stays_in_the_docx_and_a_missing_converter_is_explained() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::create_dir(dir.path().join("vault")).unwrap();
+    let vault = Vault::create(dir.path().join("vault")).unwrap();
+    let svg = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"40\" height=\"20\"><rect width=\"40\" height=\"20\"/></svg>";
+    fs::create_dir_all(vault.root().join("attachments/ab")).unwrap();
+    fs::write(vault.root().join("attachments/ab/plan.svg"), svg).unwrap();
+    vault
+        .create_note(
+            "plan.md",
+            "# Plan\n\n![The plan](../attachments/ab/plan.svg)\n",
+        )
+        .unwrap();
+    let to = dir.path().join("plan.docx");
+    let input = Input {
+        notes: vec!["plan.md".to_owned()],
+        name: None,
+    };
+    let report = PandocExporter::new(Format::Docx, pandoc())
+        .export(&vault, &input, &options(Layout::SingleFile), &to)
+        .unwrap();
+    let svg = |name: &String| Path::new(name).extension().is_some_and(|e| e == "svg");
+    assert!(names(&to).iter().any(svg));
+    // Without rsvg-convert Pandoc adds no PNG copy, and the report says so plainly.
+    for warning in &report.warnings {
+        assert!(
+            warning.starts_with(
+                "Plan: The SVG drawing \u{201c}The plan\u{201d} is in the document as SVG only"
+            ),
+            "{warning}"
+        );
+    }
+}
+
+#[test]
+#[ignore = "needs Pandoc"]
+fn pandoc_writes_contents_and_page_numbers() {
+    let dir = tempfile::tempdir().unwrap();
+    let out = dir.path().join("out");
+    fs::create_dir(&out).unwrap();
+    let with_contents = Options {
+        contents: true,
+        ..options(Layout::SingleFile)
+    };
+
+    let to = out.join("samples.docx");
+    let report = PandocExporter::new(Format::Docx, pandoc())
+        .export(&vault(), &all_notes(), &with_contents, &to)
+        .unwrap();
+    assert_eq!(report.warnings, Vec::<String>::new());
+    let xml = part(&to, "word/document.xml");
+    assert_eq!(xml.matches(" PAGEREF _Schnipsle").count(), 6, "{xml}");
+    for index in 1..=6 {
+        let name = format!("w:name=\"_Schnipsle{index}\"");
+        assert!(xml.contains(&name), "{name} in {xml}");
+    }
+    assert!(xml.contains("<w:footerReference w:type=\"default\" r:id=\"rIdSchnipsleFooter\"/>"));
+    assert!(part(&to, "word/schnipsle-footer.xml").contains(" PAGE "));
+
+    let to = out.join("samples.epub");
+    let report = PandocExporter::new(Format::Epub, pandoc())
+        .export(&vault(), &all_notes(), &with_contents, &to)
+        .unwrap();
+    assert_eq!(report.warnings, Vec::<String>::new());
+    let opf = part(&to, "EPUB/content.opf");
+    assert!(opf.contains("<itemref idref=\"nav\""), "{opf}");
+    assert!(part(&to, "EPUB/nav.xhtml").contains(">Contents<"));
     keep(&out);
 }

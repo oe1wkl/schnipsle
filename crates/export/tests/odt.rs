@@ -53,6 +53,8 @@ fn options(layout: Layout) -> Options {
         layout,
         keep_tag_line: false,
         paper: Paper::A4,
+        contents: false,
+        page_numbers: false,
     }
 }
 
@@ -245,6 +247,8 @@ fn letter_paper_and_a_folder_with_a_free_name() {
                 layout: Layout::Folder,
                 keep_tag_line: false,
                 paper: Paper::Letter,
+                contents: false,
+                page_numbers: false,
             },
             dir.path(),
         )
@@ -551,4 +555,47 @@ fn libreoffice_converts_every_file() {
     ] {
         assert!(text.contains(expected), "{expected} in {text}");
     }
+}
+
+#[test]
+fn contents_and_page_numbers() {
+    let dir = tempfile::tempdir().unwrap();
+    let to = dir.path().join("samples.odt");
+    let with_contents = Options {
+        contents: true,
+        ..options(Layout::SingleFile)
+    };
+    OdtExporter
+        .export(&vault(), &all_notes(), &with_contents, &to)
+        .unwrap();
+    let content = part(&to, "content.xml");
+    let start = content.find("Contents_20_Heading").unwrap();
+    let first_note = content
+        .find("text:bookmark text:name=\"note-welcome\"")
+        .unwrap();
+    assert!(start < first_note, "{content}");
+    assert_eq!(content.matches("text:reference-format=\"page\"").count(), 6);
+    assert!(content.contains("xlink:href=\"#note-bread-rolls\" text:style-name=\"Index_20_Link\" text:visited-style-name=\"Index_20_Link\">Bread rolls</text:a><text:tab/><text:bookmark-ref text:reference-format=\"page\" text:ref-name=\"note-bread-rolls\">"), "{content}");
+    // Every note starts a new page, the first one too.
+    assert_eq!(content.matches("Note_20_Start").count(), 6);
+    let styles = part(&to, "styles.xml");
+    assert!(styles.contains("<text:page-number"), "{styles}");
+    assert!(styles.contains("style:position=\"17.00cm\""), "{styles}");
+    assert!(styles.contains("fo:margin-bottom=\"1cm\""), "{styles}");
+    if let Some(keep) = std::env::var_os("SCHNIPSLE_ODT_KEEP") {
+        fs::create_dir_all(&keep).unwrap();
+        fs::copy(&to, Path::new(&keep).join("contents.odt")).unwrap();
+    }
+
+    // Page numbers alone, and no contents for a single note.
+    let numbered = Options {
+        page_numbers: true,
+        contents: true,
+        ..options(Layout::SingleFile)
+    };
+    OdtExporter
+        .export(&vault(), &one("welcome.md"), &numbered, &to)
+        .unwrap();
+    assert!(!part(&to, "content.xml").contains("Contents_20"));
+    assert!(part(&to, "styles.xml").contains("<text:page-number"));
 }

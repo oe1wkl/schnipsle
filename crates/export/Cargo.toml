@@ -19,6 +19,7 @@ serde.workspace = true
 unicode-normalization.workspace = true
 tempfile.workspace = true
 zip.workspace = true
+lopdf = { version = "0.47", default-features = false }
 
 # Pictures many programs cannot show are converted (ADR-0027).
 [target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]

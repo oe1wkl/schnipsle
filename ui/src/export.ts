@@ -62,6 +62,10 @@ const noPandoc = el("export-no-pandoc");
 const paperRow = el("export-paper-row");
 const paperSelect = el("export-paper") as HTMLSelectElement;
 const keepTags = el("export-keep-tags") as HTMLInputElement;
+const contentsRow = el("export-contents-row");
+const contentsBox = el("export-contents") as HTMLInputElement;
+const pageNumbersRow = el("export-page-numbers-row");
+const pageNumbersBox = el("export-page-numbers") as HTMLInputElement;
 const unsavedText = el("export-unsaved");
 const progressBox = el("export-progress");
 const progressText = el("export-progress-text");
@@ -106,6 +110,8 @@ interface Settings {
   layout?: ExportLayout;
   paper?: ExportPaper;
   keepTagLine?: boolean;
+  contents?: boolean;
+  pageNumbers?: boolean;
 }
 
 function loadSettings(): Settings {
@@ -136,6 +142,8 @@ export function createExport(hooks: ExportHooks): { open(): Promise<void> } {
   let target: string | null = null;
   /** Picking or writing: the dialog cannot be closed. */
   let busy = false;
+  /** Page numbers as the user chose them; a table of contents turns them on. */
+  let pageNumbersChosen = false;
 
   function showError(message: string | null): void {
     errorText.textContent = message ?? "";
@@ -159,6 +167,16 @@ export function createExport(hooks: ExportHooks): { open(): Promise<void> } {
   function chosenNotes(): string[] {
     if (whatNote.checked) return selection.note ? [selection.note.path] : [];
     return selection.list?.notes ?? [];
+  }
+
+  /** One document of several notes, which can start with a table of contents. */
+  function contentsPossible(): boolean {
+    return chosenNotes().length > 1 && layout() === "singleFile";
+  }
+
+  /** A table of contents, whose page numbers need numbered pages (ADR-0029). */
+  function withContents(): boolean {
+    return contentsPossible() && contentsBox.checked;
   }
 
   /** The note the chosen notes consist of, or the name of the list. */
@@ -194,7 +212,13 @@ export function createExport(hooks: ExportHooks): { open(): Promise<void> } {
     } else {
       manyLabel.textContent = "In a folder, with copies of its attachments";
     }
-    paperRow.hidden = !WITH_PAGES.includes(format());
+    const pages = WITH_PAGES.includes(format());
+    paperRow.hidden = !pages;
+    contentsRow.hidden = !contentsPossible();
+    pageNumbersRow.hidden = !pages;
+    // Checked and fixed while a table of contents needs them.
+    pageNumbersBox.checked = withContents() || pageNumbersChosen;
+    pageNumbersBox.disabled = busy || withContents();
 
     const chosen = chosenNotes();
     const unsaved = note?.unsaved === true && chosen.includes(note.path);
@@ -211,6 +235,8 @@ export function createExport(hooks: ExportHooks): { open(): Promise<void> } {
       layout: layoutMany.checked ? "filePerNote" : "singleFile",
       paper: paperSelect.value as ExportPaper,
       keepTagLine: keepTags.checked,
+      contents: contentsBox.checked,
+      pageNumbers: pageNumbersChosen,
     };
     try {
       localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
@@ -267,6 +293,8 @@ export function createExport(hooks: ExportHooks): { open(): Promise<void> } {
       }
       paperSelect.value = settings.paper === "letter" ? "letter" : "a4";
       keepTags.checked = settings.keepTagLine === true;
+      contentsBox.checked = settings.contents === true;
+      pageNumbersChosen = settings.pageNumbers === true;
       layoutMany.checked = settings.layout === "filePerNote";
       layoutOne.checked = !layoutMany.checked;
     } catch (e) {
@@ -320,6 +348,8 @@ export function createExport(hooks: ExportHooks): { open(): Promise<void> } {
           layout: chosenLayout,
           keepTagLine: keepTags.checked,
           paper: paperSelect.value,
+          contents: withContents(),
+          pageNumbers: WITH_PAGES.includes(format()) && pageNumbersBox.checked,
         },
         to: picked,
       });
@@ -404,9 +434,12 @@ export function createExport(hooks: ExportHooks): { open(): Promise<void> } {
     }
   }
 
-  for (const control of [whatNote, whatList, layoutOne, layoutMany, formatSelect]) {
+  for (const control of [whatNote, whatList, layoutOne, layoutMany, formatSelect, contentsBox]) {
     control.addEventListener("change", update);
   }
+  pageNumbersBox.addEventListener("change", () => {
+    pageNumbersChosen = pageNumbersBox.checked;
+  });
   startButton.addEventListener("click", () => void start());
   revealButton.addEventListener("click", () => void reveal());
   cancelButton.addEventListener("click", close);

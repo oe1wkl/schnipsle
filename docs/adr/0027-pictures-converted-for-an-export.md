@@ -1,6 +1,6 @@
 # ADR-0027: Pictures few programs show are converted for an export
 
-- Status: Accepted
+- Status: Accepted; amended by [ADR-0028](0028-turned-pictures-upright-in-docx-and-odt.md) (turned pictures in DOCX and ODT)
 - Date: 2026-11-05
 - Deciders: Willi Kraml
 - Related: F-06, F-13, ADR-0010, ADR-0015, ADR-0021, ADR-0025

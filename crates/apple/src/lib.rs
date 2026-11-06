@@ -8,7 +8,8 @@
 //! [`ICloudVersions`] lists and resolves iCloud conflict versions (ADR-0006).
 //! On macOS, [`print_pdf`] turns an HTML page into a PDF with real pages (ADR-0022).
 //! [`convert_picture`] turns a picture many programs cannot show into one they can
-//! (ADR-0027).
+//! (ADR-0027), and [`is_turned`] tells one that only its orientation turns upright
+//! (ADR-0028).
 //!
 //! This is one of two crates allowed to use `unsafe`. Every `unsafe` block carries
 //! a `// SAFETY:` comment, and the public API is safe. On other platforms the
@@ -31,7 +32,7 @@ pub use coordinator::FileCoordinator;
 #[cfg(target_os = "macos")]
 pub use pdf::{PdfPage, print_pdf};
 #[cfg(any(target_os = "macos", target_os = "ios"))]
-pub use picture::{ConvertedPicture, convert_picture};
+pub use picture::{ConvertedPicture, convert_picture, is_turned};
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 pub use presenter::VaultPresenter;
 #[cfg(any(target_os = "macos", target_os = "ios"))]

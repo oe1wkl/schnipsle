@@ -71,6 +71,21 @@ pub(crate) struct Rules<'r> {
     pub keep_tag_line: bool,
     /// Each note is a section of one document, which starts with its title.
     pub sections: bool,
+    /// Pictures that only their orientation turns upright are turned in the
+    /// file, for formats whose programs ignore it (ADR-0028).
+    pub upright_pictures: bool,
+}
+
+/// Whether one document of `notes` starts with a table of contents: asked for,
+/// and more than one note (ADR-0029).
+pub(crate) fn has_contents(options: Options, notes: &[Source]) -> bool {
+    options.contents && notes.len() > 1 && options.layout != crate::Layout::FilePerNote
+}
+
+/// Whether the pages of a format with pages are numbered: asked for, and always
+/// with a table of contents, whose page numbers need them (ADR-0029).
+pub(crate) fn numbers_pages(options: Options, notes: &[Source]) -> bool {
+    options.page_numbers || has_contents(options, notes)
 }
 
 /// The title of one document of several notes without a name of its own.
@@ -102,6 +117,7 @@ pub(crate) fn rules_of_one_document<'r>(
         web_pictures,
         keep_tag_line: options.keep_tag_line,
         sections: notes.len() > 1,
+        upright_pictures: false,
     };
     (anchors, rules)
 }
@@ -277,7 +293,7 @@ fn is_one_line_title<'a>(node: &'a AstNode<'a>) -> bool {
 }
 
 /// The text of `node` and what is below it.
-fn plain_text<'a>(node: &'a AstNode<'a>) -> String {
+pub(crate) fn plain_text<'a>(node: &'a AstNode<'a>) -> String {
     let mut out = String::new();
     for d in node.descendants() {
         match &d.data().value {
@@ -501,7 +517,7 @@ impl<'a> Preparer<'a, '_> {
             return;
         };
         let copying = self.rules.copy_attachments;
-        if copying && !needs_converting(mime) {
+        if copying && !needs_converting(mime) && !self.rules.upright_pictures {
             self.copy(path, url);
             set_url(node, &href_of(path));
             return;
@@ -516,7 +532,8 @@ impl<'a> Preparer<'a, '_> {
             }
             return;
         };
-        let converted = needs_converting(mime)
+        let turning = self.rules.upright_pictures && is_turned(&bytes);
+        let converted = (needs_converting(mime) || turning)
             .then(|| convert_picture(&bytes))
             .flatten();
         if needs_converting(mime) && converted.is_none() {
@@ -642,12 +659,18 @@ fn needs_converting(mime: &str) -> bool {
 }
 
 #[cfg(any(target_os = "macos", target_os = "ios"))]
-use schnipsle_apple::convert_picture;
+use schnipsle_apple::{convert_picture, is_turned};
 
 /// No system converter here, so the picture stays as it is and is reported.
 #[cfg(not(any(target_os = "macos", target_os = "ios")))]
 fn convert_picture(_bytes: &[u8]) -> Option<Converted> {
     None
+}
+
+/// Without a system converter there is nothing to turn a picture with.
+#[cfg(not(any(target_os = "macos", target_os = "ios")))]
+fn is_turned(_bytes: &[u8]) -> bool {
+    false
 }
 
 /// What [`convert_picture`] gives on the platforms that have one.
@@ -732,6 +755,7 @@ mod tests {
             web_pictures,
             keep_tag_line: false,
             sections: false,
+            upright_pictures: false,
         };
         let mut collected = Collected::default();
         let arena = Arena::new();

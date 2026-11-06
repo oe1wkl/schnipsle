@@ -17,6 +17,7 @@ mod output;
 mod pandoc;
 mod pdf;
 mod pdf_dates;
+mod pdf_pages;
 mod raw_html;
 
 use std::path::Path;
@@ -107,6 +108,12 @@ pub struct Options {
     /// The paper, for a format with pages.
     #[serde(default)]
     pub paper: Paper,
+    /// Start one document of several notes with a table of contents (ADR-0029).
+    #[serde(default)]
+    pub contents: bool,
+    /// Number the pages of PDF, ODT and DOCX; always with a table of contents (ADR-0029).
+    #[serde(default)]
+    pub page_numbers: bool,
 }
 
 /// What an export did (ADR-0021 rule 12). Serialized with camelCase names.

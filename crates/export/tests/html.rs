@@ -42,6 +42,8 @@ fn options(layout: Layout) -> Options {
         layout,
         keep_tag_line: false,
         paper: Paper::A4,
+        contents: false,
+        page_numbers: false,
     }
 }
 
@@ -188,6 +190,8 @@ fn the_final_tag_line_is_left_out_unless_kept() {
         layout: Layout::SingleFile,
         keep_tag_line: true,
         paper: Paper::A4,
+        contents: false,
+        page_numbers: false,
     };
     let (html, _) = export_note(&one("welcome.md"), keep);
     assert!(html.contains("#schnipsle #demo"));

@@ -126,8 +126,9 @@ mod macos {
         }
     }
 
-    /// Exports `notes` of the sample vault on a thread and prints here.
-    fn export(notes: &[&str]) -> Vec<u8> {
+    /// Exports `notes` of the sample vault on a thread and prints here, with a
+    /// table of contents and page numbers if `contents`.
+    fn export(notes: &[&str], contents: bool) -> Vec<u8> {
         let vault =
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/export/vault");
         let input = Input {
@@ -143,6 +144,8 @@ mod macos {
                 layout: Layout::SingleFile,
                 keep_tag_line: false,
                 paper: Paper::A4,
+                contents,
+                page_numbers: contents,
             };
             PdfExporter::new(MainThreadPrinter(requests))
                 .export(&Vault::open(vault).unwrap(), &input, &options, &target)
@@ -169,7 +172,7 @@ mod macos {
 
     /// The dates of the note reach the file on every macOS, whatever `PDFKit` does.
     fn a_note_keeps_its_dates() {
-        let bytes = export(&["welcome.md"]);
+        let bytes = export(&["welcome.md"], false);
         let document = document(&bytes);
         assert_eq!(title(&document), "Welcome");
         // SAFETY: plain getters on a valid document.
@@ -196,15 +199,17 @@ mod macos {
         );
     }
 
+    const SAMPLES: [&str; 6] = [
+        "welcome.md",
+        "packing-list.md",
+        "Radio/antenna-tuner.md",
+        "Recipes/bread-rolls.md",
+        "Songs/abendlied.md",
+        "raw-html.md",
+    ];
+
     fn the_samples_start_a_page_per_note() {
-        let bytes = export(&[
-            "welcome.md",
-            "packing-list.md",
-            "Radio/antenna-tuner.md",
-            "Recipes/bread-rolls.md",
-            "Songs/abendlied.md",
-            "raw-html.md",
-        ]);
+        let bytes = export(&SAMPLES, false);
         let document = document(&bytes);
         assert_eq!(title(&document), "Samples");
         // SAFETY: plain getters on a valid document.
@@ -222,6 +227,47 @@ mod macos {
         }
     }
 
+    /// The table of contents is the first page, and its entries and the foot of
+    /// every page carry the page number, added to the printed file (ADR-0029).
+    fn contents_and_page_numbers() {
+        let bytes = export(&SAMPLES, true);
+        if let Some(keep) = std::env::var_os("SCHNIPSLE_PDF_KEEP") {
+            std::fs::write(PathBuf::from(keep).join("contents.pdf"), &bytes).unwrap();
+        }
+        let document = document(&bytes);
+        assert_eq!(title(&document), "Samples");
+        // SAFETY: plain getters on a valid document.
+        unsafe {
+            let count = document.pageCount();
+            assert!(count >= 7, "{count}");
+            let text_of = |index: usize| {
+                document
+                    .pageAtIndex(index)
+                    .and_then(|page| page.string())
+                    .map(|text| text.to_string())
+                    .unwrap_or_default()
+            };
+            let contents = text_of(0);
+            assert!(contents.contains("Contents"), "{contents}");
+            for title in ["Welcome", "Raw HTML"] {
+                assert!(contents.contains(title), "{contents}");
+            }
+            for index in 0..count {
+                let words: Vec<String> = text_of(index)
+                    .split_whitespace()
+                    .map(str::to_owned)
+                    .collect();
+                let number = (index + 1).to_string();
+                assert!(words.contains(&number), "page {number}: {words:?}");
+            }
+            // The entries give the pages their notes start on.
+            let words: Vec<&str> = contents.split_whitespace().collect();
+            for page in 2..=7 {
+                assert!(words.contains(&page.to_string().as_str()), "{contents}");
+            }
+        }
+    }
+
     pub fn main() {
         let mtm = MainThreadMarker::new().expect("main thread");
         let app = NSApplication::sharedApplication(mtm);
@@ -231,7 +277,8 @@ mod macos {
         several_jobs_one_after_the_other();
         a_note_keeps_its_dates();
         the_samples_start_a_page_per_note();
-        println!("pdf: 4 checks passed");
+        contents_and_page_numbers();
+        println!("pdf: 5 checks passed");
     }
 }
 
