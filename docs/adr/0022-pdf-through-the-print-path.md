@@ -16,7 +16,7 @@ On macOS the PDF exporter prints with `WKWebView.printOperationWithPrintInfo:`, 
 - `runOperation` is not used: in the spike it did not finish and wrote a file of hundreds of megabytes.
 - The print operation's success is not trusted: the exporter checks that the file exists.
 - Title and dates (ADR-0021 rule 1) are set afterwards with PDFKit, through `objc2-pdf-kit`.
-- iOS is decided when export comes there (M6).
+- iOS is decided when export comes there (M7, at first planned as M6).
 
 ## Options considered
 
@@ -32,4 +32,4 @@ On macOS the PDF exporter prints with `WKWebView.printOperationWithPrintInfo:`, 
 
 - Positive: PDFs have the pages ADR-0021 asks for, with the same look as the HTML export.
 - Negative: one more framework binding (`objc2-pdf-kit`) in `schnipsle-apple`; a separate path on iOS later.
-- Follow-up work: PDF exporter (M5 package 4); iOS path (M6); check under a sandbox if a Mac App Store build comes.
+- Follow-up work: PDF exporter (M5 package 4); iOS path (M7); check under a sandbox if a Mac App Store build comes.

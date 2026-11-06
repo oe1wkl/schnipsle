@@ -45,4 +45,4 @@ How the formats can do it differs:
 
 - Positive: a long export can be found in, on paper and on screen, in every format.
 - Negative: `lopdf` brings 25 crates, among them ciphers for encrypted PDFs, which these exports are not. Word may ask to update fields when it opens a DOCX with a table of contents. The numbers in a PDF are in Helvetica, not in the font of the text.
-- Follow-up work: printing on iOS (M6) needs the same numbers; a table of contents of the headings of a single long note, if wanted. ADR-0021 is amended by this, and the open point on page numbers in `docs/spikes/pdf-print.md` is settled.
+- Follow-up work: printing on iOS (M7) needs the same numbers; a table of contents of the headings of a single long note, if wanted. ADR-0021 is amended by this, and the open point on page numbers in `docs/spikes/pdf-print.md` is settled.
