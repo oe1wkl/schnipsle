@@ -15,6 +15,7 @@ use crate::document::{self, Collected, Rules, Source};
 use crate::html;
 use crate::output::{self, Names};
 use crate::pdf_dates;
+use crate::pdf_pages::{self, Numbering};
 use crate::{Exporter, Format, Input, Layout, Options, Paper, Report};
 
 /// Points per millimetre.
@@ -66,6 +67,8 @@ impl<P: Printer> PdfExporter<P> {
         title: &str,
         note: Option<&Source>,
         paper: Paper,
+        (footer, contents): (bool, bool),
+        collected: &mut Collected,
     ) -> io::Result<Vec<u8>> {
         let (width, height) = match paper {
             Paper::A4 => (210.0 * MM, 297.0 * MM),
@@ -80,7 +83,24 @@ impl<P: Printer> PdfExporter<P> {
             title: title.to_owned(),
         })?;
         pdf_dates::set_dates(&mut pdf, date("created"), date("modified"));
-        Ok(pdf)
+        if !footer && !contents {
+            return Ok(pdf);
+        }
+        let numbering = Numbering {
+            #[allow(clippy::cast_possible_truncation)] // 20 mm in points
+            margin: MARGIN as f32,
+            footer,
+            contents,
+        };
+        match pdf_pages::number_pages(&pdf, numbering) {
+            Ok(numbered) => Ok(numbered),
+            Err(error) => {
+                collected
+                    .warnings
+                    .push(format!("{title}: page numbers could not be added: {error}"));
+                Ok(pdf)
+            }
+        }
     }
 
     /// One PDF of all `notes`, and its file name. Attachments never come along
@@ -95,7 +115,18 @@ impl<P: Printer> PdfExporter<P> {
         collected: &mut Collected,
     ) -> Result<Option<String>> {
         let one = html::one_page(vault, notes, input, options, false, false, collected)?;
-        let pdf = self.print(one.page, &one.title, one.note, options.paper)?;
+        let numbers = (
+            document::numbers_pages(options, notes),
+            document::has_contents(options, notes),
+        );
+        let pdf = self.print(
+            one.page,
+            &one.title,
+            one.note,
+            options.paper,
+            numbers,
+            collected,
+        )?;
         if options.layout == Layout::SingleFile {
             output::replace_file(to, &pdf)?;
             return Ok(to.file_name().map(|n| n.to_string_lossy().into_owned()));
@@ -129,11 +160,20 @@ impl<P: Printer> PdfExporter<P> {
             web_pictures: false,
             keep_tag_line: options.keep_tag_line,
             sections: false,
+            upright_pictures: false,
         };
         let mut names = Names::new(to);
         for note in notes {
             let page = html::page_of_note(note, &rules, collected)?;
-            let pdf = self.print(page, &note.title, Some(note), options.paper)?;
+            let numbers = (options.page_numbers, false);
+            let pdf = self.print(
+                page,
+                &note.title,
+                Some(note),
+                options.paper,
+                numbers,
+                collected,
+            )?;
             let name = names.free(&note.title, "pdf");
             output::write_new(&to.join(&name), &pdf)?;
             report.files.push(name);
@@ -166,6 +206,7 @@ impl<P: Printer> Exporter for PdfExporter<P> {
         }
         report.problems.append(&mut collected.problems);
         report.numbered.append(&mut collected.numbered);
+        report.warnings.append(&mut collected.warnings);
         Ok(report)
     }
 }

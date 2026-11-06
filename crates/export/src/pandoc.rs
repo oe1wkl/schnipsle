@@ -8,6 +8,7 @@
 use std::collections::HashMap;
 use std::env;
 use std::ffi::OsStr;
+use std::fmt::Write as _;
 use std::fs::{self, File};
 use std::io;
 use std::path::{Path, PathBuf};
@@ -23,6 +24,7 @@ use schnipsle_core::tags::parse_options;
 use schnipsle_core::vault::{Result, Vault, VaultError};
 
 use crate::document::{self, Collected, Rules, Source};
+use crate::odt_content::escape;
 use crate::output::{self, Names};
 use crate::{Exporter, Format, Input, Layout, Options, Paper, Report, docx_package};
 
@@ -34,6 +36,58 @@ const MARKDOWN: &str = "commonmark+pipe_tables+footnotes+strikeout+attributes+ra
 /// chapter anyway.
 const DOCX_PAGE_BREAK: &str =
     "```{=openxml}\n<w:p><w:r><w:br w:type=\"page\"/></w:r></w:p>\n```\n\n";
+
+/// What an EPUB adds to Pandoc's stylesheet, after it in every chapter, so that
+/// a reader such as Books can lay out its pages: a note, a chapter of its own,
+/// starts no second page before its title; a picture is never taller than a page;
+/// and a long code block goes on over pages instead of being cut off.
+const EPUB_STYLE: &str = "<style>
+section.level1 > h1 { page-break-before: auto; break-before: auto; margin-top: 0; }
+img { width: auto; height: auto; max-width: 100%; max-height: 90vh; object-fit: contain; }
+pre { overflow: visible; }
+</style>
+";
+
+/// How the pages of a document look.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct Pages {
+    pub paper: Paper,
+    /// A page number at the foot of every page of a DOCX.
+    pub numbered: bool,
+    /// One document of several notes starts with a table of contents.
+    pub contents: bool,
+}
+
+/// The identifier and name of the bookmark at the start of note `index` of a
+/// DOCX with a table of contents. Pandoc's own identifiers are small numbers.
+fn docx_bookmark(index: usize) -> (usize, String) {
+    (900_000 + index, format!("_Schnipsle{}", index + 1))
+}
+
+/// The table of contents of a DOCX of notes with these titles, as raw Word XML:
+/// each title links to its note, and a field shows the page it starts on, which
+/// Word and `LibreOffice` work out when they open it (ADR-0029).
+fn docx_contents_of<'t>(titles: impl Iterator<Item = &'t str>, paper: Paper) -> String {
+    let width = docx_package::text_width(paper);
+    let mut xml = String::from(
+        "<w:p><w:pPr><w:pStyle w:val=\"TOCHeading\"/></w:pPr><w:r><w:t>Contents</w:t></w:r></w:p>\n",
+    );
+    for (index, title) in titles.enumerate() {
+        let (_, name) = docx_bookmark(index);
+        let _ = writeln!(
+            xml,
+            "<w:p><w:pPr><w:tabs><w:tab w:val=\"right\" w:leader=\"dot\" w:pos=\"{width}\"/></w:tabs></w:pPr><w:hyperlink w:anchor=\"{name}\"><w:r><w:t xml:space=\"preserve\">{}</w:t></w:r></w:hyperlink><w:r><w:tab/></w:r><w:r><w:fldChar w:fldCharType=\"begin\" w:dirty=\"true\"/></w:r><w:r><w:instrText xml:space=\"preserve\"> PAGEREF {name} \\h </w:instrText></w:r><w:r><w:fldChar w:fldCharType=\"separate\"/></w:r><w:r><w:t></w:t></w:r><w:r><w:fldChar w:fldCharType=\"end\"/></w:r></w:p>",
+            escape(title)
+        );
+    }
+    let fence = "`".repeat(longest_backtick_run(&xml).max(2) + 1);
+    format!("{fence}{{=openxml}}\n{xml}{fence}\n\n")
+}
+
+/// The longest run of backticks in `text`, so a fence around it can be longer.
+fn longest_backtick_run(text: &str) -> usize {
+    text.split(|c| c != '`').map(str::len).max().unwrap_or(0)
+}
 
 /// How long a conversion may take before the export gives up.
 const LIMIT: Duration = Duration::from_secs(300);
@@ -69,6 +123,9 @@ pub struct ConversionJob {
     pub modified_ms: Option<u64>,
     /// The files the Markdown refers to.
     pub pictures: Vec<JobPicture>,
+    /// One document of several notes starts with a table of contents (ADR-0029),
+    /// which Pandoc makes for an e-book; a DOCX has it in its Markdown.
+    pub contents: bool,
 }
 
 /// A finished document, and what the converter said about it.
@@ -153,9 +210,18 @@ impl Converter for Pandoc {
             .stderr(File::create(&errors)?);
         // DOCX shows a title given here on its first page; docx_package sets it instead.
         if job.format == Format::Epub {
-            command.arg(format!("--metadata=title:{}", job.title));
+            fs::write(dir.path().join("style.html"), EPUB_STYLE)?;
+            command
+                .arg(format!("--metadata=title:{}", job.title))
+                .arg("--include-in-header=style.html");
             if let Some(day) = job.created.as_deref().and_then(|c| c.get(..10)) {
                 command.arg(format!("--metadata=date:{day}"));
+            }
+            if job.contents {
+                command
+                    .arg("--toc")
+                    .arg("--toc-depth=1")
+                    .arg("--metadata=toc-title:Contents");
             }
         }
         command.arg("input.md");
@@ -218,6 +284,29 @@ fn warnings_in(text: &str) -> Vec<String> {
         .collect()
 }
 
+/// A warning of Pandoc in words the user can act on, for the one that needs it:
+/// Pandoc names a picture by its file in the temporary folder and asks for
+/// `rsvg-convert`, without saying that the SVG is in the document all the same.
+fn explained(warning: &str, descriptions: &HashMap<String, String>) -> Option<String> {
+    let (name, why) = warning
+        .strip_prefix("Could not convert image ")?
+        .split_once(": ")?;
+    // Named by `Markdown::picture`, in lower case.
+    let svg = Path::new(name).extension().is_some_and(|e| e == "svg");
+    if !(svg && why.contains("rsvg-convert")) {
+        return None;
+    }
+    let picture = match descriptions.get(name).map(|d| d.trim()) {
+        Some("") | None => "An SVG drawing".to_owned(),
+        Some(description) => format!("The SVG drawing \u{201c}{description}\u{201d}"),
+    };
+    Some(format!(
+        "{picture} is in the document as SVG only, which Word before 2016 and some other \
+         programs do not show. With rsvg-convert installed (on a Mac: brew install \
+         librsvg), a PNG copy is added for them."
+    ))
+}
+
 /// Writes DOCX or EPUB through a [`Converter`].
 pub struct PandocExporter<C> {
     format: Format,
@@ -240,18 +329,33 @@ impl<C: Converter> PandocExporter<C> {
         to: &Path,
         collected: &mut Collected,
     ) -> Result<Option<String>> {
-        let (anchors, rules) = document::rules_of_one_document(vault, notes, options, false, false);
+        let (anchors, mut rules) =
+            document::rules_of_one_document(vault, notes, options, false, false);
+        rules.upright_pictures = self.format == Format::Docx;
+        let pages = Pages {
+            paper: options.paper,
+            numbered: document::numbers_pages(options, notes),
+            contents: document::has_contents(options, notes),
+        };
+        let docx_contents = pages.contents && self.format == Format::Docx;
         let mut writer = Markdown::default();
+        if docx_contents {
+            let titles = notes.iter().map(|note| note.title.as_str());
+            writer
+                .text
+                .push_str(&docx_contents_of(titles, options.paper));
+        }
         for (index, (note, anchor)) in notes.iter().zip(&anchors).enumerate() {
             let arena = Arena::new();
             let root = document::prepare(&arena, note, anchor, &rules, collected);
-            if self.format == Format::Docx && index > 0 {
+            if self.format == Format::Docx && (index > 0 || docx_contents) {
                 writer.text.push_str(DOCX_PAGE_BREAK);
             }
-            writer.note(&arena, root, rules.sections.then_some(anchor.as_str()))?;
+            let anchor = rules.sections.then_some(anchor.as_str());
+            writer.note(&arena, root, anchor, docx_contents.then_some(index))?;
         }
         let (title, note) = document::title_of_one_document(notes, input);
-        let bytes = self.convert(writer, &title, note, options.paper, collected)?;
+        let bytes = self.convert(writer, &title, note, pages, collected)?;
         if options.layout == Layout::SingleFile {
             output::replace_file(to, &bytes)?;
             return Ok(to.file_name().map(|n| n.to_string_lossy().into_owned()));
@@ -305,14 +409,20 @@ impl<C: Converter> PandocExporter<C> {
             web_pictures: false,
             keep_tag_line: options.keep_tag_line,
             sections: false,
+            upright_pictures: self.format == Format::Docx,
         };
         for (note, name) in notes.iter().zip(files) {
             let arena = Arena::new();
             let anchor = format!("note-{}", schnipsle_core::names::slug(&note.title));
             let root = document::prepare(&arena, note, &anchor, &rules, collected);
             let mut writer = Markdown::default();
-            writer.note(&arena, root, None)?;
-            let bytes = self.convert(writer, &note.title, Some(note), options.paper, collected)?;
+            writer.note(&arena, root, None, None)?;
+            let pages = Pages {
+                paper: options.paper,
+                numbered: options.page_numbers,
+                contents: false,
+            };
+            let bytes = self.convert(writer, &note.title, Some(note), pages, collected)?;
             output::write_new(&to.join(&name), &bytes)?;
             report.files.push(name);
         }
@@ -325,7 +435,7 @@ impl<C: Converter> PandocExporter<C> {
         writer: Markdown,
         title: &str,
         note: Option<&Source>,
-        paper: Paper,
+        pages: Pages,
         collected: &mut Collected,
     ) -> Result<Vec<u8>> {
         let date = |key| {
@@ -333,6 +443,7 @@ impl<C: Converter> PandocExporter<C> {
                 .and_then(|ms| u64::try_from(ms).ok())
         };
         let created = date("created").map(rfc3339_utc);
+        let descriptions = writer.descriptions;
         let job = ConversionJob {
             format: self.format,
             markdown: writer.text,
@@ -340,16 +451,17 @@ impl<C: Converter> PandocExporter<C> {
             created: created.clone(),
             modified_ms: date("modified"),
             pictures: writer.pictures,
+            contents: pages.contents,
         };
         let converted = self.converter.convert(&job).map_err(VaultError::Io)?;
-        collected.warnings.extend(
-            converted
-                .warnings
-                .into_iter()
-                .map(|warning| format!("{title}: {warning}")),
-        );
+        collected
+            .warnings
+            .extend(converted.warnings.into_iter().map(|warning| {
+                let warning = explained(&warning, &descriptions).unwrap_or(warning);
+                format!("{title}: {warning}")
+            }));
         if self.format == Format::Docx {
-            let bytes = docx_package::finish(&converted.bytes, title, created.as_deref(), paper)
+            let bytes = docx_package::finish(&converted.bytes, title, created.as_deref(), pages)
                 .map_err(VaultError::Io)?;
             return Ok(bytes);
         }
@@ -392,6 +504,8 @@ struct Markdown {
     pictures: Vec<JobPicture>,
     /// The name of a picture by its `data:` URL.
     known: HashMap<String, String>,
+    /// The description of a picture by its name, for what Pandoc says about it.
+    descriptions: HashMap<String, String>,
 }
 
 impl Markdown {
@@ -401,6 +515,7 @@ impl Markdown {
         arena: &'a Arena<'a>,
         root: &'a AstNode<'a>,
         anchor: Option<&str>,
+        bookmark: Option<usize>,
     ) -> Result<()> {
         for node in root.descendants().collect::<Vec<_>>() {
             self.adapt(arena, node);
@@ -414,6 +529,17 @@ impl Markdown {
             let end = text.find('\n').unwrap_or(text.len());
             text.insert_str(end, &format!(" {{#{anchor}}}"));
         }
+        // The page reference of a table of contents needs a bookmark of a name it
+        // knows, which Pandoc's own do not promise.
+        if let Some(index) = bookmark
+            && text.starts_with("# ")
+        {
+            let (id, name) = docx_bookmark(index);
+            let mark = format!(
+                "`<w:bookmarkStart w:id=\"{id}\" w:name=\"{name}\"/><w:bookmarkEnd w:id=\"{id}\"/>`{{=openxml}}"
+            );
+            text.insert_str(2, &mark);
+        }
         self.text.push_str(&text);
         if !self.text.ends_with("\n\n") {
             self.text.push('\n');
@@ -425,7 +551,14 @@ impl Markdown {
     fn adapt<'a>(&mut self, arena: &'a Arena<'a>, node: &'a AstNode<'a>) {
         let url = match &node.data().value {
             NodeValue::Link(link) if link.url.starts_with('#') => Some(decoded(&link.url)),
-            NodeValue::Image(image) if image.url.starts_with("data:") => self.picture(&image.url),
+            NodeValue::Image(image) if image.url.starts_with("data:") => {
+                let name = self.picture(&image.url);
+                if let Some(name) = &name {
+                    let description = document::plain_text(node);
+                    self.descriptions.entry(name.clone()).or_insert(description);
+                }
+                name
+            }
             _ => None,
         };
         if let Some(url) = url {
@@ -529,6 +662,33 @@ mod tests {
             ]
         );
         assert!(warnings_in("").is_empty());
+    }
+
+    #[test]
+    fn a_missing_svg_converter_is_explained() {
+        let descriptions = HashMap::from([
+            ("picture-2.svg".to_owned(), "A plan".to_owned()),
+            ("picture-3.svg".to_owned(), String::new()),
+        ]);
+        let said = |name: &str| {
+            format!(
+                "Could not convert image {name}: \"check that rsvg-convert is in path.\\n\
+                 rsvg-convert: createProcess: posix_spawnp: does not exist\""
+            )
+        };
+        let named = explained(&said("picture-2.svg"), &descriptions).unwrap();
+        assert!(
+            named.starts_with(
+                "The SVG drawing \u{201c}A plan\u{201d} is in the document as SVG only"
+            )
+        );
+        assert!(named.contains("brew install librsvg"));
+        let unnamed = explained(&said("picture-3.svg"), &descriptions).unwrap();
+        assert!(unnamed.starts_with("An SVG drawing is in"));
+        assert!(explained(&said("picture-9.svg"), &descriptions).is_some());
+        let other = "Could not convert image picture-1.png: something else";
+        assert_eq!(explained(other, &descriptions), None);
+        assert_eq!(explained("Something else", &descriptions), None);
     }
 
     #[cfg(unix)]

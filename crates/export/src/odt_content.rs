@@ -88,6 +88,21 @@ impl Content {
         }
     }
 
+    /// Writes a table of contents: the title of each note, by its anchor, and the
+    /// page it starts on, which the office program fills in (ADR-0029).
+    pub fn contents(&mut self, entries: &[(&str, &str)]) {
+        self.body
+            .push_str("<text:p text:style-name=\"Contents_20_Heading\">Contents</text:p>\n");
+        for (title, anchor) in entries {
+            let anchor = escape(anchor);
+            let _ = writeln!(
+                self.body,
+                "<text:p text:style-name=\"Contents_20_1\"><text:a xlink:type=\"simple\" xlink:href=\"#{anchor}\" text:style-name=\"Index_20_Link\" text:visited-style-name=\"Index_20_Link\">{}</text:a><text:tab/><text:bookmark-ref text:reference-format=\"page\" text:ref-name=\"{anchor}\"></text:bookmark-ref></text:p>",
+                escape(title)
+            );
+        }
+    }
+
     /// Writes a note. Links to `anchor` go to its start; with `page_break` its
     /// level-1 heading starts a new page.
     pub fn note<'a>(&mut self, root: &'a AstNode<'a>, anchor: &str, page_break: bool) {

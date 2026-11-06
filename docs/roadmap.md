@@ -1,6 +1,6 @@
 # Roadmap and status
 
-- Updated: 2026-11-01
+- Updated: 2026-11-06
 - Current milestone: **M5 – Export**
 
 Each milestone ends in a usable build. Scope can move between milestones; the order should not.
@@ -42,7 +42,12 @@ Goal: export a note, or the notes of a tag folder, search or smart folder, to HT
 - [x] Export UI (desktop; `ui/src/export.ts`, `src-tauri/src/exporting.rs`): File › Export… with what (this note, or the notes shown in the list, never hits from the trash), format, one document or one file per note, page size for PDF and ODT, keep the tag line; then a save dialog or folder picker, which suggests a name from the title. The open note is saved first, and a change that cannot be saved is said in the dialog. An export into the vault is refused, as its copies would sync next to the notes. The report lists what is different from the notes, each note openable from it, and names the files that got a number because their name was taken (a folder export never replaces anything); the result opens in Finder on request. The choices are remembered. A single note in a folder is offered for HTML only, the one format that copies attachments; one document of several notes in a folder (`Layout::Folder`) stays unused by the dialog. No progress per note yet. Playground without Tauri: `/dev/export.html`
 - [x] Pandoc (desktop, F-13; ADR-0025): `PandocExporter` in `schnipsle-export` writes the shared tree as Markdown, with its pictures as files in a temporary folder, for a Pandoc found on `PATH` or in the usual Homebrew folders. DOCX and EPUB are offered only then, with its version shown; never bundled (ADR-0005, ADR-0010). In DOCX title, date of creation and paper are set in the finished package, a new page per note; in EPUB a chapter per note. Links between files stay links in DOCX and become text in EPUB. Pandoc's warnings go into the report. Golden files of the Markdown in `tests/fixtures/export/pandoc/expected/`; the real Pandoc writes DOCX and EPUB in a CI job of its own
 - [x] Check with real notes: all 538 notes of the M4 import in every format, as one document, as recipes alone and one file per note, in under 40 s each. No text lost (words of each note compared with each export), LibreOffice opens every DOCX and ODT file, PDFKit every PDF, calibre the EPUB. Found and fixed: HEIC and TIFF pictures missing or broken outside Apple's programs, now converted (ADR-0027); titles with `##` in file names and metadata, now a heading of any level gives the title (ADR-0026); pictures taller than the page cut off in ODT. The notes hold no music or song blocks, so those are covered by the sample vault only
-- [ ] Open the DOCX and ODT exports in Word, and the EPUB in Books
+- [x] Open the exports in office programs and e-book readers: DOCX and ODT in LibreOffice and WordCraft, EPUB in Books (2026-11-06). Found and fixed: Pandoc's raw message about SVG pictures, now said plainly; photos turned only by their orientation lay on their side in DOCX and ODT, now turned upright (ADR-0028); no format had a table of contents or page numbers, now two choices of the dialog (ADR-0029); in Books pictures taller than a page and contents links landing a page early, now a stylesheet of ours after Pandoc's. Word itself is not checked
+
+Fonts, for later: notes carry no fonts, and that stays so (code is always monospaced). How they look is the reader's business, so two settings may come:
+
+- Reading view in the app: serif or sans-serif, for headings and for text apart, and larger or smaller text. A setting of the device, never in the vault.
+- Export: the same serif or sans-serif choice, with basic fonts per format. PDF embeds what it uses, so it can take the Mac's own (San Francisco, New York, SF Mono). ODT and DOCX carry no fonts, so they name ones nearly every computer has (Arial, Times New Roman, Courier New; LibreOffice on Linux puts in the Liberation fonts of the same widths); fonts are not embedded, for their licences and size. EPUB names only the family, as readers let their users choose. Until then DOCX names Pandoc's Aptos and Consolas, which only Microsoft Office brings; ODT has Arial and Courier New. This needs an ADR.
 
 Not in M5: export on iOS (M6); rendered music and song sheets in exports (music milestone; until then they export as code blocks); multi-select in the note list.
 

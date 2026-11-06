@@ -76,6 +76,8 @@ fn options(layout: Layout) -> Options {
         layout,
         keep_tag_line: false,
         paper: Paper::A4,
+        contents: false,
+        page_numbers: false,
     }
 }
 
@@ -236,6 +238,8 @@ fn letter_paper_and_a_folder_with_a_free_name() {
                 layout: Layout::Folder,
                 keep_tag_line: false,
                 paper: Paper::Letter,
+                contents: false,
+                page_numbers: false,
             },
             dir.path(),
         )

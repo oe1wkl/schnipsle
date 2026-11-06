@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Turns a picture many programs cannot show, such as HEIC or TIFF, into a JPEG
-//! or, if it has transparency, a PNG (ADR-0027). `ImageIO` reads and writes it on
+//! or, if it has transparency, a PNG (ADR-0027), and tells a picture that only
+//! its orientation turns upright, which office programs ignore (ADR-0028). `ImageIO` reads and writes it on
 //! any thread, on macOS and iOS alike. The bindings of `objc2` do not cover it yet,
 //! so its few functions are declared here.
 
@@ -19,6 +20,7 @@ unsafe extern "C-unwind" {
     static kCGImageSourceCreateThumbnailWithTransform: &'static CFString;
     static kCGImageDestinationLossyCompressionQuality: &'static CFString;
     static kCGImagePropertyHasAlpha: &'static CFString;
+    static kCGImagePropertyOrientation: &'static CFString;
     fn CGImageSourceCreateWithData(
         data: &CFData,
         options: Option<&CFType>,
@@ -76,6 +78,20 @@ pub fn convert_picture(bytes: &[u8]) -> Option<ConvertedPicture> {
     })
 }
 
+/// Whether `bytes` are a picture whose orientation says to show it turned or
+/// mirrored: its pixels are not upright as they are stored.
+#[must_use]
+pub fn is_turned(bytes: &[u8]) -> bool {
+    let Some(source) = source_of(bytes) else {
+        return false;
+    };
+    // SAFETY: a constant of the framework, valid for the whole program.
+    let key = unsafe { kCGImagePropertyOrientation };
+    property(&source, key)
+        .and_then(|value| value.downcast_ref::<CFNumber>().and_then(CFNumber::as_i64))
+        .is_some_and(|orientation| orientation != 1)
+}
+
 /// Takes over what a `Create` function returned.
 fn owned(pointer: Option<NonNull<CFType>>) -> Option<CFRetained<CFType>> {
     // SAFETY: only called with the result of a `Create` function, which the caller owns.
@@ -107,19 +123,20 @@ fn upright_image(source: &CFType) -> Option<CFRetained<CFType>> {
 /// What the file says. The image read from it cannot tell: one from a HEIC has
 /// an alpha channel even if every pixel is opaque.
 fn has_transparency(source: &CFType) -> bool {
-    // SAFETY: `source` is an image source, and options are optional.
-    let properties = unsafe { CGImageSourceCopyPropertiesAtIndex(source, 0, None) };
-    let Some(properties) = properties else {
-        return false;
-    };
-    // SAFETY: the result of a `Copy` function, which the caller owns.
-    let properties = unsafe { CFRetained::from_raw(properties) };
     // SAFETY: a constant of the framework, valid for the whole program.
     let key = unsafe { kCGImagePropertyHasAlpha };
-    properties
-        .get(key)
+    property(source, key)
         .and_then(|value| value.downcast_ref::<CFBoolean>().map(CFBoolean::as_bool))
         .unwrap_or(false)
+}
+
+/// A property the file gives for its first picture.
+fn property(source: &CFType, key: &CFString) -> Option<CFRetained<CFType>> {
+    // SAFETY: `source` is an image source, and options are optional.
+    let properties = unsafe { CGImageSourceCopyPropertiesAtIndex(source, 0, None) }?;
+    // SAFETY: the result of a `Copy` function, which the caller owns.
+    let properties = unsafe { CFRetained::from_raw(properties) };
+    properties.get(key)
 }
 
 /// `image` as a file of the type `kind`.
@@ -213,6 +230,14 @@ mod tests {
         // Orientation 6: stored on its side, shown turned by 90 degrees.
         let picture = convert_picture(&tiff(600, 400, 6, false)).unwrap();
         assert_eq!(size(&picture.bytes), (400, 600));
+    }
+
+    #[test]
+    fn a_picture_turned_by_its_orientation_is_told() {
+        assert!(is_turned(&tiff(60, 40, 6, false)));
+        assert!(is_turned(&tiff(60, 40, 2, false)));
+        assert!(!is_turned(&tiff(60, 40, 1, false)));
+        assert!(!is_turned(b"this is no picture"));
     }
 
     #[test]

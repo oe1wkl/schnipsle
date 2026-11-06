@@ -1,17 +1,22 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Pictures few programs show (ADR-0027), in the formats that hold them and in a
-//! folder of copies. The conversion itself is tested in `schnipsle-apple`.
+//! folder of copies, and pictures turned by their orientation, which ODT gets
+//! upright (ADR-0028). The conversion itself is tested in `schnipsle-apple`.
 
 use std::fs;
 
 use schnipsle_core::vault::Vault;
-use schnipsle_export::{Exporter as _, HtmlExporter, Input, Layout, Options, Paper, ProblemKind};
+use schnipsle_export::{
+    Exporter as _, HtmlExporter, Input, Layout, OdtExporter, Options, Paper, ProblemKind,
+};
 
 fn options(layout: Layout) -> Options {
     Options {
         layout,
         keep_tag_line: false,
         paper: Paper::A4,
+        contents: false,
+        page_numbers: false,
     }
 }
 
@@ -132,5 +137,43 @@ mod with_a_converter {
         assert!(!to.join("notes/view.tiff").exists());
         let page = fs::read_to_string(to.join("Note.html")).unwrap();
         assert!(page.contains("notes/view.tiff.jpg"), "{page}");
+    }
+
+    /// Stored 24 × 40, shown turned by its orientation as 40 × 24.
+    const TURNED: &[u8] = include_bytes!("../../../tests/fixtures/export/pictures/turned.jpg");
+
+    #[test]
+    fn odt_gets_a_turned_picture_upright() {
+        let dir = tempfile::tempdir().unwrap();
+        let vault = vault_with(dir.path(), "turned.jpg", TURNED);
+        let to = dir.path().join("note.odt");
+        let report = OdtExporter
+            .export(&vault, &one("note.md"), &options(Layout::SingleFile), &to)
+            .unwrap();
+        assert_eq!(report.problems, []);
+        let mut odt = zip::ZipArchive::new(fs::File::open(&to).unwrap()).unwrap();
+        let mut picture = Vec::new();
+        for index in 0..odt.len() {
+            let mut part = odt.by_index(index).unwrap();
+            if part.name().unwrap().starts_with("Pictures/") {
+                std::io::Read::read_to_end(&mut part, &mut picture).unwrap();
+            }
+        }
+        assert_ne!(picture, TURNED);
+        let size = imagesize::blob_size(&picture).unwrap();
+        assert_eq!((size.width, size.height), (40, 24));
+    }
+
+    #[test]
+    fn html_keeps_a_turned_picture_as_it_is() {
+        let dir = tempfile::tempdir().unwrap();
+        let vault = vault_with(dir.path(), "turned.jpg", TURNED);
+        let to = dir.path().join("note.html");
+        HtmlExporter
+            .export(&vault, &one("note.md"), &options(Layout::SingleFile), &to)
+            .unwrap();
+        let page = fs::read_to_string(&to).unwrap();
+        let original = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, TURNED);
+        assert!(page.contains(&original));
     }
 }

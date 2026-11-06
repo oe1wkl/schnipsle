@@ -22,6 +22,39 @@ use crate::{Exporter, Format, Input, Layout, Options, Problem, ProblemKind, Repo
 
 const THEME: &str = include_str!("theme.css");
 
+/// The table of contents, added only to a page that has one (ADR-0029). In print
+/// it is a page of its own, with room at the right for the page numbers the PDF
+/// gets ([`crate::pdf_pages`]).
+const CONTENTS_CSS: &str = "
+nav.contents ol {
+  padding-left: 0;
+  list-style: none;
+}
+
+nav.contents li {
+  margin: 0.35em 0;
+}
+
+nav.contents a.end {
+  text-decoration: none;
+}
+
+@media print {
+  nav.contents {
+    break-after: page;
+  }
+
+  nav.contents li {
+    padding-right: 3em;
+  }
+
+  nav.contents a {
+    color: inherit;
+    text-decoration: none;
+  }
+}
+";
+
 comrak::create_formatter!(NoteHtml, {
     // The ☐ or ☑ is in the text (ADR-0021 rule 10), not a form control.
     NodeValue::TaskItem(_) => |context, entering| {
@@ -120,12 +153,16 @@ pub(crate) fn one_page<'n>(
 ) -> Result<OnePage<'n>> {
     let (anchors, rules) =
         document::rules_of_one_document(vault, notes, options, copy_attachments, web_pictures);
+    let contents = document::has_contents(options, notes);
     let mut body = String::new();
+    if contents {
+        body.push_str(&contents_of(notes, &anchors));
+    }
     for (note, anchor) in notes.iter().zip(&anchors) {
         body.push_str(&section(note, anchor, &rules, collected)?);
     }
     let (title, note) = document::title_of_one_document(notes, input);
-    let page = page(&title, note, &body);
+    let page = page(&title, note, &body, contents);
     Ok(OnePage { title, note, page })
 }
 
@@ -158,6 +195,7 @@ fn file_per_note(
         web_pictures: true,
         keep_tag_line: options.keep_tag_line,
         sections: false,
+        upright_pictures: false,
     };
     for (note, name) in notes.iter().zip(files) {
         let page = page_of_note(note, &rules, collected)?;
@@ -175,7 +213,24 @@ pub(crate) fn page_of_note(
 ) -> Result<String> {
     let anchor = format!("note-{}", slug(&note.title));
     let body = section(note, &anchor, rules, collected)?;
-    Ok(page(&note.title, Some(note), &body))
+    Ok(page(&note.title, Some(note), &body, false))
+}
+
+/// The table of contents: the title of each note, linking to it. A second link
+/// of one space marks where the entry ends, for the page number a PDF gets
+/// there ([`crate::pdf_pages`]).
+fn contents_of(notes: &[Source], anchors: &[String]) -> String {
+    let mut out = String::from("<nav class=\"contents\">\n<h1>Contents</h1>\n<ol>\n");
+    for (note, anchor) in notes.iter().zip(anchors) {
+        let href = escape(&document::href_of(anchor));
+        let _ = writeln!(
+            out,
+            "<li><a href=\"#{href}\">{}</a><a class=\"end\" href=\"#{href}\" aria-hidden=\"true\" tabindex=\"-1\">\u{a0}</a></li>",
+            escape(&note.title)
+        );
+    }
+    out.push_str("</ol>\n</nav>\n");
+    out
 }
 
 /// The HTML of `note`.
@@ -204,7 +259,7 @@ fn render<'a>(root: &'a AstNode<'a>, out: &mut String) -> Result<()> {
 }
 
 /// The whole page. The dates of `note`, the one it holds, go into its metadata.
-fn page(title: &str, note: Option<&Source>, body: &str) -> String {
+fn page(title: &str, note: Option<&Source>, body: &str, contents: bool) -> String {
     let mut out = String::with_capacity(body.len() + THEME.len() + 256);
     out.push_str("<!doctype html>\n<html>\n<head>\n<meta charset=\"utf-8\">\n");
     out.push_str("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n");
@@ -217,7 +272,8 @@ fn page(title: &str, note: Option<&Source>, body: &str) -> String {
             let _ = writeln!(out, "<meta name=\"{name}\" content=\"{}\">", escape(&value));
         }
     }
-    let _ = writeln!(out, "<style>\n{THEME}</style>");
+    let css = if contents { CONTENTS_CSS } else { "" };
+    let _ = writeln!(out, "<style>\n{THEME}{css}</style>");
     let _ = writeln!(
         out,
         "</head>\n<body>\n<main>\n{body}</main>\n</body>\n</html>"
