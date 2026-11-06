@@ -1,7 +1,7 @@
 # Roadmap and status
 
 - Updated: 2026-11-06
-- Current milestone: **M5 – Export**
+- Current milestone: **M6 – Release 1.0**
 
 Each milestone ends in a usable build. Scope can move between milestones; the order should not.
 
@@ -12,7 +12,7 @@ Each milestone ends in a usable build. Scope can move between milestones; the or
 | M2 – Index and organization | SQLite/FTS5 index, tag folders with combination subfolders, full-text search | Done 2026-10-27 |
 | M3 – Smart folders | Query language, saved searches | Done 2026-10-28 |
 | M4 – Import | Apple Notes (macOS 26 Markdown export), Simplenote, HTML, Markdown folders | Done 2026-11-01 |
-| M5 – Export | HTML, PDF, ODT built in; Pandoc formats on desktop (desktop first) | |
+| M5 – Export | HTML, PDF, ODT built in; Pandoc formats on desktop (desktop first) | Done 2026-11-06 |
 | M6 – Release 1.0 | Export on iOS, manual, packaging and signing, performance and data-safety tests | |
 | Later | Note links, music rendering and playback (ABC), ChordPro, extras | |
 
@@ -29,6 +29,15 @@ Each milestone ends in a usable build. Scope can move between milestones; the or
 - Data safety: atomic, coordinated writes with conflict checks; iCloud conflict versions and same-id copies resolved without losing text; trash; history snapshots with retention and a history view to read, restore or copy versions; relative links kept working when notes move (ADR-0016).
 - Format spec at draft revision 0.8; ADR-0016 and ADR-0017 added. Tested on macOS and on the iPhone (iOS 27).
 - Moved to later milestones: loading the editor on demand (bundle ~530 kB), inline formatting inside table cells, a settings view.
+
+## M5 results
+
+- Export on the desktop (File › Export…) of the open note or the notes in the list: HTML, PDF (macOS) and ODT built in, DOCX and EPUB when Pandoc is installed (ADR-0010, ADR-0021, ADR-0025). One document, or one file per note; A4 or Letter; with or without the final tag line; optionally a table of contents and page numbers (ADR-0029).
+- One tree all formats share, so a note looks alike everywhere: front matter into the document's properties, pictures inside the file, real footnotes, links to notes only to notes exported too, raw HTML through an allowlist. PDF through the print path of `WebKit` (ADR-0022) with its dates corrected (ADR-0024); ODT from a writer of our own.
+- Pictures that most programs do not show (HEIC, HEIF, TIFF) are converted (ADR-0027), and photos turned only by their orientation are upright in DOCX and ODT (ADR-0028). A first heading of any level gives the title (ADR-0026).
+- Nothing is ever replaced: a taken name gets a number, an export into the vault is refused, and the report says what differs from the notes.
+- Checked with all 538 notes of the M4 import in every format, no text lost, and by hand in LibreOffice, WordCraft and Books. Word itself is not checked.
+- Moved on: export on iOS (M6, with page numbers for printing there); rendered music and song sheets in exports (music milestone); fonts as a choice (below); a table of contents of the headings of one long note, if wanted; exports on Linux and Windows.
 
 ## M5 backlog
 
