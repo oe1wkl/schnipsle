@@ -1,0 +1,22 @@
+X:1
+T:Schwalbenlied
+T:für zwei Stimmen
+C:Erfunden für die Tests
+M:3/4
+L:1/4
+Q:1/4=96
+K:F#m
+%%score S A
+% #kein-tag: Kommentare werden nicht durchsucht
+V:S name="Sopran"
+"F#m"c2 c | B A G | "C#7"F2 E | F3 |
+w:Schwal-ben zie-hen ü-ber die D\"a-
+"D"d2 d | c B A | "C#7"G2 E | F3 |]
+w:cher, weit _ in das Land. *
+V:A name="Alt"
+A2 A | G F E | ^E2 C | C3 |
+w:Schwal-ben zie-hen fort % die Alt-Stimme
++:und fort.
+W:2. Kommt der Frühling, kommen sie wieder.
+W:
+W:3. &Uuml;ber dem See ruft der Wind.
