@@ -42,7 +42,7 @@ To decide first:
 
 Work:
 
-- [ ] ABC indexing (format.md §5.6 rule 5, a MUST not yet built): `T:`, `C:`, `w:` and `W:` into the full-text index, the rest not; fixtures in `tests/fixtures/format/5.6-index/` (fragment without `X:`, several voices, lyrics, `#` inside the block), as format.md §11 promises; index schema bump
+- [x] ABC indexing (format.md §5.6 rule 5; `abc.rs`, golden files in `tests/fixtures/format/5.6-index/`: a score with two voices, `#` in key, chords and comments, and a fragment without `X:`): `T:`, `C:`, `w:` and `W:` into the full-text index, the notes, other fields and `%` comments not; syllables joined into words, also over a line end, `+:` continues a field, ABC accents and HTML entities read as letters; no tags from the block; index schema 6
 - [ ] ChordPro renderer in `schnipsle-core` (ADR-0014): the parser of M3 gives a model of lines with chords and syllables, sections and directives; a transposer with English and German names and sharps or flats by key; `{transpose}`, the info-string options of §5.7 rule 7 and the vault default of rule 6 in `settings.yaml`; golden files of rendering and transposition
 - [ ] ChordPro in the editor: chords over syllables in the live preview, the source while the cursor is in the block; transpose control, notation and lyrics only per block as a view setting; "Apply transposition" rewrites the block after a history snapshot (§5.7 rule 5)
 - [ ] ABC in the editor: abcjs (MIT; through `scripts/check-npm-licenses.mjs`) engraves the block in the live preview, the source while the cursor is in it, errors shown without losing text; `transpose=` and `nosource`; loaded only when a note has music, as abcjs is large

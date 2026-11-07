@@ -6,8 +6,9 @@
 //! from the front matter (format.md §4), plain text without Markdown syntax for
 //! full-text search, tags (§5.3, with their hierarchy ancestors), note links
 //! (`[[Title]]` and relative `.md` links), linked files (attachments, §5.5)
-//! and chord names; `chordpro` blocks contribute their lyrics and song
-//! details instead of their source (§5.7 rule 8).
+//! and chord names; `abc` blocks contribute their titles, composers and lyrics
+//! (§5.6 rule 5) and `chordpro` blocks their lyrics and song details (§5.7
+//! rule 8) instead of their source.
 //! [`Index`] keeps that per note, keyed by its path below the vault root
 //! (`notes/…` or `.notesapp/trash/…`).
 //!
@@ -25,6 +26,7 @@ use comrak::nodes::{AstNode, NodeValue};
 use comrak::{Arena, parse_document};
 use rusqlite::{Connection, OptionalExtension as _, params};
 
+use crate::abc;
 use crate::attachments::percent_decode;
 use crate::chordpro::Song;
 use crate::dates::parse_rfc3339;
@@ -35,7 +37,7 @@ use crate::tags::{Tag, extract_tags, parse_options};
 use crate::vault::{title_of, title_sort_key};
 
 /// Version of the tables below; a file with another version is rebuilt.
-pub const SCHEMA_VERSION: i64 = 5;
+pub const SCHEMA_VERSION: i64 = 6;
 
 const SCHEMA: &str = "
 CREATE TABLE notes (
@@ -175,7 +177,8 @@ pub struct NoteFacts {
     /// Front matter `modified`, as written.
     pub modified: Option<String>,
     /// The visible text, without Markdown syntax, front matter or link
-    /// destinations; code is included, `chordpro` blocks as their
+    /// destinations; code is included, `abc` blocks as their
+    /// [`abc::index_text`] and `chordpro` blocks as their
     /// [`Song::index_text`].
     pub body: String,
     /// Tags in order of first appearance (format.md §5.3).
@@ -267,6 +270,8 @@ impl Walk<'_> {
                             self.chords.push(chord);
                         }
                     }
+                } else if lang.eq_ignore_ascii_case("abc") {
+                    self.body.push_str(&abc::index_text(&block.literal));
                 } else {
                     self.body.push_str(&block.literal);
                     self.body.push('\n');
@@ -692,6 +697,39 @@ mod tests {
             .query_row("SELECT count(*) FROM note_chords", [], |r| r.get(0))
             .unwrap();
         assert_eq!(chords, 3);
+    }
+
+    #[test]
+    fn abc_blocks_give_titles_and_lyrics_but_no_notes_or_tags() {
+        let fixtures = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/format/5.6-index");
+        let read = |name| std::fs::read_to_string(fixtures.join(name)).unwrap();
+        let text = format!(
+            "# Lieder\n\n```abc transpose=2\n{}```\n\n```ABC\n{}```\n",
+            read("score.abc"),
+            read("fragment.abc")
+        );
+        let facts = analyze("notes/a.md", &text);
+        assert_eq!(
+            facts.body,
+            format!("Lieder\n{}{}", read("score.txt"), read("fragment.txt")).trim_end()
+        );
+        assert!(facts.tags.is_empty(), "no tags inside music (§5.6 rule 4)");
+        assert!(
+            facts.chords.is_empty(),
+            "chord names come from ChordPro only"
+        );
+
+        let mut index = Index::in_memory().unwrap();
+        index
+            .put("notes/a.md", NoteState::Active, &stamp("h"), &facts)
+            .unwrap();
+        assert_eq!(matches(&index, "Schwalbenlied"), ["notes/a.md"]);
+        assert_eq!(matches(&index, "\"über die Dächer\""), ["notes/a.md"]);
+        assert!(
+            matches(&index, "Sopran").is_empty(),
+            "voice names are not indexed"
+        );
     }
 
     #[test]
