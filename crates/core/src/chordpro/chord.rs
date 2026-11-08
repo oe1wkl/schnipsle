@@ -7,14 +7,16 @@
 //! sharps in sharp keys and flats in flat keys; in C major and A minor `C#`,
 //! `Eb`, `F#`, `Ab` and `Bb`. The quality and extensions stay as written,
 //! and so does a root written in lower case, which German song sheets use
-//! for minor chords.
+//! for minor chords. A viewer may show the chords in the other naming than
+//! they are written in (ADR-0031); without transposition each note then
+//! keeps the sharp or flat it is written with.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::vault::Vault;
 
 /// The names of the notes in a song (rule 6).
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Notation {
     /// `B` is B, `Bb` is B♭.
@@ -151,11 +153,13 @@ fn shift(pc: u8, semitones: i32) -> u8 {
     u8::try_from((i32::from(pc) + semitones).rem_euclid(12)).unwrap_or(0)
 }
 
-/// A note as written: its pitch class and whether its letter is lower case.
+/// A note as written: its pitch class, whether its letter is lower case,
+/// and whether it is written with a sharp.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Note {
     pc: u8,
     lower: bool,
+    sharp: bool,
 }
 
 /// A chord split into root, quality and bass note (rule 4).
@@ -200,8 +204,16 @@ impl<'a> Chord<'a> {
         self.root.lower || q.starts_with('-') || (q.starts_with('m') && !q.starts_with("maj"))
     }
 
-    fn spell(&self, semitones: i32, spelling: Spelling, notation: Notation) -> String {
+    /// The chord moved by `semitones` and named in `spelling` and
+    /// `notation`; with `spelling` `None`, each note keeps the sharp or flat
+    /// it is written with (a white key needs neither).
+    fn spell(&self, semitones: i32, spelling: Option<Spelling>, notation: Notation) -> String {
         let spell_note = |note: Note| {
+            let spelling = spelling.unwrap_or(if note.sharp {
+                Spelling::Sharps
+            } else {
+                Spelling::Flats
+            });
             let name = name(shift(note.pc, semitones), spelling, notation);
             if note.lower {
                 name.to_lowercase()
@@ -237,14 +249,21 @@ fn note(text: &str, notation: Notation) -> Option<(Note, &str)> {
         _ => return None,
     };
     let rest = chars.as_str();
-    let (pc, rest) = match rest.chars().next() {
-        Some(c @ ('#' | '♯')) => (natural + 1, &rest[c.len_utf8()..]),
+    let (pc, sharp, rest) = match rest.chars().next() {
+        Some(c @ ('#' | '♯')) => (natural + 1, true, &rest[c.len_utf8()..]),
         // German `Bb` is read as B♭ like `B`, as song sheets write it so.
-        Some(c @ ('b' | '♭')) if natural == 10 => (natural, &rest[c.len_utf8()..]),
-        Some(c @ ('b' | '♭')) => (natural + 11, &rest[c.len_utf8()..]),
-        _ => (natural, rest),
+        Some(c @ ('b' | '♭')) if natural == 10 => (natural, false, &rest[c.len_utf8()..]),
+        Some(c @ ('b' | '♭')) => (natural + 11, false, &rest[c.len_utf8()..]),
+        _ => (natural, false, rest),
     };
-    Some((Note { pc: pc % 12, lower }, rest))
+    Some((
+        Note {
+            pc: pc % 12,
+            lower,
+            sharp,
+        },
+        rest,
+    ))
 }
 
 /// `text`, the inside of a chord bracket, moved by `semitones` and spelled
@@ -258,28 +277,53 @@ pub fn transpose(
     key: Option<Key>,
     notation: Notation,
 ) -> Option<String> {
-    if semitones.rem_euclid(12) == 0 {
+    respell(text, semitones, key, notation, notation)
+}
+
+/// [`transpose`] for a chord written in `read` and shown in `shown`
+/// (ADR-0031). If `semitones` is a whole number of octaves, the chord is
+/// only renamed, each note with the sharp or flat it is written with;
+/// `None` if that changes nothing or `text` is not a chord.
+#[must_use]
+pub fn respell(
+    text: &str,
+    semitones: i32,
+    key: Option<Key>,
+    read: Notation,
+    shown: Notation,
+) -> Option<String> {
+    let octaves = semitones.rem_euclid(12) == 0;
+    if octaves && read == shown {
         return None;
     }
     let trimmed = text.trim();
-    let chord = Chord::parse(trimmed, notation)?;
-    let spelling = key.map_or(Spelling::Natural, Key::spelling);
+    let chord = Chord::parse(trimmed, read)?;
+    let spelling = if octaves {
+        None
+    } else {
+        Some(key.map_or(Spelling::Natural, Key::spelling))
+    };
+    let spelled = chord.spell(semitones, spelling, shown);
+    if spelled == trimmed {
+        return None;
+    }
     let start = text.len() - text.trim_start().len();
     let end = start + trimmed.len();
-    Some(format!(
-        "{}{}{}",
-        &text[..start],
-        chord.spell(semitones, spelling, notation),
-        &text[end..]
-    ))
+    Some(format!("{}{spelled}{}", &text[..start], &text[end..]))
 }
 
 /// A `{key}` value moved by `semitones`, spelled in its own key; `None` as
 /// for [`transpose`].
 #[must_use]
 pub fn transpose_key(text: &str, semitones: i32, notation: Notation) -> Option<String> {
-    let key = Key::parse(text.trim(), notation)?.transposed(semitones);
-    transpose(text, semitones, Some(key), notation)
+    respell_key(text, semitones, notation, notation)
+}
+
+/// [`transpose_key`] for a key written in `read` and shown in `shown`.
+#[must_use]
+pub fn respell_key(text: &str, semitones: i32, read: Notation, shown: Notation) -> Option<String> {
+    let key = Key::parse(text.trim(), read)?.transposed(semitones);
+    respell(text, semitones, Some(key), read, shown)
 }
 
 #[cfg(test)]
@@ -320,6 +364,34 @@ mod tests {
         assert_eq!(transpose("N.C.", 2, None, Notation::English), None);
         assert_eq!(t(" G ", 2, "G", Notation::English), " A ");
         assert_eq!(t("G", -14, "G", Notation::English), "F");
+    }
+
+    #[test]
+    fn chords_are_shown_in_the_other_naming() {
+        use Notation::{English, German};
+        let r = |text, n, key: &str, read, shown| {
+            let key = Key::parse(key, read).map(|k| k.transposed(n));
+            respell(text, n, key, read, shown)
+        };
+        // Renamed only: each note keeps its sharp or flat.
+        assert_eq!(r("Bb", 0, "F", English, German).as_deref(), Some("B"));
+        assert_eq!(
+            r("B7/F#", 0, "E", English, German).as_deref(),
+            Some("H7/F#")
+        );
+        assert_eq!(r("A#m", 0, "F#", English, German), None, "unchanged");
+        assert_eq!(r("B", 12, "F", German, English).as_deref(), Some("Bb"));
+        assert_eq!(r("h", 0, "D", German, English).as_deref(), Some("b"));
+        assert_eq!(r("Am", 0, "C", English, German), None);
+        assert_eq!(r("N.C.", 0, "C", English, German), None);
+        // Moved: spelled for the new key, in the names shown.
+        assert_eq!(r("F", 5, "F", English, German).as_deref(), Some("B"));
+        assert_eq!(r("H7", 2, "E", German, English).as_deref(), Some("C#7"));
+        assert_eq!(
+            respell_key("F", 5, English, German).as_deref(),
+            Some("B"),
+            "B-flat major in German"
+        );
     }
 
     #[test]

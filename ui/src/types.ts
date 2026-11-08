@@ -241,3 +241,41 @@ export interface ExportReport {
   warnings: string[];
   problems: ExportProblem[];
 }
+
+/** The names of the notes in a song (schnipsle-core `chordpro::chord::Notation`). */
+export type Notation = "english" | "german";
+/** A piece of a lyrics line: its chord, as shown, goes over the start of its text. */
+export interface SongSegment {
+  chord: string | null;
+  text: string;
+}
+/** A line of a song sheet (schnipsle-core `chordpro::sheet::SheetLine`). */
+export type SongLine =
+  | { type: "lyrics"; segments: SongSegment[] }
+  | { type: "chords"; chords: string[] }
+  | { type: "comment"; text: string; italic: boolean }
+  | { type: "tab"; text: string }
+  | { type: "unknown"; text: string }
+  | { type: "empty" };
+/** A verse, chorus, bridge or tab, or lines outside any of them. */
+export interface SongSection {
+  kind: "plain" | "verse" | "chorus" | "bridge" | "tab";
+  label: string | null;
+  /** A chorus sung again by `{chorus}`. */
+  repeat: boolean;
+  lines: SongLine[];
+}
+/** What `render_song` returns (schnipsle-core `chordpro::sheet::Sheet`). */
+export interface SongSheet {
+  /** Title, subtitle, artist, composer, lyricist, key, capo, tempo and time. */
+  meta: { name: string; value: string }[];
+  sections: SongSection[];
+  /** The names the chords are written in. */
+  notation: Notation;
+  /** The names they are shown in. */
+  shown: Notation;
+  /** Semitones of the info string and the viewer. */
+  transpose: number;
+  lyricsOnly: boolean;
+  nosource: boolean;
+}

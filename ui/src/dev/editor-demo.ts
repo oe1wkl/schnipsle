@@ -1,6 +1,16 @@
 // SPDX-License-Identifier: Apache-2.0
 // Development playground for the note editor (ui/dev/editor.html), without Tauri.
+/// <reference types="vite/client" />
 import { createEditor } from "../editor";
+import type { SongHost } from "../song";
+import type { SongSheet } from "../types";
+// Without the core, song sheets come from its golden files (format.md §11).
+import song from "../../../tests/fixtures/format/5.7-render/song.cho?raw";
+import songPlus3 from "../../../tests/fixtures/format/5.7-render/song+3.cho?raw";
+import plain from "../../../tests/fixtures/format/5.7-render/render.json";
+import german from "../../../tests/fixtures/format/5.7-render/render-german.json";
+import lyricsOnly from "../../../tests/fixtures/format/5.7-render/render-lyrics-only.json";
+import transposed from "../../../tests/fixtures/format/5.7-render/render-transposed.json";
 
 const SAMPLE = `---
 id: 01ARZ3NDEKTSV4RRFFQ69G5FAV
@@ -34,7 +44,35 @@ Links to open with ⌘-click: the [manual](<../attachments/61/manual v2.pdf>), t
 \`\`\`sh
 cargo test --workspace
 \`\`\`
+
+\`\`\`chordpro
+${song.trimEnd()}
+\`\`\`
 `;
+
+/**
+ * The golden sheets for the plain view, lyrics only, German names and any
+ * transposition; "Apply transposition" gives the song moved by 3.
+ */
+const songs: SongHost = {
+  render: (source, _info, view) => {
+    if (source.trim() !== song.trim() && source.trim() !== songPlus3.trim()) {
+      return Promise.reject(new Error("the demo knows only the fixture song"));
+    }
+    const sheet = view.lyricsOnly
+      ? lyricsOnly
+      : view.shown === "german"
+        ? german
+        : view.transpose !== 0
+          ? transposed
+          : plain;
+    return Promise.resolve({ ...sheet, transpose: view.transpose } as SongSheet);
+  },
+  applyTransposition: () => Promise.resolve(songPlus3.trimEnd()),
+  report: (message) => {
+    status.textContent = message;
+  },
+};
 
 const DRAWING = `<svg xmlns="http://www.w3.org/2000/svg" width="240" height="80">
 <rect width="240" height="80" rx="8" fill="#d0e4ff"/><text x="20" y="48" font-size="20">Schaltplan</text></svg>`;
@@ -67,6 +105,7 @@ const editor = createEditor(el("editor-host"), {
   openLink: (link) => {
     status.textContent = `Open: ${link}`;
   },
+  songs,
 });
 editor.load(SAMPLE);
 editor.setEnabled(true);

@@ -12,7 +12,7 @@
 
 use serde::Serialize;
 
-use super::chord::{Key, Notation, transpose, transpose_key};
+use super::chord::{Key, Notation, respell, respell_key, transpose, transpose_key};
 use super::{Directive, Line, Segment, Song};
 
 /// The options of a block's info string (rule 7), such as
@@ -65,6 +65,9 @@ pub struct View {
     pub lyrics_only: bool,
     /// The vault default of rule 6, for a block without `notation=`.
     pub notation: Notation,
+    /// The names to show the chords in, if not those they are written in
+    /// (ADR-0031).
+    pub shown: Option<Notation>,
 }
 
 /// A rendered song sheet.
@@ -76,8 +79,10 @@ pub struct Sheet {
     pub meta: Vec<Meta>,
     /// The song.
     pub sections: Vec<Section>,
-    /// The names the chords are read and shown in.
+    /// The names the chords are written in: the block's or the vault's.
     pub notation: Notation,
+    /// The names they are shown in.
+    pub shown: Notation,
     /// Semitones of the info string and the viewer, before any `{transpose}`.
     pub transpose: i32,
     /// Chords, chord lines and tablature left out.
@@ -173,8 +178,10 @@ pub fn render(source: &str, info: &str, view: View) -> Sheet {
     let options = BlockOptions::parse(info);
     let notation = options.notation.unwrap_or(view.notation);
     let song = Song::parse(source);
+    let shown = view.shown.unwrap_or(notation);
     let mut renderer = Renderer {
         notation,
+        shown,
         lyrics_only: options.nochords || view.lyrics_only,
         base: options.transpose.saturating_add(view.transpose),
         shift: 0,
@@ -192,6 +199,7 @@ pub fn render(source: &str, info: &str, view: View) -> Sheet {
         meta: renderer.meta,
         sections: renderer.sections,
         notation,
+        shown,
         transpose: renderer.base,
         lyrics_only: renderer.lyrics_only,
         nosource: options.nosource,
@@ -224,7 +232,10 @@ struct Chorus<'a> {
 }
 
 struct Renderer<'a> {
+    /// The names chords are written in.
     notation: Notation,
+    /// The names they are shown in.
+    shown: Notation,
     lyrics_only: bool,
     /// Semitones of the info string and the viewer.
     base: i32,
@@ -280,7 +291,8 @@ impl<'a> Renderer<'a> {
                     if let Some(key) = Key::parse(v.trim(), self.notation) {
                         self.key = Some(key);
                     }
-                    let shown = transpose_key(&v, self.semitones(), self.notation).unwrap_or(v);
+                    let shown =
+                        respell_key(&v, self.semitones(), self.notation, self.shown).unwrap_or(v);
                     self.meta.push(Meta {
                         name: d.name.clone(),
                         value: shown,
@@ -346,7 +358,8 @@ impl<'a> Renderer<'a> {
         let semitones = self.semitones();
         let key = self.key.map(|k| k.transposed(semitones));
         let shown = |chord: &str| {
-            transpose(chord, semitones, key, self.notation).unwrap_or_else(|| chord.to_owned())
+            respell(chord, semitones, key, self.notation, self.shown)
+                .unwrap_or_else(|| chord.to_owned())
         };
         if chords_only {
             let chords = segments
@@ -663,6 +676,10 @@ mod tests {
             lyrics_only: true,
             ..View::default()
         };
+        let in_german = View {
+            shown: Some(Notation::German),
+            ..View::default()
+        };
         let cases = [
             ("render.json", render(&song, "chordpro", View::default())),
             (
@@ -673,6 +690,7 @@ mod tests {
                 "render-lyrics-only.json",
                 render(&song, "chordpro", lyrics_only),
             ),
+            ("render-german.json", render(&song, "chordpro", in_german)),
         ];
         let mut outputs: Vec<(&str, String)> = cases
             .iter()
