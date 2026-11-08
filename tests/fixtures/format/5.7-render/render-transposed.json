@@ -1,0 +1,280 @@
+{
+  "meta": [
+    {
+      "name": "title",
+      "value": "Sommerabend am See"
+    },
+    {
+      "name": "subtitle",
+      "value": "Ein Lied für die Tests"
+    },
+    {
+      "name": "artist",
+      "value": "Niemand Bestimmtes"
+    },
+    {
+      "name": "key",
+      "value": "F"
+    },
+    {
+      "name": "capo",
+      "value": "2"
+    },
+    {
+      "name": "tempo",
+      "value": "92"
+    },
+    {
+      "name": "time",
+      "value": "3/4"
+    }
+  ],
+  "sections": [
+    {
+      "kind": "verse",
+      "label": "Strophe 1",
+      "repeat": false,
+      "lines": [
+        {
+          "type": "lyrics",
+          "segments": [
+            {
+              "chord": null,
+              "text": "Am "
+            },
+            {
+              "chord": "F",
+              "text": "Ufer liegt ein "
+            },
+            {
+              "chord": "Bb",
+              "text": "Boot im "
+            },
+            {
+              "chord": "F",
+              "text": "Schilf,"
+            }
+          ]
+        },
+        {
+          "type": "lyrics",
+          "segments": [
+            {
+              "chord": null,
+              "text": "die "
+            },
+            {
+              "chord": "Dm",
+              "text": "Wellen gehen "
+            },
+            {
+              "chord": "Gm7",
+              "text": "leise "
+            },
+            {
+              "chord": "C7",
+              "text": "hin."
+            }
+          ]
+        },
+        {
+          "type": "chords",
+          "chords": [
+            "F",
+            "Bb/D",
+            "C"
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "chorus",
+      "label": "Refrain",
+      "repeat": false,
+      "lines": [
+        {
+          "type": "lyrics",
+          "segments": [
+            {
+              "chord": "Bb",
+              "text": "Sommer"
+            },
+            {
+              "chord": "C",
+              "text": "abend, "
+            },
+            {
+              "chord": "Am",
+              "text": "bleib noch "
+            },
+            {
+              "chord": "Dm",
+              "text": "hier,"
+            }
+          ]
+        },
+        {
+          "type": "lyrics",
+          "segments": [
+            {
+              "chord": "Bb",
+              "text": "sing dein "
+            },
+            {
+              "chord": "C7",
+              "text": "Lied mit "
+            },
+            {
+              "chord": "F",
+              "text": "mir. "
+            },
+            {
+              "chord": "N.C.",
+              "text": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "plain",
+      "label": null,
+      "repeat": false,
+      "lines": [
+        {
+          "type": "comment",
+          "text": "Zwischenspiel",
+          "italic": false
+        }
+      ]
+    },
+    {
+      "kind": "tab",
+      "label": null,
+      "repeat": false,
+      "lines": [
+        {
+          "type": "tab",
+          "text": "e|---2---3---[x]---|"
+        }
+      ]
+    },
+    {
+      "kind": "plain",
+      "label": null,
+      "repeat": false,
+      "lines": [
+        {
+          "type": "lyrics",
+          "segments": [
+            {
+              "chord": null,
+              "text": "Ohne Abschnitt geht es "
+            },
+            {
+              "chord": "F",
+              "text": "weiter,"
+            }
+          ]
+        },
+        {
+          "type": "comment",
+          "text": "frei gesungen",
+          "italic": true
+        }
+      ]
+    },
+    {
+      "kind": "verse",
+      "label": "Strophe 2, einen Ton höher",
+      "repeat": false,
+      "lines": [
+        {
+          "type": "lyrics",
+          "segments": [
+            {
+              "chord": null,
+              "text": "Dann "
+            },
+            {
+              "chord": "G",
+              "text": "wird es "
+            },
+            {
+              "chord": "C",
+              "text": "Nacht und "
+            },
+            {
+              "chord": "D",
+              "text": "still."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "chorus",
+      "label": "Refrain",
+      "repeat": true,
+      "lines": [
+        {
+          "type": "lyrics",
+          "segments": [
+            {
+              "chord": "C",
+              "text": "Sommer"
+            },
+            {
+              "chord": "D",
+              "text": "abend, "
+            },
+            {
+              "chord": "Bm",
+              "text": "bleib noch "
+            },
+            {
+              "chord": "Em",
+              "text": "hier,"
+            }
+          ]
+        },
+        {
+          "type": "lyrics",
+          "segments": [
+            {
+              "chord": "C",
+              "text": "sing dein "
+            },
+            {
+              "chord": "D7",
+              "text": "Lied mit "
+            },
+            {
+              "chord": "G",
+              "text": "mir. "
+            },
+            {
+              "chord": "N.C.",
+              "text": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "plain",
+      "label": null,
+      "repeat": false,
+      "lines": [
+        {
+          "type": "unknown",
+          "text": "{x_lichtstimmung: gedimmt}"
+        }
+      ]
+    }
+  ],
+  "notation": "english",
+  "transpose": 3,
+  "lyricsOnly": false,
+  "nosource": false
+}

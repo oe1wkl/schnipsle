@@ -1,3 +1,4 @@
-# Example .notesapp/settings.yaml (format.md §7): history retention.
+# Example .notesapp/settings.yaml (format.md §7): history retention and chord names.
 history_keep_all_days: 14     # keep every version for two weeks
 history_keep_daily_days: 180  # then the last version of each day for half a year
+chord_notation: german        # song sheets read and show H and B (§5.7 rule 6)

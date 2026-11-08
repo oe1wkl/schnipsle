@@ -1,9 +1,9 @@
 # Vault File Format Specification
 
 - Format version: **1** (draft)
-- Spec revision: 0.14, 2026-11-05 (§5.2 a first heading of any level gives the title; 0.13: §12.4 rule 4 notes an undo cannot change; 0.12: §12.1 rule 7 the source's title as a heading; 0.11: §12.1 rule 6 notes from the source's trash; 0.10: §12 imported notes, import log, re-import and undo; 0.9: §9 reading and writing smart folders; 0.8: §7 retention settings; 0.7: §5.5 relative links are kept working when a note moves; 0.6: §8 `original_path` is relative to the vault root; 0.5: §8 trash names for notes without `id` and for collisions; 0.4: §5.3 refined by the first implementation, §5.6 music notation, §5.7 lyrics with chords)
+- Spec revision: 0.15, 2026-11-07 (§5.7 rule 6 names the vault default `chord_notation`; 0.14: §5.2 a first heading of any level gives the title; 0.13: §12.4 rule 4 notes an undo cannot change; 0.12: §12.1 rule 7 the source's title as a heading; 0.11: §12.1 rule 6 notes from the source's trash; 0.10: §12 imported notes, import log, re-import and undo; 0.9: §9 reading and writing smart folders; 0.8: §7 retention settings; 0.7: §5.5 relative links are kept working when a note moves; 0.6: §8 `original_path` is relative to the vault root; 0.5: §8 trash names for notes without `id` and for collisions; 0.4: §5.3 refined by the first implementation, §5.6 music notation, §5.7 lyrics with chords)
 - Status: Draft — becomes normative when M1 ships
-- Related: ADR-0004, ADR-0008, ADR-0009, ADR-0011, ADR-0013, ADR-0014, ADR-0012, ADR-0016, ADR-0017, ADR-0018, ADR-0019, ADR-0020, ADR-0026
+- Related: ADR-0004, ADR-0008, ADR-0009, ADR-0011, ADR-0013, ADR-0014, ADR-0012, ADR-0016, ADR-0017, ADR-0018, ADR-0019, ADR-0020, ADR-0026, ADR-0030
 
 The key words MUST, MUST NOT, SHOULD, SHOULD NOT and MAY are used as described in RFC 2119.
 
@@ -203,7 +203,7 @@ Rules:
 3. Lines starting with `#` inside the block are ChordPro comments and are not rendered. As for all fenced code, they never create tags (§5.3, rule 3).
 4. **Chord names:** root `A`–`G` (and `H` for the German B, see rule 6), optional `#` or `b`, optional quality and extensions, optional `/` bass note. Anything else in brackets is shown as written and not transposed.
 5. **Transposition:** `{transpose: n}` in the block, an info-string option `transpose=<n>`, or the viewer's transpose control shift displayed chords by n semitones. The file is never rewritten unless the user explicitly chooses "Apply transposition", which then rewrites the chord brackets and keeps the old version in the history (§7). Sharps or flats in the result follow the target key.
-6. **Note naming:** an info-string option `notation=german` displays and transposes with German names (`H` = B, `B` = B♭); default is `notation=english`. The setting can also be a vault default in `settings.yaml`.
+6. **Note naming:** an info-string option `notation=german` displays and transposes with German names (`H` = B, `B` = B♭); default is `notation=english`. The setting can also be a vault default in `settings.yaml`: `chord_notation: german` (or `english`); any other value counts as English, and a block's `notation=` wins (ADR-0030).
 7. **Info-string options** (OPTIONAL, space-separated after `chordpro`): `transpose=<semitones>`, `notation=english|german`, `nochords` (show lyrics only, e.g. for singers), `nosource`. Unknown options MUST be ignored.
 8. **Indexing:** `title`, `subtitle`, `artist`, `composer`, `lyricist` and the lyric text without chord brackets MUST be added to the full-text index. Chord names are indexed separately so the query `has:chord` and the filter `chord:Am` work.
 9. Whole files with the extension `.cho`, `.crd`, `.chopro` or `.chordpro` are imported as notes containing one `chordpro` block, with `title` used as the note title.
@@ -268,7 +268,7 @@ The query syntax is defined in the user manual: [Query language](manual/query-la
 
 ## 11. Conformance tests
 
-Fixtures in `tests/fixtures/format/` cover every MUST rule in this document, in particular all tag examples in §5.3 and the music rules in §5.6 (fragment without `X:`, multi-voice score, lyrics indexing, `#` inside an `abc` block) and §5.7 (chord placement, every directive, transposition in both note namings, unknown directives preserved). The import log rules of §12.2–§12.4 are covered by `tests/fixtures/format/12-import-log/` (a finished run, a re-import, an undone run with a kept note, an interrupted run, a newer format); sample exports for §12.1 are in `tests/fixtures/import/<source>/`. A change to this spec without matching fixtures is incomplete.
+Fixtures in `tests/fixtures/format/` cover every MUST rule in this document, in particular all tag examples in §5.3 and the music rules in §5.6 (fragment without `X:`, multi-voice score, lyrics indexing, `#` inside an `abc` block) and §5.7 (chord placement, every directive, transposition in both note namings, unknown directives preserved; golden files in `tests/fixtures/format/5.6-index/`, `5.7-index/` and `5.7-render/`). The import log rules of §12.2–§12.4 are covered by `tests/fixtures/format/12-import-log/` (a finished run, a re-import, an undone run with a kept note, an interrupted run, a newer format); sample exports for §12.1 are in `tests/fixtures/import/<source>/`. A change to this spec without matching fixtures is incomplete.
 
 ## 12. Imports
 

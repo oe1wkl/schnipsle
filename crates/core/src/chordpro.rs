@@ -7,8 +7,11 @@
 //! lyrics split at chord brackets. The index uses it for rule 8: the lyrics
 //! without brackets and the title, subtitle, artist, composer and lyricist
 //! go into the full text ([`Song::index_text`]), chord names into their own
-//! table ([`Song::chords`]). Rendering and transposition will build on the
-//! same lines.
+//! table ([`Song::chords`]). [`sheet`] renders the same lines for the editor
+//! and the exports, transposed by [`chord`].
+
+pub mod chord;
+pub mod sheet;
 
 /// A parsed `chordpro` block.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -45,7 +48,7 @@ pub struct Directive {
 }
 
 /// A piece of a lyrics line: a bracket group and the text up to the next one.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct Segment {
     /// What the brackets before the text hold, as written; `None` for the
     /// text before the first bracket.

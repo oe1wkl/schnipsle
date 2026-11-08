@@ -1,0 +1,173 @@
+{
+  "meta": [
+    {
+      "name": "title",
+      "value": "Sommerabend am See"
+    },
+    {
+      "name": "subtitle",
+      "value": "Ein Lied für die Tests"
+    },
+    {
+      "name": "artist",
+      "value": "Niemand Bestimmtes"
+    },
+    {
+      "name": "key",
+      "value": "D"
+    },
+    {
+      "name": "capo",
+      "value": "2"
+    },
+    {
+      "name": "tempo",
+      "value": "92"
+    },
+    {
+      "name": "time",
+      "value": "3/4"
+    }
+  ],
+  "sections": [
+    {
+      "kind": "verse",
+      "label": "Strophe 1",
+      "repeat": false,
+      "lines": [
+        {
+          "type": "lyrics",
+          "segments": [
+            {
+              "chord": null,
+              "text": "Am Ufer liegt ein Boot im Schilf,"
+            }
+          ]
+        },
+        {
+          "type": "lyrics",
+          "segments": [
+            {
+              "chord": null,
+              "text": "die Wellen gehen leise hin."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "chorus",
+      "label": "Refrain",
+      "repeat": false,
+      "lines": [
+        {
+          "type": "lyrics",
+          "segments": [
+            {
+              "chord": null,
+              "text": "Sommerabend, bleib noch hier,"
+            }
+          ]
+        },
+        {
+          "type": "lyrics",
+          "segments": [
+            {
+              "chord": null,
+              "text": "sing dein Lied mit mir."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "plain",
+      "label": null,
+      "repeat": false,
+      "lines": [
+        {
+          "type": "comment",
+          "text": "Zwischenspiel",
+          "italic": false
+        }
+      ]
+    },
+    {
+      "kind": "plain",
+      "label": null,
+      "repeat": false,
+      "lines": [
+        {
+          "type": "lyrics",
+          "segments": [
+            {
+              "chord": null,
+              "text": "Ohne Abschnitt geht es weiter,"
+            }
+          ]
+        },
+        {
+          "type": "comment",
+          "text": "frei gesungen",
+          "italic": true
+        }
+      ]
+    },
+    {
+      "kind": "verse",
+      "label": "Strophe 2, einen Ton höher",
+      "repeat": false,
+      "lines": [
+        {
+          "type": "lyrics",
+          "segments": [
+            {
+              "chord": null,
+              "text": "Dann wird es Nacht und still."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "chorus",
+      "label": "Refrain",
+      "repeat": true,
+      "lines": [
+        {
+          "type": "lyrics",
+          "segments": [
+            {
+              "chord": null,
+              "text": "Sommerabend, bleib noch hier,"
+            }
+          ]
+        },
+        {
+          "type": "lyrics",
+          "segments": [
+            {
+              "chord": null,
+              "text": "sing dein Lied mit mir."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "plain",
+      "label": null,
+      "repeat": false,
+      "lines": [
+        {
+          "type": "unknown",
+          "text": "{x_lichtstimmung: gedimmt}"
+        }
+      ]
+    }
+  ],
+  "notation": "english",
+  "transpose": 0,
+  "lyricsOnly": true,
+  "nosource": false
+}

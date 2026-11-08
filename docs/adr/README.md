@@ -43,3 +43,4 @@ This folder records every significant architectural decision of the project, one
 | [0027](0027-pictures-converted-for-an-export.md) | Pictures few programs show are converted for an export | Accepted | 2026-11-05 |
 | [0028](0028-turned-pictures-upright-in-docx-and-odt.md) | Turned pictures are upright in DOCX and ODT | Accepted | 2026-11-06 |
 | [0029](0029-table-of-contents-and-page-numbers.md) | Table of contents and page numbers | Accepted | 2026-11-06 |
+| [0030](0030-rendering-and-transposing-song-sheets.md) | Rendering and transposing song sheets | Accepted | 2026-11-07 |
