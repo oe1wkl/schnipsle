@@ -1,0 +1,35 @@
+{title: Sommerabend am See}
+{subtitle: Ein Lied für die Tests}
+{artist: Niemand Bestimmtes}
+{key: D}
+{capo: 2}
+{tempo: 92}
+{time: 3/4}
+# Für mich: im Refrain leiser
+
+{start_of_verse: Strophe 1}
+Am [D]Ufer liegt ein [G]Boot im [D]Schilf,
+die [Bm]Wellen gehen [Em7]leise [A7]hin.
+[D] [G/B] [A]
+{end_of_verse}
+
+{start_of_chorus: Refrain}
+[G]Sommer[A]abend, [F#m]bleib noch [Bm]hier,
+[G]sing dein [A7]Lied mit [D]mir. [N.C.]
+{end_of_chorus}
+
+{c: Zwischenspiel}
+{start_of_tab}
+e|---2---3---[x]---|
+{end_of_tab}
+
+Ohne Abschnitt geht es [D]weiter,
+{ci: frei gesungen}
+
+{transpose: 2}
+{sov: Strophe 2, einen Ton höher}
+Dann [D]wird es [G]Nacht und [A]still.
+{eov}
+
+{chorus}
+{x_lichtstimmung: gedimmt}

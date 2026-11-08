@@ -634,6 +634,20 @@ impl Vault {
         Ok(())
     }
 
+    /// The text of `.notesapp/settings.yaml` (format.md §7), empty if there
+    /// is none.
+    ///
+    /// # Errors
+    /// I/O errors other than a missing file.
+    pub fn settings_text(&self) -> Result<String> {
+        let file = self.root().join(crate::layout::SETTINGS_FILE);
+        self.coordinated(Access::Read, &file, |file| match fs::read(file) {
+            Ok(bytes) => Ok(String::from_utf8_lossy(&bytes).into_owned()),
+            Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(String::new()),
+            Err(e) => Err(e.into()),
+        })
+    }
+
     /// Runs `f` inside the coordinator and passes its result through. `f` gets
     /// the path to use, which the coordinator may have updated.
     pub(crate) fn coordinated<T>(

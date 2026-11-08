@@ -172,13 +172,7 @@ impl Vault {
     /// file is missing or cannot be read.
     #[must_use]
     pub fn retention(&self) -> Retention {
-        let file = self.root().join(crate::layout::SETTINGS_FILE);
-        let text = self.coordinated(Access::Read, &file, |file| match fs::read(file) {
-            Ok(bytes) => Ok(String::from_utf8_lossy(&bytes).into_owned()),
-            Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(String::new()),
-            Err(e) => Err(e.into()),
-        });
-        text.map_or_else(
+        self.settings_text().map_or_else(
             |e| {
                 eprintln!("settings not readable, default retention: {e}");
                 Retention::default()
