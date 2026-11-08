@@ -12,6 +12,7 @@ import { createImageCache, fileName } from "./images";
 import { createImport } from "./import";
 import { createImports } from "./imports";
 import { createSidebar, type ListFilter } from "./sidebar";
+import type { SongHost } from "./song";
 import type {
   VaultInfo,
   FolderSetup,
@@ -31,6 +32,8 @@ import type {
   SearchHit,
   SnippetPart,
   SortOrder,
+  SongSheet,
+  Notation,
 } from "./types";
 
 const AUTOSAVE_MS = 1000;
@@ -65,6 +68,21 @@ let vaultIsOpen = false;
 let straysShown = "";
 let straysDismissed = "";
 
+/** Song sheets for both editors: the core renders them (ADR-0030). */
+const songs: SongHost = {
+  render: (source, info, view) =>
+    invoke<SongSheet>("render_song", {
+      source,
+      info,
+      transpose: view.transpose,
+      lyricsOnly: view.lyricsOnly,
+      shown: view.shown,
+    }),
+  applyTransposition: (source, semitones, notation) =>
+    applyTransposition(source, semitones, notation),
+  report: setStatus,
+};
+
 const editor = createEditor(ui.editorHost, {
   onChange: () => {
     setStatus("Editing…");
@@ -77,6 +95,7 @@ const editor = createEditor(ui.editorHost, {
   onFiles: (files, pos) => void attachFiles(files, pos),
   loadImage: (url) => images.load(url),
   openLink: (link) => void openLink(link),
+  songs,
 });
 
 /**
@@ -89,6 +108,7 @@ const historyView = createEditor(ui.historyPreview, {
   onFiles: () => undefined,
   loadImage: (url) => images.load(url),
   placeholderText: "Select a version",
+  songs,
 });
 
 /**
@@ -708,6 +728,32 @@ async function snapshot(text: string | null = null): Promise<void> {
     await invoke("snapshot_note", { path: note.path, text });
   } catch (e) {
     setStatus(`Version not stored in the history: ${asError(e).message}`);
+  }
+}
+
+/**
+ * "Apply transposition" (format.md §5.7 rule 5): saves the note and stores
+ * it in its history, then asks the core for the block with its chords moved.
+ * Returns `null`, and says why, if the version before could not be kept.
+ */
+async function applyTransposition(
+  source: string,
+  semitones: number,
+  notation: Notation,
+): Promise<string | null> {
+  const note = current;
+  if (!note || readOnly !== null) return null;
+  try {
+    await flushSave();
+    if (current !== note || isDirty() || conflictHash !== undefined) {
+      setStatus("The note is not saved, so its chords were not rewritten.");
+      return null;
+    }
+    await invoke("snapshot_note", { path: note.path, text: null });
+    return await invoke<string>("apply_transposition", { source, semitones, notation });
+  } catch (e) {
+    setStatus(`Chords not rewritten: ${asError(e).message}`);
+    return null;
   }
 }
 

@@ -34,6 +34,7 @@ import {
 } from "@codemirror/view";
 import type { SyntaxNode } from "@lezer/common";
 import { tags as t } from "@lezer/highlight";
+import { forgetSongSheets, type SongHost, songHost, songPreview } from "./song";
 
 export type EditorMode = "live" | "source";
 
@@ -546,7 +547,7 @@ const sourceTheme = EditorView.theme({
 });
 
 const modes: Record<EditorMode, Extension> = {
-  live: [livePreview, tablePreview, syntaxHighlighting(liveStyle)],
+  live: [livePreview, tablePreview, songPreview(focused), syntaxHighlighting(liveStyle)],
   source: [syntaxHighlighting(sourceStyle), sourceTheme],
 };
 
@@ -564,6 +565,8 @@ export function createEditor(
     openLink?: (link: string) => void;
     /** Shown while the editor is empty; "Select a note" by default. */
     placeholderText?: string;
+    /** Renders song sheets (format.md §5.7); without it they show as source. */
+    songs?: SongHost;
   },
 ): NoteEditor {
   const mode = new Compartment();
@@ -588,6 +591,7 @@ export function createEditor(
         mutedFrontMatter,
         trackFocus,
         imageLoader.of(events.loadImage),
+        events.songs ? songHost.of(events.songs) : [],
         mode.of(modes[currentMode]),
         enabled.of(enabledExtension(isEnabled)),
         placeholder(events.placeholderText ?? "Select a note"),
@@ -641,6 +645,7 @@ export function createEditor(
   return {
     text: () => view.state.doc.toString(),
     load(text) {
+      forgetSongSheets(); // the vault's default chord names may differ
       view.setState(makeState(text));
     },
     setEnabled(on) {

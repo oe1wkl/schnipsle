@@ -9,6 +9,7 @@ mod exporting;
 mod importing;
 mod indexing;
 mod smart_folders;
+mod songs;
 mod vault_location;
 mod watching;
 
@@ -852,6 +853,8 @@ pub fn run() {
             keep_both,
             download_note,
             extract_tags,
+            songs::render_song,
+            songs::apply_transposition,
             exporting::export_choices,
             exporting::pick_export,
             exporting::export_notes,
