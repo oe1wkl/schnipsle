@@ -37,7 +37,7 @@ Draft, to be agreed. Goal: music in notes as the HLD asks for 1.0: ABC scores en
 
 To decide first:
 
-- [ ] How exports get the engraved ABC: abcjs runs in the web view, the exporters in Rust. Likely the app renders the SVG and hands it to the export (as the PDF path already uses the web view); on iOS the same. A spike, then an ADR amending rule 8 of ADR-0021 (music as source until now)
+- [x] How exports get the engraved ABC (spike `docs/spikes/abc-export.md`, ADR-0033): the app's web view engraves the scores before the export with the editor's code and hands the SVGs to the export command; inline SVG in HTML and PDF, a picture in ODT, DOCX and EPUB; a block without a score stays source and is reported
 - [x] Playback (F-17, a should) is part of M6 (2026-11-06)
 
 Work:

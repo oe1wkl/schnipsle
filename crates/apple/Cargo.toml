@@ -70,9 +70,11 @@ objc2-web-kit = { version = "0.3", default-features = false, features = [
 tempfile.workspace = true
 
 [dev-dependencies]
+# Only for examples/engrave_spike.rs.
+serde_json.workspace = true
 tempfile.workspace = true
 
-# Only for examples/pdf_spike.rs and tests/pdf.rs; already in the lock file through the Tauri shell.
+# Only for the spikes in examples/ and tests/pdf.rs; already in the lock file through the Tauri shell.
 [target.'cfg(target_os = "macos")'.dev-dependencies]
 objc2-app-kit = "0.3"
 objc2-pdf-kit = "0.3"
