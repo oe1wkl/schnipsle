@@ -5,6 +5,7 @@ import { createEditor } from "../editor";
 import type { SongHost } from "../song";
 import type { SongSheet } from "../types";
 // Without the core, song sheets come from its golden files (format.md §11).
+import score from "../../../tests/fixtures/format/5.6-index/score.abc?raw";
 import song from "../../../tests/fixtures/format/5.7-render/song.cho?raw";
 import songPlus3 from "../../../tests/fixtures/format/5.7-render/song+3.cho?raw";
 import plain from "../../../tests/fixtures/format/5.7-render/render.json";
@@ -47,6 +48,26 @@ cargo test --workspace
 
 \`\`\`chordpro
 ${song.trimEnd()}
+\`\`\`
+
+\`\`\`abc
+${score.trimEnd()}
+\`\`\`
+
+A fragment moved up a tone:
+
+\`\`\`abc transpose=2
+T:Motiv &amp; \\u00c4nderung, &#x263A; \\&amp; bleibt
+K:G
+"G"GABc "D7"d2 B2 | "G"G4 z4 |]
+\`\`\`
+
+One with mistakes, which stays source:
+
+\`\`\`abc
+X:1
+K:C
+C D E $ F | [[ zz "Am
 \`\`\`
 `;
 

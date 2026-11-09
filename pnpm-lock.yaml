@@ -35,6 +35,9 @@ importers:
       '@tauri-apps/api':
         specifier: ~2.12.4
         version: 2.12.4
+      abcjs:
+        specifier: ~6.7.2
+        version: 6.7.2
     devDependencies:
       '@eslint/js':
         specifier: ~10.0.1
@@ -454,6 +457,9 @@ packages:
   '@typescript-eslint/visitor-keys@8.72.1':
     resolution: {integrity: sha512-SB8xqipSzZHUePCCLNeYxqnxq83X61/qzNhjQGbTfjxGZIeOEP7tBgWYX05Tcd6CgE02WdTJnh5b8kMZJ/+bnQ==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
+
+  abcjs@6.7.2:
+    resolution: {integrity: sha512-cHCyf8j0hAcxTuwZ9l2QznaSlLK1TD2s5oVw6Ig8Kfss6VfJKoNJ1kAzMBwa6DDWeyNl2JH7mN/U+MJ8MYbC5g==}
 
   acorn-jsx@5.3.2:
     resolution: {integrity: sha512-rq9s+JNhf0IChjtDXxllJ7g41oZk5SlXtp0LHwyA5cejwn7vKmKp4pPri6YEePv2PU65sAsegbXtIinmDFDXgQ==}
@@ -1299,6 +1305,8 @@ snapshots:
     dependencies:
       '@typescript-eslint/types': 8.72.1
       eslint-visitor-keys: 5.0.1
+
+  abcjs@6.7.2: {}
 
   acorn-jsx@5.3.2(acorn@8.19.0):
     dependencies:

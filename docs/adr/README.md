@@ -45,3 +45,4 @@ This folder records every significant architectural decision of the project, one
 | [0029](0029-table-of-contents-and-page-numbers.md) | Table of contents and page numbers | Accepted | 2026-11-06 |
 | [0030](0030-rendering-and-transposing-song-sheets.md) | Rendering and transposing song sheets | Accepted | 2026-11-07 |
 | [0031](0031-song-sheets-in-the-editor.md) | Song sheets in the editor | Accepted | 2026-11-08 |
+| [0032](0032-scores-in-the-editor.md) | Scores in the editor | Accepted | 2026-11-08 |
