@@ -97,8 +97,13 @@
 <text:p text:style-name="Preformatted_20_Text">Bake at 230 °C for 20 minutes.</text:p>
 <text:p text:style-name="Preformatted_20_Text">Indented code is code too.</text:p>
 <text:h text:style-name="Note_20_Start" text:outline-level="1"><text:bookmark text:name="note-abendlied"/>Abendlied</text:h>
-<text:p text:style-name="Preformatted_20_Text">{title: Abendlied}<text:line-break/>{key: G}<text:line-break/><text:line-break/>{start_of_verse}<text:line-break/>Der [G]Mond ist aufge[D]gangen,<text:line-break/>die [G]goldnen Sternlein [C]pran[D]gen<text:line-break/>{end_of_verse}</text:p>
-<text:p text:style-name="Preformatted_20_Text">X:1<text:line-break/>T:Kanon<text:line-break/>M:4/4<text:line-break/>L:1/4<text:line-break/>K:D<text:line-break/>f2 e2 | d2 c2 |</text:p>
+<text:p text:style-name="Song_20_Title">Abendlied</text:p>
+<text:p text:style-name="Song_20_Details">Key G</text:p>
+<text:p text:style-name="Song_20_Chords"><text:s text:c="4"/>G <text:s text:c="12"/>D</text:p>
+<text:p text:style-name="Song_20_Lyrics">Der Mond ist aufgegangen,</text:p>
+<text:p text:style-name="Song_20_Chords"><text:s text:c="4"/>G <text:s text:c="16"/>C <text:s text:c="2"/>D</text:p>
+<text:p text:style-name="Song_20_Lyrics">die goldnen Sternlein prangen</text:p>
+<text:p text:style-name="Text_20_body"><draw:frame draw:style-name="Picture" draw:name="Picture3" text:anchor-type="as-char" svg:width="15.875cm" svg:height="3.577cm"><draw:image xlink:href="Pictures/3.svg" xlink:type="simple" xlink:show="embed" xlink:actuate="onLoad"/><svg:desc>Kanon</svg:desc></draw:frame></text:p>
 <text:p text:style-name="Preformatted_20_Text">graph LR<text:line-break/><text:s text:c="2"/>Rig --&gt; Tuner --&gt; Antenna</text:p>
 <text:p text:style-name="Text_20_body">Inline math <text:span text:style-name="Source_20_Text">$E = mc^2$</text:span> and a block:</text:p>
 <text:p text:style-name="Preformatted_20_Text">$$<text:line-break/>f = \frac{c}{\lambda}<text:line-break/>$$</text:p>

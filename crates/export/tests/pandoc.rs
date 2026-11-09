@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 use schnipsle_core::vault::Vault;
 use schnipsle_export::{
     ConversionJob, Converted, Converter, Exporter, Format, Input, Layout, Options, Pandoc,
-    PandocExporter, Paper, ProblemKind, Report,
+    PandocExporter, Paper, ProblemKind, Report, Score,
 };
 use zip::ZipArchive;
 use zip::write::{SimpleFileOptions, ZipWriter};
@@ -37,6 +37,27 @@ fn fixtures() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/export")
 }
 
+/// The kanon of `Songs/abendlied.md`, engraved by abcjs 6.7.2 as the app does
+/// (ADR-0033).
+/// The warnings of a report but that a DOCX holds the score of `scores` as SVG
+/// only, which it does where `rsvg-convert` is missing, as in CI (ADR-0033).
+fn other_warnings(report: &Report) -> Vec<&str> {
+    report
+        .warnings
+        .iter()
+        .map(String::as_str)
+        .filter(|w| !w.contains("“Kanon” is in the document as SVG only"))
+        .collect()
+}
+
+fn scores() -> Vec<Score> {
+    vec![Score {
+        source: "X:1\nT:Kanon\nM:4/4\nL:1/4\nK:D\nf2 e2 | d2 c2 |\n".to_owned(),
+        transpose: 0,
+        tunes: vec![fs::read_to_string(fixtures().join("scores/kanon.svg")).unwrap()],
+    }]
+}
+
 fn vault() -> Vault {
     Vault::open(fixtures().join("vault")).unwrap()
 }
@@ -53,6 +74,7 @@ fn all_notes() -> Input {
     Input {
         notes: NOTES.iter().map(|p| (*p).to_owned()).collect(),
         name: Some("Samples".to_owned()),
+        scores: scores(),
     }
 }
 
@@ -60,6 +82,7 @@ fn tricky_notes() -> Input {
     Input {
         notes: vec!["grüße.md".to_owned(), "other.md".to_owned()],
         name: Some("Tricky".to_owned()),
+        scores: scores(),
     }
 }
 
@@ -67,6 +90,7 @@ fn options(layout: Layout) -> Options {
     Options {
         layout,
         keep_tag_line: false,
+        abc_source: false,
         paper: Paper::A4,
         contents: false,
         page_numbers: false,
@@ -251,6 +275,7 @@ fn a_note_is_a_section_only_among_others() {
     let one = Input {
         notes: vec!["other.md".to_owned()],
         name: None,
+        scores: scores(),
     };
     let job = job_of(&vault, &one, Format::Docx);
     assert!(job.markdown.starts_with("# Andere Überschrift\n"));
@@ -274,6 +299,7 @@ fn pictures_go_by_file_each_once() {
         &Input {
             notes: vec!["Recipes/bread-rolls.md".to_owned()],
             name: None,
+            scores: scores(),
         },
         Format::Docx,
     );
@@ -437,7 +463,7 @@ fn pandoc_writes_docx() {
     let report = exporter
         .export(&vault, &tricky_notes(), &options(Layout::SingleFile), &to)
         .unwrap();
-    assert_eq!(report.warnings, Vec::<String>::new());
+    assert_eq!(other_warnings(&report), Vec::<&str>::new());
     let xml = part(&to, "word/document.xml");
     for text in [
         "`a`",
@@ -485,6 +511,7 @@ fn pandoc_writes_docx() {
     let bread = Input {
         notes: vec!["Recipes/bread-rolls.md".to_owned()],
         name: None,
+        scores: scores(),
     };
     let to = out.join("bread.docx");
     let report = exporter
@@ -498,7 +525,7 @@ fn pandoc_writes_docx() {
             &to,
         )
         .unwrap();
-    assert_eq!(report.warnings, Vec::<String>::new());
+    assert_eq!(other_warnings(&report), Vec::<&str>::new());
     let core = part(&to, "docProps/core.xml");
     assert!(core.contains("<dc:title>Bread rolls</dc:title>"), "{core}");
     assert!(!core.contains("1970-"), "{core}");
@@ -516,7 +543,7 @@ fn pandoc_writes_docx() {
         .export(&samples, &all_notes(), &options(Layout::FilePerNote), &out)
         .unwrap();
     assert_eq!(report.files.len(), 6);
-    assert_eq!(report.warnings, Vec::<String>::new());
+    assert_eq!(other_warnings(&report), Vec::<&str>::new());
     let tuner = out.join("Antenna tuner.docx");
     let links = part(&tuner, "word/_rels/document.xml.rels");
     assert!(links.contains("Welcome.docx"), "{links}");
@@ -536,7 +563,7 @@ fn pandoc_writes_epub() {
     let report = exporter
         .export(&vault, &tricky_notes(), &options(Layout::SingleFile), &to)
         .unwrap();
-    assert_eq!(report.warnings, Vec::<String>::new());
+    assert_eq!(other_warnings(&report), Vec::<&str>::new());
     let opf = part(&to, "EPUB/content.opf");
     assert!(opf.contains(">Tricky</dc:title>"), "{opf}");
     assert!(names(&to)[0] == "mimetype", "{:?}", names(&to));
@@ -567,12 +594,13 @@ fn pandoc_writes_epub() {
     let bread = Input {
         notes: vec!["Recipes/bread-rolls.md".to_owned()],
         name: None,
+        scores: scores(),
     };
     let to = out.join("bread.epub");
     let report = exporter
         .export(&samples, &bread, &options(Layout::SingleFile), &to)
         .unwrap();
-    assert_eq!(report.warnings, Vec::<String>::new());
+    assert_eq!(other_warnings(&report), Vec::<&str>::new());
     let opf = part(&to, "EPUB/content.opf");
     assert!(opf.contains(">Bread rolls</dc:title>"), "{opf}");
     assert!(opf.contains("<dc:date"), "{opf}");
@@ -587,7 +615,7 @@ fn pandoc_writes_epub() {
         .export(&samples, &all_notes(), &options(Layout::FilePerNote), &out)
         .unwrap();
     assert_eq!(report.files.len(), 6);
-    assert_eq!(report.warnings, Vec::<String>::new());
+    assert_eq!(other_warnings(&report), Vec::<&str>::new());
     assert!(
         report
             .problems
@@ -616,6 +644,7 @@ fn an_svg_stays_in_the_docx_and_a_missing_converter_is_explained() {
     let input = Input {
         notes: vec!["plan.md".to_owned()],
         name: None,
+        scores: scores(),
     };
     let report = PandocExporter::new(Format::Docx, pandoc())
         .export(&vault, &input, &options(Layout::SingleFile), &to)
@@ -648,7 +677,7 @@ fn pandoc_writes_contents_and_page_numbers() {
     let report = PandocExporter::new(Format::Docx, pandoc())
         .export(&vault(), &all_notes(), &with_contents, &to)
         .unwrap();
-    assert_eq!(report.warnings, Vec::<String>::new());
+    assert_eq!(other_warnings(&report), Vec::<&str>::new());
     let xml = part(&to, "word/document.xml");
     assert_eq!(xml.matches(" PAGEREF _Schnipsle").count(), 6, "{xml}");
     for index in 1..=6 {
@@ -662,7 +691,7 @@ fn pandoc_writes_contents_and_page_numbers() {
     let report = PandocExporter::new(Format::Epub, pandoc())
         .export(&vault(), &all_notes(), &with_contents, &to)
         .unwrap();
-    assert_eq!(report.warnings, Vec::<String>::new());
+    assert_eq!(other_warnings(&report), Vec::<&str>::new());
     let opf = part(&to, "EPUB/content.opf");
     assert!(opf.contains("<itemref idref=\"nav\""), "{opf}");
     assert!(part(&to, "EPUB/nav.xhtml").contains(">Contents<"));

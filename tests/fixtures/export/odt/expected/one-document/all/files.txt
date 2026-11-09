@@ -1,3 +1,4 @@
 mimetype 39
 Pictures/1.png 708
 Pictures/2.jpg 4411
+Pictures/3.svg 12992

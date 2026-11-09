@@ -555,3 +555,75 @@ const scoreTheme = EditorView.theme({
     textDecoration: "underline dotted",
   },
 });
+
+// --- Exports ---
+
+/** An `abc` block of the notes to export, as `export_scores` lists it. */
+export interface ExportScore {
+  source: string;
+  transpose: number;
+}
+
+/** The block engraved: one SVG per tune, none if it could not be engraved. */
+export interface EngravedScore extends ExportScore {
+  tunes: string[];
+}
+
+/** Width of the staves of an exported score: 15.9 cm, inside A4 and Letter (ADR-0033). */
+const EXPORT_STAFF_WIDTH = 600;
+
+/**
+ * Engraves the `abc` blocks of an export with the editor's preparation, in
+ * black, off screen, for `export_notes` to put into the documents (ADR-0033).
+ * A block abcjs warns about, or every block if abcjs cannot be loaded, gets
+ * no tunes and stays source in the export, which reports it. Yields to the
+ * window between blocks; `progress` hears how many are done.
+ */
+export async function engraveForExport(
+  blocks: ExportScore[],
+  progress?: (done: number) => void,
+): Promise<EngravedScore[]> {
+  if (blocks.length === 0) return [];
+  await loadAbcjs();
+  const lib = abcjs;
+  if (!lib) return blocks.map((block) => ({ ...block, tunes: [] }));
+  // abcjs measures text, so the score must be in the document, though unseen.
+  const host = document.createElement("div");
+  host.setAttribute("aria-hidden", "true");
+  host.style.cssText =
+    "position: absolute; left: -10000px; top: 0; width: 800px; visibility: hidden; pointer-events: none";
+  document.body.append(host);
+  const serializer = new XMLSerializer();
+  const engraved: EngravedScore[] = [];
+  try {
+    for (const [index, block] of blocks.entries()) {
+      const { abc, tunes, warnings } = parse(lib, block.source, block.transpose);
+      let svgs: string[] = [];
+      if (warnings.length === 0 && tunes > 0) {
+        const targets = Array.from({ length: tunes }, () =>
+          host.appendChild(document.createElement("div")),
+        );
+        lib.renderAbc(targets as unknown as Element, abc, {
+          visualTranspose: block.transpose,
+          staffwidth: EXPORT_STAFF_WIDTH,
+          paddingleft: 0,
+          paddingright: 0,
+          foregroundColor: "#000000",
+        });
+        svgs = targets.flatMap((target) => {
+          const svg = target.querySelector("svg");
+          return svg ? [serializer.serializeToString(svg)] : [];
+        });
+        // A tune missing would leave out part of the block: all or nothing.
+        if (svgs.length !== tunes) svgs = [];
+        host.replaceChildren();
+      }
+      engraved.push({ ...block, tunes: svgs });
+      progress?.(index + 1);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+  } finally {
+    host.remove();
+  }
+  return engraved;
+}

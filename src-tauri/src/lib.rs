@@ -858,6 +858,7 @@ pub fn run() {
             exporting::export_choices,
             exporting::pick_export,
             exporting::export_notes,
+            exporting::export_scores,
             exporting::reveal_export,
             importing::pick_import,
             importing::plan_import,

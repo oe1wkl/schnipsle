@@ -1,23 +1,18 @@
 # Abendlied
 
-```chordpro nosource
-{title: Abendlied}
-{key: G}
 
-{start_of_verse}
-Der [G]Mond ist aufge[D]gangen,
-die [G]goldnen Sternlein [C]pran[D]gen
-{end_of_verse}
+```{=html}
+<div class="song">
+<div class="song-title">Abendlied</div>
+<div class="song-details">Key G</div>
+<div class="song-section song-verse">
+<div class="song-line song-chorded"><span class="song-seg"><span class="song-chord"></span><span class="song-text">Der </span></span><span class="song-seg"><span class="song-chord">G</span><span class="song-text">Mond ist aufge</span></span><span class="song-seg"><span class="song-chord">D</span><span class="song-text">gangen,</span></span></div>
+<div class="song-line song-chorded"><span class="song-seg"><span class="song-chord"></span><span class="song-text">die </span></span><span class="song-seg"><span class="song-chord">G</span><span class="song-text">goldnen Sternlein </span></span><span class="song-seg"><span class="song-chord">C</span><span class="song-text">pran</span></span><span class="song-seg"><span class="song-chord">D</span><span class="song-text">gen</span></span></div>
+</div>
+</div>
 ```
 
-```abc
-X:1
-T:Kanon
-M:4/4
-L:1/4
-K:D
-f2 e2 | d2 c2 |
-```
+![Kanon](picture-1.svg)
 
 ```mermaid
 graph LR

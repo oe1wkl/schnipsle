@@ -17,6 +17,7 @@ use schnipsle_core::tags::parse_options;
 use schnipsle_core::vault::{Result, Vault, VaultError};
 
 use crate::document::{self, Collected, Rules, Source};
+use crate::music::{Music, Output};
 use crate::output::{self, Names};
 use crate::{Exporter, Format, Input, Layout, Options, Problem, ProblemKind, Report};
 
@@ -85,7 +86,15 @@ impl Exporter for HtmlExporter {
         let mut collected = Collected::default();
         match options.layout {
             Layout::FilePerNote => {
-                file_per_note(vault, &notes, *options, to, &mut report, &mut collected)?;
+                file_per_note(
+                    vault,
+                    &notes,
+                    input,
+                    *options,
+                    to,
+                    &mut report,
+                    &mut collected,
+                )?;
             }
             Layout::SingleFile | Layout::Folder => {
                 one_document(
@@ -151,8 +160,14 @@ pub(crate) fn one_page<'n>(
     web_pictures: bool,
     collected: &mut Collected,
 ) -> Result<OnePage<'n>> {
-    let (anchors, rules) =
-        document::rules_of_one_document(vault, notes, options, copy_attachments, web_pictures);
+    let (anchors, rules) = document::rules_of_one_document(
+        vault,
+        notes,
+        options,
+        copy_attachments,
+        web_pictures,
+        Music::of(&input.scores, Output::Html, options.abc_source),
+    );
     let contents = document::has_contents(options, notes);
     let mut body = String::new();
     if contents {
@@ -170,6 +185,7 @@ pub(crate) fn one_page<'n>(
 fn file_per_note(
     vault: &Vault,
     notes: &[Source],
+    input: &Input,
     options: Options,
     to: &Path,
     report: &mut Report,
@@ -196,6 +212,7 @@ fn file_per_note(
         keep_tag_line: options.keep_tag_line,
         sections: false,
         upright_pictures: false,
+        music: Music::of(&input.scores, Output::Html, options.abc_source),
     };
     for (note, name) in notes.iter().zip(files) {
         let page = page_of_note(note, &rules, collected)?;
@@ -273,7 +290,13 @@ fn page(title: &str, note: Option<&Source>, body: &str, contents: bool) -> Strin
         }
     }
     let css = if contents { CONTENTS_CSS } else { "" };
-    let _ = writeln!(out, "<style>\n{THEME}{css}</style>");
+    // Only a page with a song sheet needs its style (ADR-0034).
+    let songs = if body.contains("<div class=\"song\">") {
+        crate::songs::CSS
+    } else {
+        ""
+    };
+    let _ = writeln!(out, "<style>\n{THEME}{css}{songs}</style>");
     let _ = writeln!(
         out,
         "</head>\n<body>\n<main>\n{body}</main>\n</body>\n</html>"

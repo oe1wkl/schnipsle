@@ -16,6 +16,7 @@ use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipWriter};
 
 use crate::document::{self, Collected, Rules, Source};
+use crate::music::{Music, Output};
 use crate::odt_content::{Content, Picture, escape};
 use crate::output::{self, Names};
 use crate::{Exporter, Format, Input, Layout, Options, Paper, Report};
@@ -50,7 +51,15 @@ impl Exporter for OdtExporter {
         let mut collected = Collected::default();
         match options.layout {
             Layout::FilePerNote => {
-                file_per_note(vault, &notes, *options, to, &mut report, &mut collected)?;
+                file_per_note(
+                    vault,
+                    &notes,
+                    input,
+                    *options,
+                    to,
+                    &mut report,
+                    &mut collected,
+                )?;
             }
             Layout::SingleFile | Layout::Folder => {
                 let name = one_document(vault, &notes, input, *options, to, &mut collected)?;
@@ -73,7 +82,14 @@ fn one_document(
     to: &Path,
     collected: &mut Collected,
 ) -> Result<Option<String>> {
-    let (anchors, mut rules) = document::rules_of_one_document(vault, notes, options, false, false);
+    let (anchors, mut rules) = document::rules_of_one_document(
+        vault,
+        notes,
+        options,
+        false,
+        false,
+        Music::of(&input.scores, Output::Odt, options.abc_source),
+    );
     rules.upright_pictures = true;
     let contents = document::has_contents(options, notes);
     let pages = Pages {
@@ -114,6 +130,7 @@ fn one_document(
 fn file_per_note(
     vault: &Vault,
     notes: &[Source],
+    input: &Input,
     options: Options,
     to: &Path,
     report: &mut Report,
@@ -140,6 +157,7 @@ fn file_per_note(
         keep_tag_line: options.keep_tag_line,
         sections: false,
         upright_pictures: true,
+        music: Music::of(&input.scores, Output::Odt, options.abc_source),
     };
     let pages = Pages {
         paper: options.paper,

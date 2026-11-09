@@ -11,6 +11,7 @@
 mod document;
 mod docx_package;
 mod html;
+mod music;
 mod odt;
 mod odt_content;
 mod output;
@@ -19,6 +20,7 @@ mod pdf;
 mod pdf_dates;
 mod pdf_pages;
 mod raw_html;
+mod songs;
 
 use std::path::Path;
 
@@ -26,6 +28,7 @@ use schnipsle_core::vault::{Result, Vault};
 use serde::{Deserialize, Serialize};
 
 pub use html::HtmlExporter;
+pub use music::{Score, ScoreBlock};
 pub use odt::OdtExporter;
 pub use output::{check_target, suggested_file_name};
 pub use pandoc::{ConversionJob, Converted, Converter, JobPicture, Pandoc, PandocExporter};
@@ -69,6 +72,30 @@ pub struct Input {
     /// The name of the tag folder, search or smart folder they come from: the
     /// title of one document made of several notes.
     pub name: Option<String>,
+    /// The `abc` blocks of the notes, engraved by the app (ADR-0033). A block
+    /// not among them stays source.
+    #[serde(default)]
+    pub scores: Vec<Score>,
+}
+
+/// The `abc` blocks of the notes of `input` for the app to engrave, each block
+/// once (ADR-0033). A note that cannot be read is left out here; the export
+/// reports it.
+#[must_use]
+pub fn score_blocks(vault: &Vault, input: &Input) -> Vec<ScoreBlock> {
+    let mut seen = std::collections::HashSet::new();
+    let mut blocks = Vec::new();
+    for path in &input.notes {
+        let Ok(note) = vault.read_note_text(path) else {
+            continue;
+        };
+        for block in music::blocks_of(&note.text) {
+            if seen.insert((block.source.clone(), block.transpose)) {
+                blocks.push(block);
+            }
+        }
+    }
+    blocks
 }
 
 /// Where the notes go.
@@ -98,6 +125,7 @@ pub enum Paper {
 }
 
 /// How to export.
+#[allow(clippy::struct_excessive_bools)] // independent choices of the dialog
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Options {
@@ -105,6 +133,9 @@ pub struct Options {
     pub layout: Layout,
     /// Keep the final line of tags of a note (ADR-0021 rule 4).
     pub keep_tag_line: bool,
+    /// Keep the ABC source of an engraved score under it (ADR-0013, ADR-0034).
+    #[serde(default)]
+    pub abc_source: bool,
     /// The paper, for a format with pages.
     #[serde(default)]
     pub paper: Paper,
@@ -165,6 +196,9 @@ pub enum ProblemKind {
     /// The note linked to is in another file of this export, which a PDF or an
     /// EPUB cannot link to; the text of its link stays.
     NoteInOtherFile,
+    /// The score could not be engraved, such as when abcjs warned about its
+    /// ABC, so its source stays (ADR-0033).
+    ScoreNotEngraved,
 }
 
 /// Writes notes in one format (ADR-0010).
@@ -194,12 +228,20 @@ mod tests {
             serde_json::from_str(r##"{"notes": ["a.md", "b.md"], "name": "#tuner"}"##).unwrap();
         assert_eq!(input.notes, ["a.md", "b.md"]);
         assert_eq!(input.name.as_deref(), Some("#tuner"));
+        assert!(input.scores.is_empty());
+        let input: Input = serde_json::from_str(
+            r#"{"notes": ["a.md"], "name": null, "scores": [{"source": "K:C\nC|\n", "transpose": -2, "tunes": ["<svg/>"]}]}"#,
+        )
+        .unwrap();
+        assert_eq!(input.scores[0].transpose, -2);
+        assert_eq!(input.scores[0].tunes, ["<svg/>"]);
         let options: Options = serde_json::from_str(
-            r#"{"layout": "filePerNote", "keepTagLine": true, "paper": "letter"}"#,
+            r#"{"layout": "filePerNote", "keepTagLine": true, "abcSource": true, "paper": "letter"}"#,
         )
         .unwrap();
         assert_eq!(options.layout, Layout::FilePerNote);
         assert!(options.keep_tag_line);
+        assert!(options.abc_source);
         assert_eq!(options.paper, Paper::Letter);
         let options: Options = serde_json::from_str(
             r#"{"layout": "singleFile", "keepTagLine": false, "paper": "a4"}"#,
@@ -207,6 +249,7 @@ mod tests {
         .unwrap();
         assert_eq!(options.layout, Layout::SingleFile);
         assert_eq!(options.paper, Paper::A4);
+        assert!(!options.abc_source);
     }
 
     #[test]

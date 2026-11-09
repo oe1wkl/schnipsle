@@ -6,4 +6,5 @@
 <manifest:file-entry manifest:full-path="meta.xml" manifest:media-type="text/xml"/>
 <manifest:file-entry manifest:full-path="Pictures/1.png" manifest:media-type="image/png"/>
 <manifest:file-entry manifest:full-path="Pictures/2.jpg" manifest:media-type="image/jpeg"/>
+<manifest:file-entry manifest:full-path="Pictures/3.svg" manifest:media-type="image/svg+xml"/>
 </manifest:manifest>

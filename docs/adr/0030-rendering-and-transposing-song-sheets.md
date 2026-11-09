@@ -1,6 +1,6 @@
 # ADR-0030: Rendering and transposing song sheets
 
-- Status: Accepted
+- Status: Accepted; how sheets look in ODT and DOCX exports amended by [ADR-0034](0034-song-sheets-in-exports.md)
 - Date: 2026-11-07
 - Deciders: Willi Kraml
 - Related: F-18, ADR-0014, [format.md §5.7](../format.md#57-lyrics-with-chords)

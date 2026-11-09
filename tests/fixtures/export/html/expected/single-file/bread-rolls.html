@@ -86,6 +86,17 @@ img {
   max-width: 100%;
 }
 
+/* An engraved score (ADR-0033): drawn in black, narrowed with the page. */
+figure.score {
+  margin: 1em 0;
+}
+
+figure.score svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
 table {
   border-collapse: collapse;
   font-size: 0.95em;
@@ -160,6 +171,7 @@ li.task {
   }
 
   img,
+  figure.score,
   pre,
   tr {
     break-inside: avoid;

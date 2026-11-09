@@ -4,3 +4,4 @@ created: None
 modified: None
 picture: picture-1.png 708
 picture: picture-2.jpg 4411
+picture: picture-3.svg 12992

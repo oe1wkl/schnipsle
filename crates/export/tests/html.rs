@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 
 use schnipsle_core::vault::Vault;
 use schnipsle_export::{
-    Exporter, Format, HtmlExporter, Input, Layout, Options, Paper, ProblemKind, Report,
+    Exporter, Format, HtmlExporter, Input, Layout, Options, Paper, ProblemKind, Report, Score,
 };
 
 /// The notes in the order of the README's table.
@@ -26,6 +26,16 @@ fn fixtures() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/export")
 }
 
+/// The kanon of `Songs/abendlied.md`, engraved by abcjs 6.7.2 as the app does
+/// (ADR-0033).
+fn scores() -> Vec<Score> {
+    vec![Score {
+        source: "X:1\nT:Kanon\nM:4/4\nL:1/4\nK:D\nf2 e2 | d2 c2 |\n".to_owned(),
+        transpose: 0,
+        tunes: vec![fs::read_to_string(fixtures().join("scores/kanon.svg")).unwrap()],
+    }]
+}
+
 fn vault() -> Vault {
     Vault::open(fixtures().join("vault")).unwrap()
 }
@@ -34,6 +44,7 @@ fn all_notes() -> Input {
     Input {
         notes: NOTES.iter().map(|p| (*p).to_owned()).collect(),
         name: Some("Samples".to_owned()),
+        scores: scores(),
     }
 }
 
@@ -41,6 +52,7 @@ fn options(layout: Layout) -> Options {
     Options {
         layout,
         keep_tag_line: false,
+        abc_source: false,
         paper: Paper::A4,
         contents: false,
         page_numbers: false,
@@ -101,6 +113,7 @@ fn golden_files() {
         let input = Input {
             notes: vec![note.to_owned()],
             name: None,
+            scores: scores(),
         };
         let to = dir.path().join("out.html");
         let report = exporter
@@ -178,6 +191,7 @@ fn one(note: &str) -> Input {
     Input {
         notes: vec![note.to_owned()],
         name: None,
+        scores: scores(),
     }
 }
 
@@ -189,6 +203,7 @@ fn the_final_tag_line_is_left_out_unless_kept() {
     let keep = Options {
         layout: Layout::SingleFile,
         keep_tag_line: true,
+        abc_source: false,
         paper: Paper::A4,
         contents: false,
         page_numbers: false,
@@ -284,6 +299,7 @@ fn notes_with_the_same_title_have_their_own_anchors_and_footnotes() {
     let input = Input {
         notes: vec!["a.md".to_owned(), "b.md".to_owned()],
         name: None,
+        scores: scores(),
     };
     HtmlExporter
         .export(&vault, &input, &options(Layout::SingleFile), &to)

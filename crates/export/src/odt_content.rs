@@ -168,6 +168,8 @@ impl Content {
                         self.table(child, &table.alignments, place, notes);
                     }
                 }
+                // Paragraphs written for ODT already, such as a song sheet's.
+                NodeValue::Raw(xml) => self.body.push_str(xml),
                 NodeValue::FootnoteDefinition(_) => {}
                 _ => self.blocks(child, place, notes),
             }
@@ -598,7 +600,7 @@ fn plain_text<'a>(node: &'a AstNode<'a>) -> String {
 }
 
 /// `text` where every space counts, as in code.
-fn write_source(out: &mut String, text: &str) {
+pub(crate) fn write_source(out: &mut String, text: &str) {
     let mut spaces = 0;
     let mut first = true;
     for c in text.chars() {

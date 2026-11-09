@@ -7,10 +7,12 @@
 //! ([`crate::raw_html`]); math is code; a task item starts with ☐ or ☑.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
+use std::fmt::Write as _;
 
 use base64::Engine as _;
 use comrak::nodes::{
-    AstNode, NodeCode, NodeCodeBlock, NodeFootnoteDefinition, NodeHeading, NodeLink, NodeValue,
+    AstNode, NodeCode, NodeCodeBlock, NodeFootnoteDefinition, NodeHeading, NodeHtmlBlock, NodeLink,
+    NodeValue,
 };
 use comrak::{Arena, parse_document};
 use schnipsle_core::attachments::LinkTarget;
@@ -21,8 +23,10 @@ use schnipsle_core::tags::{extract_tags, normalize, parse_options};
 use schnipsle_core::vault::{Vault, VaultError};
 use unicode_normalization::UnicodeNormalization;
 
+use crate::music::{self, Music, Output};
 use crate::output;
 use crate::raw_html;
+use crate::songs;
 use crate::{Input, Options, Problem, ProblemKind, Report};
 
 /// A note to export.
@@ -74,6 +78,8 @@ pub(crate) struct Rules<'r> {
     /// Pictures that only their orientation turns upright are turned in the
     /// file, for formats whose programs ignore it (ADR-0028).
     pub upright_pictures: bool,
+    /// The engraved `abc` blocks (ADR-0033).
+    pub music: Music<'r>,
 }
 
 /// Whether one document of `notes` starts with a table of contents: asked for,
@@ -98,6 +104,7 @@ pub(crate) fn rules_of_one_document<'r>(
     options: Options,
     copy_attachments: bool,
     web_pictures: bool,
+    music: Music<'r>,
 ) -> (Vec<String>, Rules<'r>) {
     let mut used = HashSet::new();
     let anchors: Vec<String> = notes
@@ -118,6 +125,7 @@ pub(crate) fn rules_of_one_document<'r>(
         keep_tag_line: options.keep_tag_line,
         sections: notes.len() > 1,
         upright_pictures: false,
+        music,
     };
     (anchors, rules)
 }
@@ -321,6 +329,8 @@ enum Work {
     WikiLink(String),
     Math { display: bool, literal: String },
     Task { done: bool },
+    Score { source: String, transpose: i32 },
+    Song { source: String, info: String },
     Nothing,
 }
 
@@ -357,6 +367,17 @@ impl<'a> Preparer<'a, '_> {
                 NodeValue::TaskItem(item) => Work::Task {
                     done: item.symbol.is_some(),
                 },
+                NodeValue::CodeBlock(block) if block.fenced && songs::is_song(&block.info) => {
+                    Work::Song {
+                        source: block.literal.clone(),
+                        info: block.info.clone(),
+                    }
+                }
+                NodeValue::CodeBlock(block) if block.fenced => music::abc_transpose(&block.info)
+                    .map_or(Work::Nothing, |transpose| Work::Score {
+                        source: block.literal.clone(),
+                        transpose,
+                    }),
                 _ => Work::Nothing,
             };
             // The description of a picture is text only. Links are changed
@@ -370,6 +391,8 @@ impl<'a> Preparer<'a, '_> {
                 Work::WikiLink(title) => self.wiki_link(node, &title),
                 Work::Math { display, literal } => math(node, display, &literal),
                 Work::Task { done } => self.task(node, done),
+                Work::Score { source, transpose } => self.score(node, &source, transpose),
+                Work::Song { source, info } => self.song(node, &source, &info),
                 Work::Nothing => {}
             }
         }
@@ -581,6 +604,67 @@ impl<'a> Preparer<'a, '_> {
         );
     }
 
+    /// An `abc` block becomes its engraved tunes (ADR-0033): figures in the
+    /// page for HTML and PDF, pictures for the others, followed by the block
+    /// if its source is asked for. Without them its source stays, and the
+    /// report says so.
+    fn score(&mut self, node: &'a AstNode<'a>, source: &str, transpose: i32) {
+        let Some(tunes) = self.rules.music.tunes(source, transpose) else {
+            self.problem(ProblemKind::ScoreNotEngraved, &music::title_of(source));
+            return;
+        };
+        if self.rules.music.output == Output::Html {
+            let mut figures = String::new();
+            for svg in &tunes {
+                let _ = writeln!(figures, "<figure class=\"score\">{svg}</figure>");
+            }
+            let figures = NodeValue::HtmlBlock(NodeHtmlBlock {
+                block_type: 6,
+                literal: figures,
+            });
+            node.insert_before(self.arena.alloc(figures.into()));
+        } else {
+            self.pictures(node, source, &tunes);
+        }
+        if !self.rules.music.abc_source {
+            node.detach();
+        }
+    }
+
+    /// Each tune as a picture in a paragraph of its own, before `node`.
+    fn pictures(&self, node: &'a AstNode<'a>, source: &str, tunes: &[String]) {
+        let title = music::title_of(source);
+        for svg in tunes {
+            let paragraph: &'a AstNode<'a> = self.arena.alloc(NodeValue::Paragraph.into());
+            let link = NodeLink {
+                url: String::new(),
+                title: String::new(),
+            };
+            let picture: &'a AstNode<'a> =
+                self.arena.alloc(NodeValue::Image(Box::new(link)).into());
+            picture.append(
+                self.arena
+                    .alloc(NodeValue::Text(title.clone().into()).into()),
+            );
+            set_data_url(picture, "image/svg+xml", svg.as_bytes());
+            paragraph.append(picture);
+            node.insert_before(paragraph);
+        }
+    }
+
+    /// A `chordpro` block becomes its song sheet (ADR-0034), written for the
+    /// format, as the tree cannot hold chords over syllables.
+    fn song(&self, node: &'a AstNode<'a>, source: &str, info: &str) {
+        let sheet = songs::render(source, info, self.rules.vault.chord_notation());
+        let written = match self.rules.music.output {
+            Output::Html => songs::html(&sheet),
+            Output::Odt => songs::odt(&sheet),
+            Output::Docx => songs::raw_block("openxml", &songs::docx(&sheet)),
+            Output::Epub => songs::raw_block("html", &songs::html(&sheet)),
+        };
+        node.data_mut().value = NodeValue::Raw(written);
+    }
+
     fn task(&self, node: &'a AstNode<'a>, done: bool) {
         let glyph = if done { "☑ " } else { "☐ " };
         let text: &'a AstNode<'a> = self.arena.alloc(NodeValue::Text(glyph.into()).into());
@@ -736,6 +820,24 @@ mod tests {
 
     /// `markdown` as HTML through [`prepare`], with the problems found.
     fn prepared(markdown: &str, copy_attachments: bool, web_pictures: bool) -> (String, Collected) {
+        prepared_with(
+            markdown,
+            copy_attachments,
+            web_pictures,
+            Music::default(),
+            false,
+        )
+    }
+
+    /// As [`prepared`], with engraved scores, and with `raw`, raw HTML and
+    /// `data:` URLs of SVG written out.
+    fn prepared_with(
+        markdown: &str,
+        copy_attachments: bool,
+        web_pictures: bool,
+        music: Music<'_>,
+        raw: bool,
+    ) -> (String, Collected) {
         let dir = tempfile::tempdir().unwrap();
         let vault = Vault::create(dir.path()).unwrap();
         vault.create_note("note.md", markdown).unwrap();
@@ -756,13 +858,106 @@ mod tests {
             keep_tag_line: false,
             sections: false,
             upright_pictures: false,
+            music,
         };
         let mut collected = Collected::default();
         let arena = Arena::new();
         let root = prepare(&arena, &note, "n", &rules, &mut collected);
         let mut out = String::new();
-        comrak::format_html(root, &parse_options(), &mut out).unwrap();
+        let mut options = parse_options();
+        options.render.r#unsafe = raw;
+        comrak::format_html(root, &options, &mut out).unwrap();
         (out, collected)
+    }
+
+    const SCORE_NOTE: &str =
+        "Vorher\n\n```abc transpose=2\nT:Kanon\nK:D\nfe|\n```\n\n```abc\nT:Ohne\nK:C\nC|\n```\n";
+
+    fn engraved() -> Vec<crate::Score> {
+        vec![crate::Score {
+            source: "T:Kanon\nK:D\nfe|\n".to_owned(),
+            transpose: 2,
+            tunes: vec![
+                "<svg width=\"10\" height=\"5\"><style>x</style><text>Eins</text></svg>".to_owned(),
+                "<svg width=\"10\" height=\"5\"><text>Zwei</text></svg>".to_owned(),
+            ],
+        }]
+    }
+
+    #[test]
+    fn a_score_goes_into_the_page_as_figures() {
+        let scores = engraved();
+        let (html, collected) = prepared_with(
+            SCORE_NOTE,
+            false,
+            false,
+            Music::of(&scores, Output::Html, false),
+            true,
+        );
+        assert!(
+            html.contains(concat!(
+                "<figure class=\"score\"><svg width=\"10\" height=\"5\" viewBox=\"0 0 10 5\"><text>Eins</text></svg></figure>\n",
+                "<figure class=\"score\"><svg width=\"10\" height=\"5\" viewBox=\"0 0 10 5\"><text>Zwei</text></svg></figure>\n",
+            )),
+            "{html}"
+        );
+        // The block without a score stays source, and is reported.
+        assert!(
+            html.contains("<code class=\"language-abc\">T:Ohne"),
+            "{html}"
+        );
+        let problems: Vec<_> = collected
+            .problems
+            .iter()
+            .map(|p| (p.kind, p.target.as_str()))
+            .collect();
+        assert_eq!(problems, [(ProblemKind::ScoreNotEngraved, "Ohne")]);
+    }
+
+    #[test]
+    fn a_score_is_a_picture_per_tune_elsewhere() {
+        let scores = engraved();
+        let (html, collected) = prepared_with(
+            SCORE_NOTE,
+            false,
+            false,
+            Music::of(&scores, Output::Odt, false),
+            true,
+        );
+        let pictures: Vec<&str> = html
+            .match_indices("<p><img src=\"data:image/svg+xml;base64,")
+            .map(|(i, _)| &html[i..])
+            .collect();
+        assert_eq!(pictures.len(), 2, "{html}");
+        assert!(pictures[0].contains("alt=\"Kanon\""));
+        assert_eq!(collected.problems.len(), 1);
+    }
+
+    #[test]
+    fn the_source_of_a_score_stays_under_it_if_asked_for() {
+        let scores = engraved();
+        for output in [Output::Html, Output::Odt] {
+            let music = Music::of(&scores, output, true);
+            let (html, _) = prepared_with(SCORE_NOTE, false, false, music, true);
+            let score = html.find("<figure").or_else(|| html.find("<img")).unwrap();
+            let source = html.find("<code class=\"language-abc\">T:Kanon").unwrap();
+            assert!(score < source, "{html}");
+        }
+    }
+
+    #[test]
+    fn a_score_with_another_transposition_is_not_taken() {
+        let scores = engraved();
+        let note = SCORE_NOTE.replace("transpose=2", "transpose=3");
+        let (html, collected) = prepared_with(
+            &note,
+            false,
+            false,
+            Music::of(&scores, Output::Html, false),
+            true,
+        );
+        assert!(!html.contains("<figure"), "{html}");
+        assert_eq!(collected.problems.len(), 2);
     }
 
     #[test]

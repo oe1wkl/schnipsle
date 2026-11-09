@@ -1,0 +1,97 @@
+/* A song sheet (ADR-0034): each chord over the start of its text, as in the editor. */
+.song {
+  margin: 1em 0;
+}
+
+.song-title {
+  font-size: 1.2em;
+  font-weight: 700;
+}
+
+.song-subtitle {
+  font-style: italic;
+}
+
+.song-details,
+.song-label,
+.song-comment {
+  color: #6e6e73;
+  font-size: 0.9em;
+}
+
+.song-section {
+  margin-top: 0.6em;
+}
+
+.song-chorus {
+  padding-left: 0.8em;
+  border-left: 3px solid #d2d2d7;
+}
+
+.song-label {
+  font-weight: 600;
+}
+
+.song-line {
+  white-space: pre-wrap;
+}
+
+.song-chorded {
+  line-height: 1.25;
+  margin: 2px 0;
+}
+
+.song-seg {
+  display: inline-block;
+  vertical-align: bottom;
+}
+
+.song-chord {
+  display: block;
+  color: #0a66d8;
+  font-weight: 600;
+  font-size: 0.9em;
+  white-space: pre;
+  padding-right: 0.4em;
+  min-height: 1.25em;
+}
+
+.song-text {
+  display: block;
+  white-space: pre-wrap;
+}
+
+.song-chords .song-chord {
+  display: inline-block;
+  padding-right: 0.8em;
+}
+
+.song-comment {
+  margin: 4px 0;
+}
+
+.song-italic {
+  font-style: italic;
+}
+
+.song-tab,
+.song-unknown {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 0.85em;
+  white-space: pre-wrap;
+  margin: 0;
+}
+
+.song-unknown {
+  color: #6e6e73;
+}
+
+.song-gap {
+  height: 0.6em;
+}
+
+@media print {
+  .song-line {
+    break-inside: avoid;
+  }
+}

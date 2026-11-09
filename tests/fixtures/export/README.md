@@ -8,7 +8,7 @@
 | `notes/packing-list.md` | Packing list for Field Day | Title from the first line, no heading added for a single note (2); nested and ordered lists, a task list, a quote, a rule (10); `\#notatag`, a colour code and `C#` (4); a last paragraph with words and tags, which is no tag line and stays (4) |
 | `notes/Radio/antenna-tuner.md` | Antenna tuner | Keys of an import and an unknown key left out (1); a picture in the vault (5); a PDF attachment (6); a picture that is not there (5); a picture on the web (5); a relative link and a wiki link to notes in the vault, a wiki link with a label to a note that does not exist (7); final tag line `#Radio` (4) |
 | `notes/Recipes/bread-rolls.md` | Bread rolls | A JPEG picture (5); a table with left, right and centre alignment and an empty cell, a fenced and an indented code block (10); final tag line `#Recipes #baking` (4) |
-| `notes/Songs/abendlied.md` | Abendlied | `chordpro` with `nosource`, `abc` and `mermaid` blocks, inline and block math, all exported as their source (8) |
+| `notes/Songs/abendlied.md` | Abendlied | A `chordpro` block with `nosource`, exported as its song sheet (ADR-0034); an `abc` block, exported as the score in `scores/kanon.svg` (ADR-0033); a `mermaid` block, inline and block math, exported as their source (8) |
 | `notes/raw-html.md` | Raw HTML | Allowed elements (`b`, `kbd`, `sub`, `span` without its `style`), a `script`, an `iframe` and a `div` with an event handler (9) |
 | `.notesapp/trash/…007.md` | Thrown away | In the trash, never exported (11) |
 
@@ -23,6 +23,8 @@ Reports expected for all six notes (12): the missing picture `attachments/00/000
 `odt/expected/` holds the ODT export (`crates/export/tests/odt.rs`): for each file `content.xml`, `meta.xml`, `manifest.xml` and `files.txt`, the size of its other parts, in `one-document/all/` for all six notes and `file-per-note/<title>/` for a file each, plus `styles-a4.xml` and each layout's report. Links between the files of `file-per-note/` stay links, to `../<title>.odt`. `cargo test -p schnipsle-export --test odt -- --ignored` has LibreOffice convert all of them, and a note with more of the dialect, to PDF and text (`SOFFICE` names the program, `SCHNIPSLE_ODT_KEEP` a folder that keeps the results); CI runs this in a job of its own.
 
 `pandoc/expected/` holds what the export hands to Pandoc (`crates/export/tests/pandoc.rs`, ADR-0025), in `docx/` and `epub/`: for each file its Markdown and a `.job.txt` with title, dates and pictures, and the report. `one-document/` is all six notes in one file, with a page break between them in DOCX, `file-per-note/` a file each, where links to the other files stay links in DOCX and become text in EPUB. `cargo test -p schnipsle-export --test pandoc -- --ignored` has the real Pandoc write them and looks into the results (`PANDOC` names the program, `SCHNIPSLE_PANDOC_KEEP` a folder that keeps them); CI runs this in a job of its own.
+
+`scores/kanon.svg` is the kanon of `abendlied.md` as abcjs 6.7.2 engraves it for an export (staff width 600, no padding, black), not yet cleaned: the exporter tests pass it as the app does (ADR-0033), so the golden files show the cleaned score inline in HTML and PDF and as a picture in ODT, DOCX and EPUB. Song sheets and scores in more cases are tested in `crates/export/src/songs.rs`, `music.rs` and `document.rs`.
 
 `pictures/turned.jpg` is a small invented JPEG stored 24 × 40 pixels with orientation 6, so it shows as 40 × 24: `crates/export/tests/pictures.rs` checks that ODT gets it upright and HTML keeps it as it is (ADR-0028).
 
