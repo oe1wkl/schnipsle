@@ -1,6 +1,6 @@
 # ADR-0013: Music notation as ABC in fenced code blocks
 
-- Status: Accepted; where exports get the SVG amended by [ADR-0033](0033-scores-in-exports.md)
+- Status: Accepted; where exports get the SVG amended by [ADR-0033](0033-scores-in-exports.md); the ABC source in an export by [ADR-0034](0034-song-sheets-in-exports.md)
 - Date: 2026-10-14
 - Deciders: Willi Kraml
 - Related: F-16, F-17, ADR-0004, ADR-0007, ADR-0010, [format.md §5.6](../format.md#56-music-notation)

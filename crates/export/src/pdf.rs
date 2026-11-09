@@ -13,6 +13,7 @@ use schnipsle_core::vault::{Result, Vault};
 
 use crate::document::{self, Collected, Rules, Source};
 use crate::html;
+use crate::music::{Music, Output};
 use crate::output::{self, Names};
 use crate::pdf_dates;
 use crate::pdf_pages::{self, Numbering};
@@ -141,10 +142,12 @@ impl<P: Printer> PdfExporter<P> {
 
     /// A PDF per note. Unlike HTML pages they cannot link to each other: `WebKit`
     /// drops relative links, and `PDFKit` writes links to other files without the file.
+    #[allow(clippy::too_many_arguments)] // the parts of an export, as `export` has them
     fn file_per_note(
         &self,
         vault: &Vault,
         notes: &[Source],
+        input: &Input,
         options: Options,
         to: &Path,
         report: &mut Report,
@@ -161,6 +164,7 @@ impl<P: Printer> PdfExporter<P> {
             keep_tag_line: options.keep_tag_line,
             sections: false,
             upright_pictures: false,
+            music: Music::of(&input.scores, Output::Html, options.abc_source),
         };
         let mut names = Names::new(to);
         for note in notes {
@@ -197,7 +201,15 @@ impl<P: Printer> Exporter for PdfExporter<P> {
         let mut collected = Collected::default();
         match options.layout {
             Layout::FilePerNote => {
-                self.file_per_note(vault, &notes, *options, to, &mut report, &mut collected)?;
+                self.file_per_note(
+                    vault,
+                    &notes,
+                    input,
+                    *options,
+                    to,
+                    &mut report,
+                    &mut collected,
+                )?;
             }
             Layout::SingleFile | Layout::Folder => {
                 let name = self.one_document(vault, &notes, input, *options, to, &mut collected)?;

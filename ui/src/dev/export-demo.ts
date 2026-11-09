@@ -5,7 +5,10 @@
 // problems, `?failed` for one that stops with an error, `?nothing` for one with
 // no note readable, `?numbered` for files with names already taken, `?warnings`
 // for what a converter said, `?nopandoc` without Pandoc, `?unsaved` for an open note with unsaved changes, `?nonote`
-// with no note open.
+// with no note open, `?noscores` for notes without music. The scores engraved
+// for the export are kept in `window.engravedScores`.
+import scoreAbc from "../../../tests/fixtures/format/5.6-index/score.abc?raw";
+import type { EngravedScore } from "../score";
 import type { ExportProblem, ExportReport } from "../types";
 
 const params = new URLSearchParams(location.search);
@@ -28,6 +31,13 @@ const PROBLEMS = [
   problem("Morning song", "morning-song.md", "noteNotRead", ""),
 ];
 
+/** A score that engraves, two tunes in one block, and one abcjs warns about. */
+const SCORES = [
+  { source: scoreAbc, transpose: 0 },
+  { source: "X:1\nT:Erste\nK:C\nCDEF GABc|\n\nX:2\nT:Zweite\nK:G\nGABc dedc|\n", transpose: 2 },
+  { source: "X:1\nT:Kaputt\nK:C\nC D E $ F |\n", transpose: 0 },
+];
+
 async function answer(cmd: string, args?: Record<string, unknown>): Promise<unknown> {
   switch (cmd) {
     case "export_choices":
@@ -39,9 +49,23 @@ async function answer(cmd: string, args?: Record<string, unknown>): Promise<unkn
       return args?.layout === "singleFile"
         ? `/Users/you/Documents/${typeof args.title === "string" ? args.title : "Notes"}.${String(args.format)}`
         : "/Users/you/Documents/Export";
+    case "export_scores":
+      return params.has("noscores") ? [] : SCORES;
     case "export_notes": {
       await wait(1200);
       if (params.has("failed")) throw new Error("The disk is full");
+      const engraved = (args?.input as { scores?: EngravedScore[] } | undefined)?.scores ?? [];
+      Object.assign(window, { engravedScores: engraved });
+      const unengraved = engraved
+        .filter((score) => score.tunes.length === 0)
+        .map((score) =>
+          problem(
+            "Morning song",
+            "morning-song.md",
+            "scoreNotEngraved",
+            /^T:(.*)$/m.exec(score.source)?.[1] ?? "Score",
+          ),
+        );
       const report: ExportReport = params.has("nothing")
         ? { files: [], numbered: [], warnings: [], problems: PROBLEMS.slice(4) }
         : {
@@ -52,7 +76,7 @@ async function answer(cmd: string, args?: Record<string, unknown>): Promise<unkn
                   "Bread rolls: Could not convert image picture-1.svg: check that rsvg-convert is in path.",
                 ]
               : [],
-            problems: params.has("clean") ? [] : PROBLEMS,
+            problems: params.has("clean") ? [] : [...PROBLEMS, ...unengraved],
           };
       return report;
     }

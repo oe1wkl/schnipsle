@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use schnipsle_core::vault::Vault;
 use schnipsle_export::{
     Exporter, Format, Input, Layout, Options, Paper, PdfExporter, PrintJob, Printer, ProblemKind,
-    Report,
+    Report, Score,
 };
 
 const NOTES: [&str; 6] = [
@@ -60,6 +60,16 @@ fn fixtures() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/export")
 }
 
+/// The kanon of `Songs/abendlied.md`, engraved by abcjs 6.7.2 as the app does
+/// (ADR-0033).
+fn scores() -> Vec<Score> {
+    vec![Score {
+        source: "X:1\nT:Kanon\nM:4/4\nL:1/4\nK:D\nf2 e2 | d2 c2 |\n".to_owned(),
+        transpose: 0,
+        tunes: vec![fs::read_to_string(fixtures().join("scores/kanon.svg")).unwrap()],
+    }]
+}
+
 fn vault() -> Vault {
     Vault::open(fixtures().join("vault")).unwrap()
 }
@@ -68,6 +78,7 @@ fn all_notes() -> Input {
     Input {
         notes: NOTES.iter().map(|p| (*p).to_owned()).collect(),
         name: Some("Samples".to_owned()),
+        scores: scores(),
     }
 }
 
@@ -75,6 +86,7 @@ fn options(layout: Layout) -> Options {
     Options {
         layout,
         keep_tag_line: false,
+        abc_source: false,
         paper: Paper::A4,
         contents: false,
         page_numbers: false,
@@ -191,6 +203,7 @@ fn nothing_loads_from_the_web_and_attachments_stay_behind() {
     let input = Input {
         notes: vec!["Radio/antenna-tuner.md".to_owned()],
         name: None,
+        scores: scores(),
     };
     let report = PdfExporter::new(&printer)
         .export(
@@ -237,6 +250,7 @@ fn letter_paper_and_a_folder_with_a_free_name() {
             &Options {
                 layout: Layout::Folder,
                 keep_tag_line: false,
+                abc_source: false,
                 paper: Paper::Letter,
                 contents: false,
                 page_numbers: false,
@@ -278,6 +292,7 @@ fn a_single_note_gets_its_dates_and_several_keep_the_time_of_printing() {
     let input = Input {
         notes: vec!["welcome.md".to_owned()],
         name: None,
+        scores: scores(),
     };
     exporter
         .export(&vault(), &input, &options(Layout::SingleFile), &to)

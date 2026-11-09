@@ -7,7 +7,7 @@ use std::path::Path;
 
 use schnipsle_export::{
     Exporter as _, Format, HtmlExporter, Input, Layout, OdtExporter, Options, Pandoc,
-    PandocExporter, Report,
+    PandocExporter, Report, ScoreBlock,
 };
 use serde::Serialize;
 use tauri::{AppHandle, State};
@@ -120,6 +120,15 @@ pub async fn reveal_export(path: String) -> CmdResult<()> {
     {
         crate::open_with_system(path.parent().unwrap_or(path))
     }
+}
+
+/// The `abc` blocks of the notes of `input`, for the dialog to engrave before
+/// it calls [`export_notes`] (ADR-0033).
+#[tauri::command]
+pub async fn export_scores(state: State<'_, AppState>, input: Input) -> CmdResult<Vec<ScoreBlock>> {
+    with_vault(&state, |vault| {
+        Ok(schnipsle_export::score_blocks(vault, &input))
+    })
 }
 
 /// Exports `input` to `to`, a file or a folder as `options` say.

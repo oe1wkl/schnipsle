@@ -134,6 +134,7 @@ mod macos {
         let input = Input {
             notes: notes.iter().map(|n| (*n).to_owned()).collect(),
             name: Some("Samples".to_owned()),
+            scores: Vec::new(),
         };
         let dir = tempfile::tempdir().unwrap();
         let to = dir.path().join("out.pdf");
@@ -143,6 +144,7 @@ mod macos {
             let options = Options {
                 layout: Layout::SingleFile,
                 keep_tag_line: false,
+                abc_source: false,
                 paper: Paper::A4,
                 contents,
                 page_numbers: contents,

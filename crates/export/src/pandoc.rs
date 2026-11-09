@@ -24,6 +24,7 @@ use schnipsle_core::tags::parse_options;
 use schnipsle_core::vault::{Result, Vault, VaultError};
 
 use crate::document::{self, Collected, Rules, Source};
+use crate::music::{Music, Output};
 use crate::odt_content::escape;
 use crate::output::{self, Names};
 use crate::{Exporter, Format, Input, Layout, Options, Paper, Report, docx_package};
@@ -210,7 +211,8 @@ impl Converter for Pandoc {
             .stderr(File::create(&errors)?);
         // DOCX shows a title given here on its first page; docx_package sets it instead.
         if job.format == Format::Epub {
-            fs::write(dir.path().join("style.html"), EPUB_STYLE)?;
+            let style = format!("{EPUB_STYLE}<style>\n{}</style>\n", crate::songs::CSS);
+            fs::write(dir.path().join("style.html"), style)?;
             command
                 .arg(format!("--metadata=title:{}", job.title))
                 .arg("--include-in-header=style.html");
@@ -319,6 +321,15 @@ impl<C: Converter> PandocExporter<C> {
         Self { format, converter }
     }
 
+    /// What music is written as for this format.
+    fn output(&self) -> Output {
+        if self.format == Format::Epub {
+            Output::Epub
+        } else {
+            Output::Docx
+        }
+    }
+
     /// One document of all `notes`, and its file name.
     fn one_document(
         &self,
@@ -329,8 +340,14 @@ impl<C: Converter> PandocExporter<C> {
         to: &Path,
         collected: &mut Collected,
     ) -> Result<Option<String>> {
-        let (anchors, mut rules) =
-            document::rules_of_one_document(vault, notes, options, false, false);
+        let (anchors, mut rules) = document::rules_of_one_document(
+            vault,
+            notes,
+            options,
+            false,
+            false,
+            Music::of(&input.scores, self.output(), options.abc_source),
+        );
         rules.upright_pictures = self.format == Format::Docx;
         let pages = Pages {
             paper: options.paper,
@@ -370,10 +387,12 @@ impl<C: Converter> PandocExporter<C> {
 
     /// A file per note. A DOCX links to the others next to it; an e-book reader
     /// follows no link out of its book, so in EPUB those links become text.
+    #[allow(clippy::too_many_arguments)] // the parts of an export, as `export` has them
     fn file_per_note(
         &self,
         vault: &Vault,
         notes: &[Source],
+        input: &Input,
         options: Options,
         to: &Path,
         report: &mut Report,
@@ -410,6 +429,7 @@ impl<C: Converter> PandocExporter<C> {
             keep_tag_line: options.keep_tag_line,
             sections: false,
             upright_pictures: self.format == Format::Docx,
+            music: Music::of(&input.scores, self.output(), options.abc_source),
         };
         for (note, name) in notes.iter().zip(files) {
             let arena = Arena::new();
@@ -483,7 +503,15 @@ impl<C: Converter> Exporter for PandocExporter<C> {
         let mut collected = Collected::default();
         match options.layout {
             Layout::FilePerNote => {
-                self.file_per_note(vault, &notes, *options, to, &mut report, &mut collected)?;
+                self.file_per_note(
+                    vault,
+                    &notes,
+                    input,
+                    *options,
+                    to,
+                    &mut report,
+                    &mut collected,
+                )?;
             }
             Layout::SingleFile | Layout::Folder => {
                 let name = self.one_document(vault, &notes, input, *options, to, &mut collected)?;

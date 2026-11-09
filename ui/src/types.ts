@@ -224,7 +224,8 @@ export type ExportProblemKind =
   | "pictureNotConverted"
   | "attachmentNotIncluded"
   | "noteNotExported"
-  | "noteInOtherFile";
+  | "noteInOtherFile"
+  | "scoreNotEngraved";
 /** One thing an export could not carry over (schnipsle-export `Problem`). */
 export interface ExportProblem {
   path: string;

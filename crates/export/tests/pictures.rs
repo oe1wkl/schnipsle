@@ -12,6 +12,7 @@ fn options(layout: Layout) -> Options {
     Options {
         layout,
         keep_tag_line: false,
+        abc_source: false,
         paper: Paper::A4,
         contents: false,
         page_numbers: false,
@@ -22,6 +23,7 @@ fn one(path: &str) -> Input {
     Input {
         notes: vec![path.to_owned()],
         name: None,
+        scores: Vec::new(),
     }
 }
 

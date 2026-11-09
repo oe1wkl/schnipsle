@@ -4,8 +4,11 @@
 //! in HTML, PDF, ODT and, with Pandoc, DOCX and EPUB.
 //!
 //! ```sh
-//! cargo run -p schnipsle-apple --example export_spike -- vault out-dir note.md …
+//! cargo run -p schnipsle-apple --example export_spike -- vault out-dir note.md … [block.abc=tune.svg …]
 //! ```
+//!
+//! An argument `block.abc=tune.svg` passes the SVG as the engraved score of an
+//! `abc` block whose content is that of `block.abc` (ADR-0033).
 
 #[cfg(target_os = "macos")]
 mod spike {
@@ -22,7 +25,7 @@ mod spike {
     use schnipsle_core::vault::Vault;
     use schnipsle_export::{
         Exporter, Format, HtmlExporter, Input, Layout, OdtExporter, Options, Pandoc,
-        PandocExporter, Paper, PdfExporter, PrintJob, Printer,
+        PandocExporter, Paper, PdfExporter, PrintJob, Printer, Score,
     };
 
     /// Prints on this, the main thread, running its run loop meanwhile.
@@ -54,9 +57,22 @@ mod spike {
         let mut args = std::env::args().skip(1);
         let vault = Vault::open(args.next().expect("vault")).expect("open vault");
         let out = args.next().expect("out dir");
+        let (pairs, notes): (Vec<String>, Vec<String>) = args.partition(|a| a.contains('='));
+        let scores = pairs
+            .iter()
+            .map(|pair| {
+                let (abc, svg) = pair.split_once('=').unwrap();
+                Score {
+                    source: std::fs::read_to_string(abc).expect("abc"),
+                    transpose: 0,
+                    tunes: vec![std::fs::read_to_string(svg).expect("svg")],
+                }
+            })
+            .collect();
         let input = Input {
-            notes: args.collect(),
+            notes,
             name: Some("Scores".to_owned()),
+            scores,
         };
         let mtm = MainThreadMarker::new().expect("main thread");
         let app = NSApplication::sharedApplication(mtm);
@@ -66,6 +82,7 @@ mod spike {
         let options = Options {
             layout: Layout::SingleFile,
             keep_tag_line: false,
+            abc_source: false,
             paper: Paper::A4,
             contents: false,
             page_numbers: false,

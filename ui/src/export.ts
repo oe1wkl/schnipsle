@@ -7,6 +7,7 @@
 import { invoke } from "@tauri-apps/api/core";
 
 import { asError, el } from "./dom";
+import { engraveForExport, type ExportScore } from "./score";
 import type {
   ExportChoices,
   ExportFormat,
@@ -39,6 +40,7 @@ const PROBLEM_LABELS: Record<ExportProblemKind, (target: string) => string> = {
   attachmentNotIncluded: (t) => `Attachment not included, only the text of its link: ${t}`,
   noteNotExported: (t) => `Link to a note not in this export; only its text stays: ${t}`,
   noteInOtherFile: (t) => `Link to a note in another file; only its text stays: ${t}`,
+  scoreNotEngraved: (t) => `Score shown as its ABC source, as it could not be engraved: ${t}`,
 };
 
 const SETTINGS_KEY = "schnipsle.export";
@@ -62,6 +64,7 @@ const noPandoc = el("export-no-pandoc");
 const paperRow = el("export-paper-row");
 const paperSelect = el("export-paper") as HTMLSelectElement;
 const keepTags = el("export-keep-tags") as HTMLInputElement;
+const abcSource = el("export-abc-source") as HTMLInputElement;
 const contentsRow = el("export-contents-row");
 const contentsBox = el("export-contents") as HTMLInputElement;
 const pageNumbersRow = el("export-page-numbers-row");
@@ -110,6 +113,7 @@ interface Settings {
   layout?: ExportLayout;
   paper?: ExportPaper;
   keepTagLine?: boolean;
+  abcSource?: boolean;
   contents?: boolean;
   pageNumbers?: boolean;
 }
@@ -235,6 +239,7 @@ export function createExport(hooks: ExportHooks): { open(): Promise<void> } {
       layout: layoutMany.checked ? "filePerNote" : "singleFile",
       paper: paperSelect.value as ExportPaper,
       keepTagLine: keepTags.checked,
+      abcSource: abcSource.checked,
       contents: contentsBox.checked,
       pageNumbers: pageNumbersChosen,
     };
@@ -293,6 +298,7 @@ export function createExport(hooks: ExportHooks): { open(): Promise<void> } {
       }
       paperSelect.value = settings.paper === "letter" ? "letter" : "a4";
       keepTags.checked = settings.keepTagLine === true;
+      abcSource.checked = settings.abcSource === true;
       contentsBox.checked = settings.contents === true;
       pageNumbersChosen = settings.pageNumbers === true;
       layoutMany.checked = settings.layout === "filePerNote";
@@ -339,14 +345,21 @@ export function createExport(hooks: ExportHooks): { open(): Promise<void> } {
         showError("These notes are no longer there.");
         return;
       }
-      progressText.textContent = `Exporting ${plural(notes.length, "note", "notes")}…`;
+      const input = { notes, name: whatNote.checked ? null : (selection.list?.name ?? null) };
+      // Scores are engraved here, by the editor's code, for the export (ADR-0033).
+      const blocks = await invoke<ExportScore[]>("export_scores", { input });
       progressBox.hidden = false;
+      const scores = await engraveForExport(blocks, (done) => {
+        progressText.textContent = `Engraving scores: ${String(done)} of ${String(blocks.length)}…`;
+      });
+      progressText.textContent = `Exporting ${plural(notes.length, "note", "notes")}…`;
       const result = await invoke<ExportReport>("export_notes", {
         format: format(),
-        input: { notes, name: whatNote.checked ? null : (selection.list?.name ?? null) },
+        input: { ...input, scores },
         options: {
           layout: chosenLayout,
           keepTagLine: keepTags.checked,
+          abcSource: abcSource.checked,
           paper: paperSelect.value,
           contents: withContents(),
           pageNumbers: WITH_PAGES.includes(format()) && pageNumbersBox.checked,

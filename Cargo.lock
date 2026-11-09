@@ -3341,6 +3341,7 @@ dependencies = [
  "imagesize",
  "lopdf",
  "percent-encoding",
+ "quick-xml",
  "schnipsle-apple",
  "schnipsle-core",
  "serde",
