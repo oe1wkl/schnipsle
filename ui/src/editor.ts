@@ -34,6 +34,7 @@ import {
 } from "@codemirror/view";
 import type { SyntaxNode } from "@lezer/common";
 import { tags as t } from "@lezer/highlight";
+import { scorePreview } from "./score";
 import { forgetSongSheets, type SongHost, songHost, songPreview } from "./song";
 
 export type EditorMode = "live" | "source";
@@ -547,7 +548,13 @@ const sourceTheme = EditorView.theme({
 });
 
 const modes: Record<EditorMode, Extension> = {
-  live: [livePreview, tablePreview, songPreview(focused), syntaxHighlighting(liveStyle)],
+  live: [
+    livePreview,
+    tablePreview,
+    songPreview(focused),
+    scorePreview(focused),
+    syntaxHighlighting(liveStyle),
+  ],
   source: [syntaxHighlighting(sourceStyle), sourceTheme],
 };
 
