@@ -4,3 +4,9 @@ Copyright 2026 Willi Kraml and the Schnipsle contributors
 This product is licensed under the Apache License, Version 2.0 (see LICENSE).
 Third-party components keep their own licences; see the dependency manifests
 (Cargo.lock, pnpm-lock.yaml) and `cargo deny list` for details.
+
+The piano sounds in ui/public/sounds/ are the acoustic grand piano of the
+Fluid (R3) General MIDI SoundFont by Frank Wen, converted to MP3 by
+Benjamin Gleitzman (MIDI.js Soundfonts,
+https://github.com/gleitz/midi-js-soundfonts), licensed under Creative
+Commons Attribution 3.0 (https://creativecommons.org/licenses/by/3.0/).
