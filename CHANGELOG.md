@@ -67,6 +67,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Changed
 
+- Scores whose lines of staves reach past the width abcjs gives them, such as a first line with two voices on each staff, are no longer cut off at the right, in the editor or in exports. In the bar above a score, each voice of a shared staff has its own name (before: "Soprano Alto" and "Voice 3"), and the voices have a line of their own, so a voice's M and S stay together.
 - A note that starts with a heading of any level, such as `## Title`, now takes its title from that heading without the `#` marks (format.md 0.14 §5.2, ADR-0026): in the note list, in links, and in the names and titles of exports. The search index rebuilds itself once.
 - Search results show a snippet of the note's text with the hits marked, even when the hit is in the title; before, a title hit showed the title a second time, which looked like a second result.
 - Apple Notes import tells apart several notes with the same title also when they have tags: the metadata shows Notes' tags as placeholders, so the text is compared with and without its hashtags. A note matched only by title used to keep the time of the export and was updated by every re-import.

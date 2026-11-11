@@ -411,12 +411,47 @@ function voicesOf(tune: TuneObject): Voices {
     ),
   );
   const tracks = tune.setUpAudio({}).tracks;
-  const names = tracks.slice(0, count).map((track, index) => {
-    const name = track.find((event) => event.cmd === "text");
-    const text = name?.cmd === "text" ? name.text.replaceAll(WORD_JOINER, "").trim() : "";
+  // The tracks are the voices staff by staff. abcjs names a track after a
+  // staff, all its voices in one ("Soprano Alto"), so the names come from
+  // the staff titles, one per voice, on the line with the most voices.
+  const line = tune.lines.find(
+    (l) => (l.staff ?? []).reduce((n, s) => n + (s.voices?.length ?? 0), 0) === count,
+  );
+  // abcjs's types leave out a staff's `title`: the names of its voices.
+  const titles = (line?.staff ?? []).flatMap((staff) => {
+    const { title } = staff as { title?: (string | undefined)[] };
+    return (staff.voices ?? []).map((_, index) => title?.[index] ?? "");
+  });
+  const names = Array.from({ length: count }, (_, index) => {
+    const text = (titles[index] ?? "").replaceAll(WORD_JOINER, "").trim();
     return text !== "" ? text : `Voice ${String(index + 1)}`;
   });
   return { names, chords: tracks.length > count };
+}
+
+/**
+ * Makes the drawing as wide and as high as what abcjs drew in it. Some tunes
+ * reach past the width abcjs gives them, such as a first line with voices
+ * sharing staves, which would cut off its last bars. The drawing must be in
+ * the document to be measured.
+ */
+function fitDrawing(svg: SVGSVGElement): void {
+  const drawn = svg.getBBox();
+  const hasBox = svg.hasAttribute("viewBox");
+  const width = hasBox ? svg.viewBox.baseVal.width : Number(svg.getAttribute("width"));
+  const height = hasBox ? svg.viewBox.baseVal.height : Number(svg.getAttribute("height"));
+  if (!(width > 0 && height > 0)) return;
+  const right = Math.ceil(drawn.x + drawn.width + 1);
+  const bottom = Math.ceil(drawn.y + drawn.height + 1);
+  if (right <= width && bottom <= height) return;
+  const w = Math.max(width, right);
+  const h = Math.max(height, bottom);
+  svg.setAttribute("viewBox", `0 0 ${String(w)} ${String(h)}`);
+  if (svg.hasAttribute("width")) svg.setAttribute("width", String(w));
+  if (svg.hasAttribute("height")) svg.setAttribute("height", String(h));
+  // abcjs's responsive holder keeps the proportions in its bottom padding.
+  const holder = svg.parentElement;
+  if (holder?.style.paddingBottom) holder.style.paddingBottom = `${String((h / w) * 100)}%`;
 }
 
 /** An `abc` block shown as its engraved score, with the bar that plays it. */
@@ -489,8 +524,18 @@ class ScoreWidget extends WidgetType {
       const block = scoreBlocks(editor.state).find((b) => b.from === editor.posAtDOM(wrap));
       if (block) editAt(editor, Math.min(block.textFrom + offset, block.textTo));
     });
-    requestAnimationFrame(() => {
-      if (wrap.isConnected) heights.set(this.key, wrap.getBoundingClientRect().height);
+    // Measured once the editor has put the score in the document, which it
+    // does before the microtask runs; else at the next frame.
+    const settle = (): void => {
+      for (const svg of music.querySelectorAll("svg")) fitDrawing(svg);
+      heights.set(this.key, wrap.getBoundingClientRect().height);
+    };
+    queueMicrotask(() => {
+      if (wrap.isConnected) settle();
+      else
+        requestAnimationFrame(() => {
+          if (wrap.isConnected) settle();
+        });
     });
     return wrap;
   }
@@ -621,13 +666,28 @@ class ScoreWidget extends WidgetType {
       }),
       { names: [], chords: false },
     );
+    if (voices.chords) {
+      bar.append(
+        button(
+          "chords",
+          "Chords",
+          "Play an accompaniment to the chord symbols",
+          () => {
+            set({ chordsOff: !view.chordsOff });
+          },
+          !view.chordsOff,
+        ),
+      );
+    }
+    // The voices on a line of their own, so a voice's buttons stay together.
     if (voices.names.length > 1) {
+      const row = element("div", "cm-score-voices");
       voices.names.forEach((name, index) => {
         const muted = view.muted.includes(index);
         const solo = view.solo.includes(index);
         const toggle = (list: readonly number[]): number[] =>
           list.includes(index) ? list.filter((i) => i !== index) : [...list, index];
-        bar.append(
+        row.append(
           group(
             name,
             element("span", "cm-score-label", name),
@@ -652,19 +712,7 @@ class ScoreWidget extends WidgetType {
           ),
         );
       });
-    }
-    if (voices.chords) {
-      bar.append(
-        button(
-          "chords",
-          "Chords",
-          "Play an accompaniment to the chord symbols",
-          () => {
-            set({ chordsOff: !view.chordsOff });
-          },
-          !view.chordsOff,
-        ),
-      );
+      bar.append(row);
     }
   }
 
@@ -1038,6 +1086,13 @@ const scoreTheme = EditorView.theme({
     cursor: "default",
   },
   ".cm-score-group": { display: "inline-flex", alignItems: "center", gap: "4px" },
+  ".cm-score-voices": {
+    display: "flex",
+    flexWrap: "wrap",
+    flexBasis: "100%",
+    alignItems: "center",
+    gap: "6px 12px",
+  },
   ".cm-score-label": { marginRight: "2px" },
   ".cm-score-button": {
     font: "inherit",
@@ -1138,6 +1193,7 @@ export async function engraveForExport(
         });
         svgs = targets.flatMap((target) => {
           const svg = target.querySelector("svg");
+          if (svg) fitDrawing(svg);
           return svg ? [serializer.serializeToString(svg)] : [];
         });
         // A tune missing would leave out part of the block: all or nothing.
