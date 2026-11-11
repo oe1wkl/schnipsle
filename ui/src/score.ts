@@ -6,11 +6,17 @@
 // is loaded the first time a note has music. A block abcjs warns about
 // stays source, with the warnings under it (rule 3): nothing is engraved
 // that would leave out part of what the source says.
+//
+// A bar over each score plays it with the piano sounds the app brings along,
+// slower or faster, transposed, with voices muted or alone (F-17, ADR-0035).
+// These are view settings of the block, like a song sheet's; the note never
+// changes.
 
 import { syntaxTree } from "@codemirror/language";
 import {
   type EditorState,
   type Extension,
+  MapMode,
   type Range,
   StateEffect,
   StateField,
@@ -24,6 +30,8 @@ import {
 } from "@codemirror/view";
 
 type Abcjs = typeof import("abcjs");
+type TuneObject = import("abcjs").TuneObject;
+type MidiBuffer = import("abcjs").MidiBuffer;
 
 // --- Loading abcjs ---
 
@@ -103,6 +111,62 @@ function scoreBlocks(state: EditorState): ScoreBlock[] {
   });
   return blocks;
 }
+
+// --- View settings of a block ---
+
+/** How the viewer plays and shows a block, besides what the note says. */
+interface ScoreView {
+  /** Semitones added to the block's `transpose=`. */
+  transpose: number;
+  /** Speed in percent of the tune's own tempo. */
+  tempo: number;
+  /** Voices by their number in the tune, from 0. */
+  muted: readonly number[];
+  solo: readonly number[];
+  /** The accompaniment abcjs plays to the chord symbols. */
+  chordsOff: boolean;
+}
+
+const PLAIN_VIEW: ScoreView = { transpose: 0, tempo: 100, muted: [], solo: [], chordsOff: false };
+const TEMPO_STEP = 10;
+const TEMPO_MIN = 30;
+const TEMPO_MAX = 200;
+
+const sameView = (a: ScoreView, b: ScoreView): boolean => JSON.stringify(a) === JSON.stringify(b);
+
+/** A block's view settings, by the start of its opening fence. */
+interface BlockView {
+  pos: number;
+  view: ScoreView;
+}
+
+const setScoreView = StateEffect.define<BlockView>({
+  map: (value, changes) => ({ pos: changes.mapPos(value.pos, 1), view: value.view }),
+});
+
+/** View settings that differ from the plain view; reset when another note opens. */
+const scoreViews = StateField.define<readonly BlockView[]>({
+  create: () => [],
+  update(views, tr) {
+    let next = views;
+    if (tr.docChanged) {
+      next = next.flatMap((v) => {
+        const pos = tr.changes.mapPos(v.pos, 1, MapMode.TrackDel);
+        return pos === null ? [] : [{ pos, view: v.view }];
+      });
+    }
+    for (const effect of tr.effects) {
+      if (!effect.is(setScoreView)) continue;
+      const { pos, view } = effect.value;
+      next = next.filter((v) => v.pos !== pos);
+      if (!sameView(view, PLAIN_VIEW)) next = [...next, { pos, view }];
+    }
+    return next;
+  },
+});
+
+const viewAt = (state: EditorState, pos: number): ScoreView =>
+  state.field(scoreViews, false)?.find((v) => v.pos === pos)?.view ?? PLAIN_VIEW;
 
 // --- Parsing ---
 
@@ -322,13 +386,41 @@ function editAt(editor: EditorView, pos: number): void {
   editor.focus();
 }
 
-/** An `abc` block shown as its engraved score. */
+/** The voices of a tune and whether it has an accompaniment to its chord symbols. */
+interface Voices {
+  names: string[];
+  chords: boolean;
+}
+
+/** The tunes a score element shows, and their voices, for the bar and for playing. */
+const shownTunes = new WeakMap<HTMLElement, { tunes: TuneObject[]; voices: Voices[] }>();
+
+function voicesOf(tune: TuneObject): Voices {
+  const count = Math.max(
+    1,
+    ...tune.lines.map((line) =>
+      (line.staff ?? []).reduce((n, s) => n + (s.voices?.length ?? 0), 0),
+    ),
+  );
+  const tracks = tune.setUpAudio({}).tracks;
+  const names = tracks.slice(0, count).map((track, index) => {
+    const name = track.find((event) => event.cmd === "text");
+    const text = name?.cmd === "text" ? name.text.replaceAll(WORD_JOINER, "").trim() : "";
+    return text !== "" ? text : `Voice ${String(index + 1)}`;
+  });
+  return { names, chords: tracks.length > count };
+}
+
+/** An `abc` block shown as its engraved score, with the bar that plays it. */
 class ScoreWidget extends WidgetType {
   constructor(
     private readonly lib: Abcjs,
     private readonly source: string,
     private readonly transpose: number,
     private readonly tunes: number,
+    private readonly view: ScoreView,
+    /** The tune of this block that plays, and whether it is still loading. */
+    private readonly playing: { tune: number; loading: boolean } | null,
   ) {
     super();
   }
@@ -338,7 +430,11 @@ class ScoreWidget extends WidgetType {
   }
 
   override eq(other: ScoreWidget): boolean {
-    return other.source === this.source && other.transpose === this.transpose;
+    return (
+      other.key === this.key &&
+      sameView(other.view, this.view) &&
+      JSON.stringify(other.playing) === JSON.stringify(this.playing)
+    );
   }
 
   override get estimatedHeight(): number {
@@ -347,16 +443,22 @@ class ScoreWidget extends WidgetType {
 
   override toDOM(editor: EditorView): HTMLElement {
     const wrap = element("div", "cm-score");
-    wrap.setAttribute("role", "img");
-    wrap.setAttribute("aria-label", "Music score; click to edit its ABC source");
+    wrap.dataset["key"] = this.key;
+    const bar = element("div", "cm-score-bar");
+    bar.setAttribute("role", "toolbar");
+    bar.setAttribute("aria-label", "Score playback");
+    const music = element("div", "cm-score-music");
+    music.setAttribute("role", "img");
+    music.setAttribute("aria-label", "Music score; click to edit its ABC source");
     const targets = Array.from({ length: Math.max(this.tunes, 1) }, () =>
       element("div", "cm-score-tune"),
     );
-    wrap.append(...targets);
+    music.append(...targets);
+    wrap.append(bar, music);
     // Set by abcjs while a click is handled, before the click event itself.
     let picked: number | null = null;
     // abcjs takes one element per tune, though its types name only one.
-    this.lib.renderAbc(targets as unknown as Element, this.source, {
+    const tunes = this.lib.renderAbc(targets as unknown as Element, this.source, {
       responsive: "resize",
       visualTranspose: this.transpose,
       add_classes: true,
@@ -366,12 +468,14 @@ class ScoreWidget extends WidgetType {
         picked = abcelem.startChar ?? null;
       },
     });
+    shownTunes.set(wrap, { tunes, voices: tunes.map(voicesOf) });
+    this.fillBar(bar, editor, wrap);
     // Without this the browser moves the cursor to the block's start, which
     // shows the source before the click says which note it was.
     wrap.addEventListener("mousedown", (event) => {
       event.preventDefault();
     });
-    wrap.addEventListener("click", () => {
+    music.addEventListener("click", () => {
       const offset = picked !== null && picked >= 0 ? picked : 0;
       picked = null;
       const block = scoreBlocks(editor.state).find((b) => b.from === editor.posAtDOM(wrap));
@@ -383,10 +487,185 @@ class ScoreWidget extends WidgetType {
     return wrap;
   }
 
+  /** Other view settings of the same score: only the bar changes, nothing is engraved again. */
+  override updateDOM(dom: HTMLElement, editor: EditorView): boolean {
+    const bar = dom.querySelector<HTMLElement>(":scope > .cm-score-bar");
+    if (dom.dataset["key"] !== this.key || !bar) return false;
+    const active = document.activeElement;
+    const control =
+      active instanceof HTMLElement && bar.contains(active) ? active.dataset["control"] : null;
+    bar.replaceChildren();
+    this.fillBar(bar, editor, dom);
+    if (control) bar.querySelector<HTMLElement>(`[data-control="${control}"]`)?.focus();
+    return true;
+  }
+
+  private fillBar(bar: HTMLElement, editor: EditorView, wrap: HTMLElement): void {
+    const shown = shownTunes.get(wrap);
+    if (!shown) return;
+    const view = this.view;
+    const set = (change: Partial<ScoreView>): void => {
+      const pos = editor.posAtDOM(wrap);
+      const next = { ...view, ...change };
+      editor.dispatch({ effects: setScoreView.of({ pos, view: next }) });
+      if (change.transpose !== undefined) stopPlayback();
+      else replay(editor, pos, next);
+    };
+    const button = (
+      control: string,
+      text: string,
+      label: string,
+      onClick: () => void,
+      pressed?: boolean,
+    ): HTMLButtonElement => {
+      const b = element("button", "cm-score-button", text);
+      b.dataset["control"] = control;
+      b.type = "button";
+      b.setAttribute("aria-label", label);
+      b.title = label;
+      if (pressed !== undefined) b.setAttribute("aria-pressed", String(pressed));
+      b.addEventListener("click", onClick);
+      return b;
+    };
+    const group = (label: string, ...children: HTMLElement[]): HTMLElement => {
+      const g = element("span", "cm-score-group");
+      g.setAttribute("role", "group");
+      g.setAttribute("aria-label", label);
+      g.append(...children);
+      return g;
+    };
+
+    const several = shown.tunes.length > 1;
+    shown.tunes.forEach((tune, index) => {
+      // Without the word joiners of the preparation, which a screen reader might spell out.
+      const title =
+        tune.metaText.title?.replaceAll(WORD_JOINER, "").trim() || `Tune ${String(index + 1)}`;
+      const playingThis = this.playing?.tune === index;
+      const text = playingThis
+        ? this.playing.loading
+          ? "Loading…"
+          : "■ Stop"
+        : several
+          ? `▶ ${title}`
+          : "▶ Play";
+      bar.append(
+        button(
+          `play-${String(index)}`,
+          text,
+          playingThis ? `Stop ${title}` : `Play ${title}`,
+          () => {
+            if (playingThis) {
+              stopPlayback();
+            } else {
+              void play(
+                this.lib,
+                editor,
+                editor.posAtDOM(wrap),
+                index,
+                tune,
+                shown.voices[index],
+                this.transpose,
+                view,
+              );
+            }
+          },
+        ),
+      );
+    });
+
+    const tempo = element("span", "cm-score-amount", `${String(view.tempo)} %`);
+    tempo.title = "Speed in percent of the tune's tempo";
+    bar.append(
+      group(
+        "Tempo",
+        element("span", "cm-score-label", "Tempo"),
+        button("slower", "−", "Slower", () => {
+          set({ tempo: Math.max(TEMPO_MIN, view.tempo - TEMPO_STEP) });
+        }),
+        tempo,
+        button("faster", "+", "Faster", () => {
+          set({ tempo: Math.min(TEMPO_MAX, view.tempo + TEMPO_STEP) });
+        }),
+      ),
+    );
+
+    const semitones = element("span", "cm-score-amount", signed(view.transpose));
+    semitones.title = "Semitones the viewer adds";
+    bar.append(
+      group(
+        "Transpose",
+        element("span", "cm-score-label", "Transpose"),
+        button("down", "−", "Transpose down a semitone", () => {
+          set({ transpose: view.transpose - 1 });
+        }),
+        semitones,
+        button("up", "+", "Transpose up a semitone", () => {
+          set({ transpose: view.transpose + 1 });
+        }),
+      ),
+    );
+
+    // The voices of the tune with the most of them; numbers are the same in every tune.
+    const voices = shown.voices.reduce<Voices>(
+      (most, v) => ({
+        names: v.names.length > most.names.length ? v.names : most.names,
+        chords: most.chords || v.chords,
+      }),
+      { names: [], chords: false },
+    );
+    if (voices.names.length > 1) {
+      voices.names.forEach((name, index) => {
+        const muted = view.muted.includes(index);
+        const solo = view.solo.includes(index);
+        const toggle = (list: readonly number[]): number[] =>
+          list.includes(index) ? list.filter((i) => i !== index) : [...list, index];
+        bar.append(
+          group(
+            name,
+            element("span", "cm-score-label", name),
+            button(
+              `mute-${String(index)}`,
+              "M",
+              `Mute ${name}`,
+              () => {
+                set({ muted: toggle(view.muted) });
+              },
+              muted,
+            ),
+            button(
+              `solo-${String(index)}`,
+              "S",
+              `${name} alone`,
+              () => {
+                set({ solo: toggle(view.solo) });
+              },
+              solo,
+            ),
+          ),
+        );
+      });
+    }
+    if (voices.chords) {
+      bar.append(
+        button(
+          "chords",
+          "Chords",
+          "Play an accompaniment to the chord symbols",
+          () => {
+            set({ chordsOff: !view.chordsOff });
+          },
+          !view.chordsOff,
+        ),
+      );
+    }
+  }
+
   override ignoreEvent(): boolean {
-    return true; // the widget puts the cursor where the click was
+    return true; // the bar handles its own clicks, and a click on the music puts the cursor there
   }
 }
+
+const signed = (n: number): string => (n > 0 ? `+${String(n)}` : String(n));
 
 /** Why a block shows as source: its warnings, or abcjs not loading. */
 class WarningsWidget extends WidgetType {
@@ -467,17 +746,224 @@ function scoreDecorations(state: EditorState, hasFocus: boolean): DecorationSet 
       hasFocus && state.selection.ranges.some((r) => r.from <= block.to && r.to >= block.from);
     // `nosource` keeps a read-only view engraved, even with the cursor in it.
     if (edited && !(block.nosource && state.readOnly)) continue;
-    const { abc, tunes, warnings } = parse(abcjs, source, block.transpose);
+    const view = viewAt(state, block.from);
+    const transpose = block.transpose + view.transpose;
+    const { abc, tunes, warnings } = parse(abcjs, source, transpose);
     if (warnings.length > 0) {
       const widget = new WarningsWidget(warnings, null);
       found.push(Decoration.widget({ widget, block: true, side: 1 }).range(block.to));
       continue;
     }
-    const widget = new ScoreWidget(abcjs, abc, block.transpose, tunes);
+    const plays =
+      playing?.pos === block.from ? { tune: playing.tune, loading: playing.synth === null } : null;
+    const widget = new ScoreWidget(abcjs, abc, transpose, tunes, view, plays);
     found.push(Decoration.replace({ widget, block: true }).range(block.from, block.to));
   }
   return Decoration.set(found);
 }
+
+// --- Playback ---
+
+/** Where the piano sounds are, one file per note (`ui/public/sounds/`). */
+const SOUNDS = "/sounds/";
+
+/** The voice of a General MIDI drum kit, which the app has no sounds for. */
+const PERCUSSION = 128;
+
+/** The tune that plays. One plays at a time, in the whole window. */
+interface Playing {
+  editor: EditorView;
+  /** The block, by the start of its opening fence. */
+  pos: number;
+  source: string;
+  tune: number;
+  tuneObject: TuneObject;
+  voices: Voices;
+  /** Semitones the tune is shown moved by, and so played. */
+  transpose: number;
+  /** `null` while the sounds load. */
+  synth: MidiBuffer | null;
+  /** The audio clock at the tune's start, and its length, in seconds. */
+  started: number;
+  duration: number;
+}
+
+let playing: Playing | null = null;
+/** Counts starts and stops, so a start that finishes loading late knows it is stale. */
+let generation = 0;
+let context: AudioContext | null = null;
+
+/** Tells the editor that what plays changed, so the bars show it. */
+const playbackChanged = StateEffect.define();
+
+function changed(editor: EditorView): void {
+  // Not during an update of the editor, which may be what stopped the tune.
+  queueMicrotask(() => {
+    if (editor.dom.isConnected) editor.dispatch({ effects: playbackChanged.of(null) });
+  });
+}
+
+function stopPlayback(): void {
+  generation++;
+  const was = playing;
+  playing = null;
+  if (!was) return;
+  was.synth?.stop();
+  changed(was.editor);
+}
+
+/** Where in the tune it plays, from 0 to 1. */
+function position(was: Playing): number {
+  if (!was.synth || !context || was.duration <= 0) return 0;
+  return Math.min(Math.max((context.currentTime - was.started) / was.duration, 0), 1);
+}
+
+/**
+ * The iPhone keeps Web Audio silent while its ring switch is off, unless the
+ * page says it plays music (Audio Session API, iOS 16.4 and later).
+ */
+function playEvenWhenSilenced(): void {
+  const session = (navigator as Navigator & { audioSession?: { type: string } }).audioSession;
+  if (session) session.type = "playback";
+}
+
+/** The voices that do not play: muted ones, and with any alone, all others. */
+function voicesOff(view: ScoreView, voices: Voices): number[] {
+  return voices.names
+    .map((_, index) => index)
+    .filter(
+      (index) => view.muted.includes(index) || (view.solo.length > 0 && !view.solo.includes(index)),
+    );
+}
+
+/** Plays tune `tune` of the block at `pos` from `from` (0 to 1), stopping whatever plays. */
+async function play(
+  lib: Abcjs,
+  editor: EditorView,
+  pos: number,
+  tune: number,
+  tuneObject: TuneObject,
+  voices: Voices | undefined,
+  transpose: number,
+  view: ScoreView,
+  from = 0,
+): Promise<void> {
+  stopPlayback();
+  const mine = generation;
+  const block = scoreBlocks(editor.state).find((b) => b.from === pos);
+  if (!block || !voices) return;
+  if (!lib.synth.supportsAudio()) {
+    console.error("This web view cannot play audio");
+    return;
+  }
+  playEvenWhenSilenced();
+  if (!context) {
+    context = new AudioContext();
+    lib.synth.registerAudioContext(context);
+  }
+  // Within the click, which is what lets the page make sound.
+  void context.resume();
+  const current: Playing = {
+    editor,
+    pos,
+    source: editor.state.sliceDoc(block.textFrom, block.textTo),
+    tune,
+    tuneObject,
+    voices,
+    transpose,
+    synth: null,
+    started: 0,
+    duration: 0,
+  };
+  playing = current;
+  changed(editor);
+  const tracks = tuneObject.setUpAudio({
+    voicesOff: voicesOff(view, voices),
+    chordsOff: view.chordsOff,
+    // abcjs plays a shown transposition at concert pitch, as for a transposing
+    // instrument; `transpose=` moves the sound too (format.md §5.6 rule 6).
+    midiTranspose: transpose,
+  });
+  // Every voice on the piano the app brings along; no drums.
+  tracks.tracks = tracks.tracks.map((track) =>
+    track.filter((event) => event.cmd === "text" || event.instrument !== PERCUSSION),
+  );
+  for (const track of tracks.tracks) {
+    for (const event of track) if (event.cmd !== "text") event.instrument = 0;
+  }
+  const synth = new lib.synth.CreateSynth();
+  try {
+    await synth.init({
+      audioContext: context,
+      // abcjs takes the tracks of `setUpAudio` here, though its types name another shape.
+      sequence: tracks as unknown as import("abcjs").AudioSequence,
+      millisecondsPerMeasure: (tuneObject.millisecondsPerMeasure() * 100) / view.tempo,
+      options: {
+        soundFontUrl: SOUNDS,
+        onEnded: () => {
+          if (playing?.synth === synth) {
+            playing = null;
+            changed(editor);
+          }
+        },
+      },
+    });
+    const { duration } = await synth.prime();
+    if (mine !== generation) return; // stopped or replaced while loading
+    synth.start();
+    if (from > 0) synth.seek(from, "percent");
+    current.synth = synth;
+    current.duration = duration;
+    current.started = context.currentTime - from * duration;
+    changed(editor);
+  } catch (e) {
+    console.error("The score could not be played", e);
+    if (mine === generation) stopPlayback();
+  }
+}
+
+/** New view settings for the block that plays: it goes on with them where it was. */
+function replay(editor: EditorView, pos: number, view: ScoreView): void {
+  const was = playing;
+  if (was?.pos !== pos || !abcjs) return;
+  void play(
+    abcjs,
+    editor,
+    pos,
+    was.tune,
+    was.tuneObject,
+    was.voices,
+    was.transpose,
+    view,
+    position(was),
+  );
+}
+
+/** Stops playing when the block changes or goes, or the note closes. */
+const player = ViewPlugin.define(() => ({
+  update(update) {
+    const was = playing;
+    if (!was || was.editor !== update.view || !update.docChanged) return;
+    const pos = update.changes.mapPos(was.pos, 1, MapMode.TrackDel);
+    const block = pos === null ? undefined : scoreBlocks(update.state).find((b) => b.from === pos);
+    if (
+      block &&
+      update.state.sliceDoc(block.textFrom, block.textTo) === was.source &&
+      pos !== null
+    ) {
+      was.pos = pos;
+    } else {
+      stopPlayback();
+    }
+  },
+  destroy() {
+    if (playing) {
+      generation++;
+      playing.synth?.stop();
+      playing = null;
+    }
+  },
+}));
 
 /** Loads abcjs once a note with music shows, then has the blocks drawn again. */
 const loader = ViewPlugin.define((view) => {
@@ -518,7 +1004,7 @@ export function scorePreview(focused: StateField<boolean>): Extension {
     },
     provide: (field) => EditorView.decorations.from(field),
   });
-  return [preview, loader, scoreTheme];
+  return [scoreViews, preview, loader, player, scoreTheme];
 }
 
 const scoreTheme = EditorView.theme({
@@ -532,6 +1018,38 @@ const scoreTheme = EditorView.theme({
     color: "inherit",
   },
   ".cm-score-tune + .cm-score-tune": { marginTop: "8px" },
+  ".cm-score-bar": {
+    display: "flex",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: "6px 12px",
+    marginBottom: "6px",
+    fontFamily: "system-ui, sans-serif",
+    fontSize: "0.85em",
+    color: "var(--muted)",
+    cursor: "default",
+  },
+  ".cm-score-group": { display: "inline-flex", alignItems: "center", gap: "4px" },
+  ".cm-score-label": { marginRight: "2px" },
+  ".cm-score-button": {
+    font: "inherit",
+    padding: "1px 8px",
+    border: "1px solid var(--line)",
+    borderRadius: "4px",
+    background: "var(--panel)",
+    color: "var(--fg)",
+    cursor: "pointer",
+  },
+  ".cm-score-button[aria-pressed='true']": {
+    background: "var(--accent)",
+    borderColor: "var(--accent)",
+    color: "var(--bg)",
+  },
+  ".cm-score-amount": {
+    minWidth: "3.2em",
+    textAlign: "center",
+    fontVariantNumeric: "tabular-nums",
+  },
   ".cm-score svg": { display: "block" },
   ".cm-score-warnings": {
     margin: "2px 0 8px",

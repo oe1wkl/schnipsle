@@ -1,6 +1,6 @@
 # ADR-0032: Scores in the editor
 
-- Status: Accepted
+- Status: Accepted; the controls of rule 6 decided by [ADR-0035](0035-playing-scores.md)
 - Date: 2026-11-08
 - Deciders: Willi Kraml
 - Related: F-16, ADR-0007, ADR-0013, ADR-0031, [format.md §5.6](../format.md#56-music-notation)
