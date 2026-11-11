@@ -12,7 +12,7 @@ publish.workspace = true
 [dependencies]
 base64.workspace = true
 comrak.workspace = true
-imagesize = "0.14"
+imagesize = "0.15"
 percent-encoding.workspace = true
 # Engraved scores are cleaned before they go into a document (ADR-0033).
 quick-xml = "0.42"
