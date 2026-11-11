@@ -87,6 +87,14 @@ function scoreOptions(info: string): { transpose: number; nosource: boolean } | 
   return { transpose, nosource };
 }
 
+/** The `abc` block around `pos` (its fences included), or `null`. */
+export function scoreBlockAt(
+  state: EditorState,
+  pos: number,
+): { from: number; to: number; textFrom: number; textTo: number } | null {
+  return scoreBlocks(state).find((b) => b.from <= pos && pos <= b.to) ?? null;
+}
+
 function scoreBlocks(state: EditorState): ScoreBlock[] {
   const blocks: ScoreBlock[] = [];
   syntaxTree(state).iterate({

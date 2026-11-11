@@ -20,6 +20,7 @@ import {
   StateEffect,
   StateField,
   Transaction,
+  type TransactionSpec,
 } from "@codemirror/state";
 import {
   Decoration,
@@ -48,6 +49,10 @@ export interface NoteEditor {
   setMode(mode: EditorMode): void;
   focus(): void;
   cursorToEnd(): void;
+  /** The editor's state, for menus that depend on where the cursor is. */
+  state(): EditorState;
+  /** Applies `spec` as one user edit; the editor takes the focus if `focus`. */
+  edit(spec: TransactionSpec, focus: boolean): void;
   /** Inserts `text` as a user edit at `pos`, or in place of the selection if `null`. */
   insert(text: string, pos: number | null): void;
   /**
@@ -668,6 +673,11 @@ export function createEditor(
     },
     cursorToEnd() {
       view.dispatch({ selection: { anchor: view.state.doc.length }, scrollIntoView: true });
+    },
+    state: () => view.state,
+    edit(spec, focus) {
+      view.dispatch(spec, { userEvent: "input", scrollIntoView: true });
+      if (focus) view.focus();
     },
     insert(text, pos) {
       const spec =

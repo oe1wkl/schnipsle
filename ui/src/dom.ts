@@ -29,6 +29,7 @@ export const ui = {
   deleteNote: el("delete-note") as HTMLButtonElement,
   pin: el("pin") as HTMLButtonElement,
   addImage: el("add-image") as HTMLButtonElement,
+  addMusic: el("add-music") as HTMLButtonElement,
   showHistory: el("show-history") as HTMLButtonElement,
   history: el("history"),
   historyHint: el("history-hint"),
