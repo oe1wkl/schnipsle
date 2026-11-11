@@ -12,6 +12,7 @@ import { createImageCache, fileName } from "./images";
 import { createImport } from "./import";
 import { createImports } from "./imports";
 import { createSidebar, type ListFilter } from "./sidebar";
+import { musicMenu } from "./snippets";
 import type { SongHost } from "./song";
 import type {
   VaultInfo,
@@ -520,6 +521,7 @@ function closeEditor(): void {
   ui.pin.disabled = true;
   showPinned();
   ui.addImage.disabled = true;
+  ui.addMusic.disabled = true;
   hideConflict();
   showSyncConflicts([]);
   ui.tags.textContent = "";
@@ -613,6 +615,7 @@ function load(content: NoteContent): void {
   ui.deleteNote.disabled = readOnly !== null;
   ui.pin.disabled = readOnly !== null;
   ui.addImage.disabled = readOnly !== null;
+  ui.addMusic.disabled = readOnly !== null;
   showPinned();
   hideConflict();
   showSyncConflicts(content.conflicts);
@@ -1116,6 +1119,13 @@ ui.historyCopy.addEventListener("click", () => {
     });
 });
 
+musicMenu(ui.addMusic, {
+  state: () => editor.state(),
+  edit: ({ spec, focus }) => {
+    editor.edit(spec, focus);
+  },
+  openLink: (url) => void openLink(url),
+});
 ui.addImage.addEventListener("click", () => {
   ui.imageFile.click();
 });

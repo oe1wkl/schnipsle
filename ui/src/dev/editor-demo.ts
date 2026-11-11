@@ -2,6 +2,7 @@
 // Development playground for the note editor (ui/dev/editor.html), without Tauri.
 /// <reference types="vite/client" />
 import { createEditor } from "../editor";
+import { musicMenu } from "../snippets";
 import type { SongHost } from "../song";
 import type { SongSheet } from "../types";
 // Without the core, song sheets come from its golden files (format.md §11).
@@ -137,6 +138,16 @@ mode.addEventListener("click", () => {
   source = !source;
   editor.setMode(source ? "source" : "live");
   mode.textContent = source ? "Preview" : "Source";
+});
+
+musicMenu(el("add-music") as HTMLButtonElement, {
+  state: () => editor.state(),
+  edit: ({ spec, focus }) => {
+    editor.edit(spec, focus);
+  },
+  openLink: (url) => {
+    status.textContent = `Open: ${url}`;
+  },
 });
 
 // For checks from the browser console.

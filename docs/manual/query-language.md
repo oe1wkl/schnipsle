@@ -24,6 +24,8 @@ Operators and their values ignore case: `Has:Task` works too. An operator with a
 
 ## Songs and scores
 
+How to write them is in [Music](music.md).
+
 Words and phrases find song sheets (format.md §5.7) by their lyrics, read without the chord brackets (`aufgegangen` finds `aufge[D]gangen`), and by the `title`, `subtitle`, `artist`, `composer` and `lyricist` directives. ChordPro comments (`# …`), tablature and other directives are not searched.
 
 Scores in ABC (format.md §5.6) are found by their titles (`T:`), composers (`C:`) and lyrics (`w:` under the notes, `W:` after the tune). Syllables are read as words, so `aufgegangen` finds `w: auf-ge-gan-gen`, also when a word goes on in the next `w:` line. The accents of ABC count as the letters they stand for: `\"u`, `&uuml;` and `\u00fc` are found as `ü`. The notes, the other fields and `%` comments are not searched.
