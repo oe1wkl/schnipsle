@@ -37,7 +37,7 @@ Decisions made on 2026-11-13 (below). Goal: a 1.0 people can install and trust o
 
 To decide first:
 
-- [x] Ways to install: the Mac by Developer ID, notarized, from GitHub, with Tauri's updater; the iPhone by the App Store and TestFlight; no Mac App Store build (ADR-0036, proposed)
+- [x] Ways to install: the Mac by Developer ID, notarized, from GitHub, with Tauri's updater; the iPhone by the App Store and TestFlight; no Mac App Store build (ADR-0036)
 - [x] Language: English only in 1.0, with the strings in one place ready for German (N-06)
 - [x] Joining 1.0: a settings view, and renaming and merging tags (F-11). Import on the iPhone waits
 
