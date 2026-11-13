@@ -33,31 +33,33 @@ Each milestone ends in a usable build. Scope can move between milestones; the or
 
 ## M7 backlog
 
-Draft, to be agreed. Goal: a 1.0 people can install and trust on the Mac and the iPhone, with everything the HLD marks as a must (M) or settled as out of 1.0. Desktop builds are signed and notarized, the iPhone app goes through TestFlight to the App Store. Order: decisions, export on iOS, what the requirements still lack, data safety and performance on devices, then manual, packaging and release.
+Decisions made on 2026-11-13 (below). Goal: a 1.0 people can install and trust on the Mac and the iPhone, with everything the HLD marks as a must (M) or settled as out of 1.0. Desktop builds are signed and notarized, the iPhone app goes through TestFlight to the App Store. Order: decisions, export on iOS, what the requirements still lack, data safety and performance on devices, then manual, packaging and release.
 
 To decide first:
 
-- [ ] Ways to install (ADR): Developer ID with notarization from GitHub, the Mac App Store (sandbox, see ADR-0022), or both; the App Store for iOS. Updates on the desktop: Tauri's updater or none
-- [ ] German in 1.0 (N-06: English and German first), or English only with the strings ready for it
-- [ ] What else joins 1.0: import on the iPhone (Markdown folders and the Simplenote zip from Files); a settings view (history retention, Pandoc, later the reading view); renaming and merging tags (F-11)
+- [x] Ways to install: the Mac by Developer ID, notarized, from GitHub, with Tauri's updater; the iPhone by the App Store and TestFlight; no Mac App Store build (ADR-0036, proposed)
+- [x] Language: English only in 1.0, with the strings in one place ready for German (N-06)
+- [x] Joining 1.0: a settings view, and renaming and merging tags (F-11). Import on the iPhone waits
 
 Work:
 
 - [ ] PDF on iOS: a spike of `UIPrintPageRenderer` with the web view's print formatter (`docs/spikes/pdf-print.md`), then an ADR for the iOS path of ADR-0022, page numbers and table of contents included (ADR-0029)
 - [ ] Export on iOS (F-06): HTML, PDF and ODT from the note or the notes in the list, handed to the share sheet or saved to Files; the report as on the desktop. DOCX and EPUB stay desktop only (ADR-0025)
 - [ ] History: compare two versions of a note, or a version with the note (F-14 "browse, compare, restore"; browsing and restoring exist)
-- [ ] Localisation and access (N-06), as decided: UI strings in one place, German if chosen; every view usable by keyboard on the Mac and with VoiceOver on both
+- [ ] Settings view: history retention, the Pandoc path, the update check (ADR-0036); room for the reading view later
+- [ ] Renaming and merging tags (F-11): a tag renamed, or merged into another, in every note that has it, with a report of what changes before it does; written as format.md §10 asks
+- [ ] Localisation and access (N-06): UI strings in one place, ready for German; every view usable by keyboard on the Mac and with VoiceOver on both
 - [ ] Data-safety tests (N-04): a long run of random edits, renames, deletes, restores and outside changes against a model of the vault, which must never lose text; the app killed while saving; a full disk and a read-only vault; C7 and C8 (two devices, offline) again with the release build
 - [ ] Performance on devices (N-03): 10,000 notes on the oldest iPhone we support and on an Intel Mac if we build for it; start time, memory, search and export times written down; the editor loaded on demand if start time needs it (bundle ~530 kB)
 - [ ] Manual (`docs/manual/`): getting started, vaults and their files, tags and smart folders, search (exists), music (exists), import, export, history and trash, sync with iCloud; reachable from the Help menu
 - [ ] Licences: the legal check of how Pandoc is called (ADR-0005, ADR-0025); a list of third-party licences in the app and next to the download
-- [ ] macOS packaging: version 1.0.0 everywhere, hardened runtime with the Apple Events entitlement for the Notes import, Developer ID signing and notarization in a CI release job, a DMG; Apple silicon only or universal
+- [ ] macOS packaging: version 1.0.0 everywhere, hardened runtime with the Apple Events entitlement for the Notes import, Developer ID signing and notarization in a CI release job, a DMG; the updater with its signed manifest (ADR-0036); Apple silicon only or universal
 - [ ] iOS packaging: App Store Connect record, privacy manifest (`PrivacyInfo.xcprivacy`) with the reasons for the APIs used, export compliance, icon and screenshots, TestFlight; the iOS `Info.plist` without the desktop-only `NSAppleEventsUsageDescription` the build adds
 - [ ] Reproducible builds (N-07): what can be rebuilt bit for bit and what cannot (signing, Xcode), documented in `docs/dev-setup.md`
 - [ ] Beta: a few weeks of everyday use on the Mac and the iPhone, with others on TestFlight; fixes
 - [ ] Release: CHANGELOG section 1.0.0, tag, GitHub release with the DMG and notes, App Store submission
 
-Not in M7, unless decided otherwise above: Linux and Windows builds (N-05 keeps them possible), Android, note links and backlinks (F-12), the importers of F-13, fonts as a choice.
+Not in M7: a Mac App Store build, the German UI, import on the iPhone, Linux and Windows builds (N-05 keeps them possible), Android, note links and backlinks (F-12), the importers of F-13, fonts as a choice.
 
 ## M6 results
 
@@ -84,7 +86,7 @@ Not in M7, unless decided otherwise above: Linux and Windows builds (N-05 keeps 
 
 ## M6 backlog
 
-Draft, to be agreed. Goal: music in notes as the HLD asks for 1.0: ABC scores engraved in the editor and in exports, played back for practice (F-16, F-17; ADR-0013), and ChordPro song sheets with chords over their syllables, transposed, in German or English names, lyrics only on request (F-18; ADR-0014). Both follow format.md §5.6 and §5.7; the file is never rewritten except by an explicit "Apply transposition". Order: core first (indexing, ChordPro model), editor, playback, exports, then a check with real songs on the Mac and the iPhone.
+Decisions made on 2026-11-13 (below). Goal: music in notes as the HLD asks for 1.0: ABC scores engraved in the editor and in exports, played back for practice (F-16, F-17; ADR-0013), and ChordPro song sheets with chords over their syllables, transposed, in German or English names, lyrics only on request (F-18; ADR-0014). Both follow format.md §5.6 and §5.7; the file is never rewritten except by an explicit "Apply transposition". Order: core first (indexing, ChordPro model), editor, playback, exports, then a check with real songs on the Mac and the iPhone.
 
 To decide first:
 
