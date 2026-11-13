@@ -36,6 +36,7 @@ import {
 import type { SyntaxNode } from "@lezer/common";
 import { tags as t } from "@lezer/highlight";
 import { scorePreview } from "./score";
+import { straightInCode } from "./code-typing";
 import { forgetSongSheets, type SongHost, songHost, songPreview } from "./song";
 
 export type EditorMode = "live" | "source";
@@ -608,6 +609,8 @@ export function createEditor(
         enabled.of(enabledExtension(isEnabled)),
         placeholder(events.placeholderText ?? "Select a note"),
         theme,
+        // The system corrects prose (smart quotes); code keeps what was typed.
+        straightInCode(),
         EditorView.contentAttributes.of({
           spellcheck: "true",
           autocorrect: "on",
