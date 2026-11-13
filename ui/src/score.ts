@@ -913,6 +913,12 @@ async function play(
     return;
   }
   playEvenWhenSilenced();
+  // WebKit can leave a context suspended or interrupted, e.g. after the Mac
+  // slept or the sound output changed, and it then stays silent: a new one plays.
+  if (context && context.state !== "running") {
+    void context.close();
+    context = null;
+  }
   if (!context) {
     context = new AudioContext();
     lib.synth.registerAudioContext(context);
@@ -966,8 +972,10 @@ async function play(
     });
     const { duration } = await synth.prime();
     if (mine !== generation) return; // stopped or replaced while loading
-    synth.start();
+    // Where to start goes before the start: a seek while it plays stops the
+    // sounds and starts new ones, and the stopped ones would report the end.
     if (from > 0) synth.seek(from, "percent");
+    synth.start();
     current.synth = synth;
     current.duration = duration;
     current.started = context.currentTime - from * duration;
