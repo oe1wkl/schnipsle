@@ -1,7 +1,7 @@
 # Roadmap and status
 
-- Updated: 2026-11-06
-- Current milestone: **M6 – Music**
+- Updated: 2026-11-13
+- Current milestone: **M7 – Release 1.0**
 
 Each milestone ends in a usable build. Scope can move between milestones; the order should not.
 
@@ -13,7 +13,7 @@ Each milestone ends in a usable build. Scope can move between milestones; the or
 | M3 – Smart folders | Query language, saved searches | Done 2026-10-28 |
 | M4 – Import | Apple Notes (macOS 26 Markdown export), Simplenote, HTML, Markdown folders | Done 2026-11-01 |
 | M5 – Export | HTML, PDF, ODT built in; Pandoc formats on desktop (desktop first) | Done 2026-11-06 |
-| M6 – Music | ABC scores rendered and played, ChordPro song sheets rendered and transposed, both in exports | |
+| M6 – Music | ABC scores rendered and played, ChordPro song sheets rendered and transposed, both in exports | Done 2026-11-13 |
 | M7 – Release 1.0 | Export on iOS, manual, packaging and signing, performance and data-safety tests | |
 | Later | Note links, extras | |
 
@@ -30,28 +30,6 @@ Each milestone ends in a usable build. Scope can move between milestones; the or
 - Data safety: atomic, coordinated writes with conflict checks; iCloud conflict versions and same-id copies resolved without losing text; trash; history snapshots with retention and a history view to read, restore or copy versions; relative links kept working when notes move (ADR-0016).
 - Format spec at draft revision 0.8; ADR-0016 and ADR-0017 added. Tested on macOS and on the iPhone (iOS 27).
 - Moved to later milestones: loading the editor on demand (bundle ~530 kB), inline formatting inside table cells, a settings view.
-
-## M6 backlog
-
-Draft, to be agreed. Goal: music in notes as the HLD asks for 1.0: ABC scores engraved in the editor and in exports, played back for practice (F-16, F-17; ADR-0013), and ChordPro song sheets with chords over their syllables, transposed, in German or English names, lyrics only on request (F-18; ADR-0014). Both follow format.md §5.6 and §5.7; the file is never rewritten except by an explicit "Apply transposition". Order: core first (indexing, ChordPro model), editor, playback, exports, then a check with real songs on the Mac and the iPhone.
-
-To decide first:
-
-- [x] How exports get the engraved ABC (spike `docs/spikes/abc-export.md`, ADR-0033): the app's web view engraves the scores before the export with the editor's code and hands the SVGs to the export command; inline SVG in HTML and PDF, a picture in ODT, DOCX and EPUB; a block without a score stays source and is reported
-- [x] Playback (F-17, a should) is part of M6 (2026-11-06)
-
-Work:
-
-- [x] ABC indexing (format.md §5.6 rule 5; `abc.rs`, golden files in `tests/fixtures/format/5.6-index/`: a score with two voices, `#` in key, chords and comments, and a fragment without `X:`): `T:`, `C:`, `w:` and `W:` into the full-text index, the notes, other fields and `%` comments not; syllables joined into words, also over a line end, `+:` continues a field, ABC accents and HTML entities read as letters; no tags from the block; index schema 6
-- [x] ChordPro renderer in `schnipsle-core` (ADR-0014, ADR-0030; `chordpro/sheet.rs`, `chordpro/chord.rs`, golden files in `tests/fixtures/format/5.7-render/`): a sheet of the song's details and sections with each chord over its text, chord lines, comments, tabs and unknown directives; `{chorus}` repeated in the key of its place; transposition of `transpose=`, the viewer and `{transpose}` added up, spelled for the target key in English and German names; `nochords` and lyrics only; `chord_notation` as the vault default (format.md 0.15); `apply_transposition` rewrites only chords and `{key}`
-- [x] ChordPro in the editor (ADR-0031; `ui/src/song.ts`, commands in `src-tauri/src/songs.rs`): chords over syllables in the live preview, the source while the cursor is in the block; transpose control, chord names shown (read as written, ADR-0031) and lyrics only per block as view settings while the note is open; "Apply transposition" saves, stores a history snapshot and rewrites the block (§5.7 rule 5), undoable; checked in the editor playground with the golden sheets, not yet in the app
-- [x] ABC in the editor (ADR-0032; `ui/src/score.ts`): abcjs 6.7 (MIT) engraves the block in the live preview, every tune, in the text colour; the source while the cursor is in it, and a click on a note puts the cursor there; any abcjs warning keeps the block as source with the warnings listed, each a link to its place; `+:` continuations, HTML entities and `\u` escapes prepared for abcjs with every character in its place; `transpose=` and `nosource`; abcjs a chunk of its own (509 kB), loaded only when a note has music; checked in the editor playground, not yet in the app
-- [x] Playback (F-17, ADR-0035): a bar over each score with play and stop per tune, tempo in percent, transposition of score and sound, mute and solo per voice and the chord accompaniment on or off; the FluidR3 piano in the app (`ui/public/sounds/`, 2.1 MB, CC BY 3.0), so it plays offline; checked in the editor playground; not yet in the app, and not yet on the iPhone with the silent switch on
-- [x] Music in exports (ADR-0033, ADR-0034): scores engraved by the app's web view before the export (`export_scores`), inline SVG in HTML and PDF, pictures in ODT, DOCX and EPUB, a block that cannot be engraved kept as source and reported (`scoreNotEngraved`); song sheets from the core model, as in the editor in HTML, PDF and EPUB, a monospace line of chords over each line of lyrics in ODT and DOCX; the ABC source under each score as an option; golden files with a score engraved by abcjs 6.7.2 (`tests/fixtures/export/scores/`); checked with LibreOffice, Pandoc and EPUBCheck and in the export playground, not yet in the app or in Word
-- [x] Snippet menu for ABC (ADR-0013; `ui/src/snippets.ts`): Music in the bar under the note; outside a score three templates (melody with chords, two voices, choir SATB) after the paragraph, title selected; in a score the key (major, minor, modes) and metre of the tune at the cursor (the `K:` and `M:` lines; a clef stays), another voice with a clef and one bar's rest (`V:1` added where the tune had none, the voice added to `%%score`), a `w:` line, a chord symbol and another tune; one undo step each; a link to the ABC standard. Manual page `docs/manual/music.md`: scores, the menu, ABC in brief, options, playback, song sheets, search, exports. Checked in the editor playground (templates and inserted voices engrave without warnings, phone width), not yet in the app
-- [ ] Check with real songs: a choir piece with several voices, song sheets with German names, on the Mac and the iPhone (iOS 27); typing in a long score stays smooth
-
-Not in M6: chord diagrams (`{define}`) and multi-column song sheets (later extension of format.md); MusicXML, MIDI or LilyPond rendered inline (§5.6 rule 7).
 
 ## M7 backlog
 
@@ -80,6 +58,51 @@ Work:
 - [ ] Release: CHANGELOG section 1.0.0, tag, GitHub release with the DMG and notes, App Store submission
 
 Not in M7, unless decided otherwise above: Linux and Windows builds (N-05 keeps them possible), Android, note links and backlinks (F-12), the importers of F-13, fonts as a choice.
+
+## M6 results
+
+- ABC scores in the note (ADR-0013, ADR-0032): abcjs engraves every tune of an `abc` block in the live preview, shows the ABC while the cursor is in it, and lists abcjs's warnings with links to their places. A click on a note puts the cursor on it.
+- Playback for practice (F-17, ADR-0035) with a piano that comes with the app, so it plays offline: tempo, transposition, mute and solo per voice, chords on or off.
+- The Music menu writes the ABC people most often look up: three templates, key, metre, another voice, lyrics, chord symbols and another tune.
+- ChordPro song sheets (F-18; ADR-0014, ADR-0030, ADR-0031): chords over their syllables, transposed and spelled for the key, in English or German names, lyrics only on request. "Apply transposition" writes the moved chords into the note, with a snapshot in the history.
+- Search finds both: titles, composers, lyrics, and chords (`has:chord`, `chord:Am`; index schema 6).
+- Exports (ADR-0033, ADR-0034):
+  - scores as sharp drawings in HTML and PDF, as pictures in ODT, DOCX and EPUB;
+  - song sheets aligned in every format;
+  - the ABC source under each score as an option.
+- Manual page `docs/manual/music.md`.
+- The check with real songs found and fixed:
+  - the first line of staves cut off at the right, and the names of voices that share a staff;
+  - a second playback after a change of speed, and no sound on the Mac, most likely from an audio context WebKit had left suspended;
+  - the system's smart quotes breaking ABC, on the Mac and on the iPhone.
+- A score shown as ABC in the Markdown source mode is as designed: the source mode shows every block as text.
+- Not checked on their own: how smooth typing stays in a very long score, and playback with the iPhone's ring switch off.
+- Moved on:
+  - chord diagrams (`{define}`) and song sheets in several columns, which need a later extension of format.md;
+  - MusicXML, MIDI or LilyPond shown in the note (§5.6 rule 7);
+  - Word itself, which is still not checked with exports.
+
+## M6 backlog
+
+Draft, to be agreed. Goal: music in notes as the HLD asks for 1.0: ABC scores engraved in the editor and in exports, played back for practice (F-16, F-17; ADR-0013), and ChordPro song sheets with chords over their syllables, transposed, in German or English names, lyrics only on request (F-18; ADR-0014). Both follow format.md §5.6 and §5.7; the file is never rewritten except by an explicit "Apply transposition". Order: core first (indexing, ChordPro model), editor, playback, exports, then a check with real songs on the Mac and the iPhone.
+
+To decide first:
+
+- [x] How exports get the engraved ABC (spike `docs/spikes/abc-export.md`, ADR-0033): the app's web view engraves the scores before the export with the editor's code and hands the SVGs to the export command; inline SVG in HTML and PDF, a picture in ODT, DOCX and EPUB; a block without a score stays source and is reported
+- [x] Playback (F-17, a should) is part of M6 (2026-11-06)
+
+Work:
+
+- [x] ABC indexing (format.md §5.6 rule 5; `abc.rs`, golden files in `tests/fixtures/format/5.6-index/`: a score with two voices, `#` in key, chords and comments, and a fragment without `X:`): `T:`, `C:`, `w:` and `W:` into the full-text index, the notes, other fields and `%` comments not; syllables joined into words, also over a line end, `+:` continues a field, ABC accents and HTML entities read as letters; no tags from the block; index schema 6
+- [x] ChordPro renderer in `schnipsle-core` (ADR-0014, ADR-0030; `chordpro/sheet.rs`, `chordpro/chord.rs`, golden files in `tests/fixtures/format/5.7-render/`): a sheet of the song's details and sections with each chord over its text, chord lines, comments, tabs and unknown directives; `{chorus}` repeated in the key of its place; transposition of `transpose=`, the viewer and `{transpose}` added up, spelled for the target key in English and German names; `nochords` and lyrics only; `chord_notation` as the vault default (format.md 0.15); `apply_transposition` rewrites only chords and `{key}`
+- [x] ChordPro in the editor (ADR-0031; `ui/src/song.ts`, commands in `src-tauri/src/songs.rs`): chords over syllables in the live preview, the source while the cursor is in the block; transpose control, chord names shown (read as written, ADR-0031) and lyrics only per block as view settings while the note is open; "Apply transposition" saves, stores a history snapshot and rewrites the block (§5.7 rule 5), undoable; checked in the editor playground with the golden sheets, not yet in the app
+- [x] ABC in the editor (ADR-0032; `ui/src/score.ts`): abcjs 6.7 (MIT) engraves the block in the live preview, every tune, in the text colour; the source while the cursor is in it, and a click on a note puts the cursor there; any abcjs warning keeps the block as source with the warnings listed, each a link to its place; `+:` continuations, HTML entities and `\u` escapes prepared for abcjs with every character in its place; `transpose=` and `nosource`; abcjs a chunk of its own (509 kB), loaded only when a note has music; checked in the editor playground, not yet in the app
+- [x] Playback (F-17, ADR-0035): a bar over each score with play and stop per tune, tempo in percent, transposition of score and sound, mute and solo per voice and the chord accompaniment on or off; the FluidR3 piano in the app (`ui/public/sounds/`, 2.1 MB, CC BY 3.0), so it plays offline; checked in the editor playground; not yet in the app, and not yet on the iPhone with the silent switch on
+- [x] Music in exports (ADR-0033, ADR-0034): scores engraved by the app's web view before the export (`export_scores`), inline SVG in HTML and PDF, pictures in ODT, DOCX and EPUB, a block that cannot be engraved kept as source and reported (`scoreNotEngraved`); song sheets from the core model, as in the editor in HTML, PDF and EPUB, a monospace line of chords over each line of lyrics in ODT and DOCX; the ABC source under each score as an option; golden files with a score engraved by abcjs 6.7.2 (`tests/fixtures/export/scores/`); checked with LibreOffice, Pandoc and EPUBCheck and in the export playground, not yet in the app or in Word
+- [x] Snippet menu for ABC (ADR-0013; `ui/src/snippets.ts`): Music in the bar under the note; outside a score three templates (melody with chords, two voices, choir SATB) after the paragraph, title selected; in a score the key (major, minor, modes) and metre of the tune at the cursor (the `K:` and `M:` lines; a clef stays), another voice with a clef and one bar's rest (`V:1` added where the tune had none, the voice added to `%%score`), a `w:` line, a chord symbol and another tune; one undo step each; a link to the ABC standard. Manual page `docs/manual/music.md`: scores, the menu, ABC in brief, options, playback, song sheets, search, exports. Checked in the editor playground (templates and inserted voices engrave without warnings, phone width), not yet in the app
+- [x] Check with real songs: a choir piece with several voices, song sheets with German names, on the Mac and the iPhone (iOS 27); typing in a long score stays smooth. Done 2026-11-13 with a four-voice choir score and song sheets with German chord names, on the Mac (dev build) and an iPhone (release build); what it found is in the results
+
+Not in M6: chord diagrams (`{define}`) and multi-column song sheets (later extension of format.md); MusicXML, MIDI or LilyPond rendered inline (§5.6 rule 7).
 
 ## M5 results
 
