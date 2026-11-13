@@ -49,3 +49,4 @@ This folder records every significant architectural decision of the project, one
 | [0033](0033-scores-in-exports.md) | Scores in exports, engraved by the app's web view | Accepted | 2026-11-09 |
 | [0034](0034-song-sheets-in-exports.md) | Song sheets and ABC sources in exports | Accepted | 2026-11-09 |
 | [0035](0035-playing-scores.md) | Playing scores | Accepted | 2026-11-10 |
+| [0036](0036-installing-and-updating.md) | Installing and updating | Proposed | 2026-11-13 |
