@@ -6,6 +6,10 @@
 // matter, shell lines. Where the system turns a typed `"`, `'` or `--` into
 // „ “ ” ‚ ‘ ’ or —, this puts back what was typed. A typographic quote typed on
 // purpose (e.g. ⌥-key on the Mac) or pasted stays.
+//
+// The iPhone's and iPad's keyboard (Smart Punctuation) types the typographic
+// quote itself, with no sign of the straight key pressed, so there every
+// quote typed in code is made straight; one on purpose can still be pasted.
 
 import { syntaxTree } from "@codemirror/language";
 import { type ChangeSpec, EditorState, type Extension, Transaction } from "@codemirror/state";
@@ -46,16 +50,29 @@ export function inCode(state: EditorState, pos: number): boolean {
 /**
  * What was typed, if the system replaced it: a quote typed as `"` or `'` (by
  * the key pressed, or by the straight quote it replaces), or `--` made a dash.
+ * With `anyQuote`, every typographic quote counts as typed straight.
  */
-export function asTyped(inserted: string, deleted: string, key: string | null): string | null {
+export function asTyped(
+  inserted: string,
+  deleted: string,
+  key: string | null,
+  anyQuote = false,
+): string | null {
   const straight = QUOTES[inserted];
-  if (straight !== undefined) return key === straight || deleted === straight ? straight : null;
+  if (straight !== undefined) {
+    return anyQuote || key === straight || deleted === straight ? straight : null;
+  }
   if (DASHES.has(inserted) && deleted.endsWith("-")) return `${deleted}-`;
   return null;
 }
 
-/** Keeps quotes and dashes in code as they were typed. */
-export function straightInCode(): Extension {
+/** Whether text is typed on the iPhone's or iPad's keyboard (an iPad also says "Mac"). */
+const IOS =
+  /iPhone|iPad|iPod/.test(navigator.userAgent) ||
+  (/Mac/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+
+/** Keeps quotes and dashes in code as they were typed; `ios` as for the iPhone. */
+export function straightInCode(ios = IOS): Extension {
   // The key of the last keydown: the system's replacement comes with the key
   // of the straight quote, a typographic quote typed on purpose with its own.
   let lastKey: string | null = null;
@@ -68,7 +85,7 @@ export function straightInCode(): Extension {
     tr.changes.iterChanges((fromA, toA, _fromB, _toB, text) => {
       const inserted = text.toString();
       const deleted = start.sliceDoc(fromA, toA);
-      const typed = asTyped(inserted, deleted, lastKey);
+      const typed = asTyped(inserted, deleted, lastKey, ios);
       if (typed !== null && inCode(start, fromA)) {
         changes.push({ from: fromA, to: toA, insert: typed });
         fixed++;
