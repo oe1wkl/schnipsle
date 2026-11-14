@@ -3,7 +3,7 @@
 - Branch: `spike/ios-pdf`
 - Started: 2026-11-14
 - Decides: how the PDF exporter makes pages on the iPhone and iPad (M7, export on iOS; the iOS path of ADR-0022)
-- Status: **concluded 2026-11-14: the print formatter for the pages, the links put back from the exporter's HTML** (way 2 below, chosen by the owner). ADR to follow
+- Status: **concluded 2026-11-14: the print formatter for the pages, the links put back from the exporter's HTML** (way 2 below, chosen by the owner). Decided in ADR-0037
 
 ## Question
 

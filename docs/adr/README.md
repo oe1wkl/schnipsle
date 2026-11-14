@@ -50,3 +50,4 @@ This folder records every significant architectural decision of the project, one
 | [0034](0034-song-sheets-in-exports.md) | Song sheets and ABC sources in exports | Accepted | 2026-11-09 |
 | [0035](0035-playing-scores.md) | Playing scores | Accepted | 2026-11-10 |
 | [0036](0036-installing-and-updating.md) | Installing and updating | Accepted | 2026-11-13 |
+| [0037](0037-pdf-on-ios.md) | PDF on iOS, with the links put back | Proposed | 2026-11-14 |
