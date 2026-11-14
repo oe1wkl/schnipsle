@@ -1,6 +1,6 @@
 # ADR-0022: PDF through the print path on macOS
 
-- Status: Accepted; title and dates amended by [ADR-0024](0024-pdf-dates-in-the-file.md)
+- Status: Accepted; title and dates amended by [ADR-0024](0024-pdf-dates-in-the-file.md); the iOS path decided by [ADR-0037](0037-pdf-on-ios.md)
 - Date: 2026-11-02
 - Deciders: Willi Kraml
 - Related: F-06, ADR-0010, ADR-0021, [spike](../spikes/pdf-print.md)
