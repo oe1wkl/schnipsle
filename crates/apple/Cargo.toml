@@ -20,6 +20,7 @@ objc2-foundation = { version = "0.3", default-features = false, features = [
   "std",
   "block2",
   "NSArray",
+  "NSData",
   "NSDate",
   "NSDictionary",
   "NSEnumerator",
@@ -28,6 +29,7 @@ objc2-foundation = { version = "0.3", default-features = false, features = [
   "NSFilePresenter",
   "NSFileVersion",
   "NSOperation",
+  "NSRange",
   "NSRunLoop",
   "NSString",
   "NSURL",
@@ -38,6 +40,7 @@ objc2-foundation = { version = "0.3", default-features = false, features = [
 objc2-core-foundation = { version = "0.3", default-features = false, features = [
   "std",
   "CFBase",
+  "CFCGTypes",
   "CFData",
   "CFDictionary",
   "CFNumber",
@@ -68,6 +71,31 @@ objc2-web-kit = { version = "0.3", default-features = false, features = [
   "WKWebpagePreferences",
 ] }
 tempfile.workspace = true
+
+# PDF through the print formatter on iOS (spike, docs/spikes/ios-pdf.md). Already in
+# the lock file through the Tauri shell.
+[target.'cfg(target_os = "ios")'.dependencies]
+objc2-ui-kit = { version = "0.3", default-features = false, features = [
+  "std",
+  "objc2-core-foundation",
+  "block2",
+  "UIGraphics",
+  "UIGraphicsPDFRenderer",
+  "UIGraphicsRenderer",
+  "UIPrintFormatter",
+  "UIPrintPageRenderer",
+  "UIResponder",
+  "UIView",
+] }
+objc2-web-kit = { version = "0.3", default-features = false, features = [
+  "std",
+  "block2",
+  "WKNavigation",
+  "WKNavigationDelegate",
+  "WKPDFConfiguration",
+  "WKWebViewConfiguration",
+  "WKWebpagePreferences",
+] }
 
 [dev-dependencies]
 # Only for examples/engrave_spike.rs.

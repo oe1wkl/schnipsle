@@ -43,7 +43,7 @@ To decide first:
 
 Work:
 
-- [ ] PDF on iOS: a spike of `UIPrintPageRenderer` with the web view's print formatter (`docs/spikes/pdf-print.md`), then an ADR for the iOS path of ADR-0022, page numbers and table of contents included (ADR-0029)
+- [ ] PDF on iOS: a spike of `UIPrintPageRenderer` with the web view's print formatter (`docs/spikes/pdf-print.md`), then an ADR for the iOS path of ADR-0022, page numbers and table of contents included (ADR-0029). Spike done 2026-11-14 (`docs/spikes/ios-pdf.md`): the pages work; links are lost and are put back from the exporter's HTML
 - [ ] Export on iOS (F-06): HTML, PDF and ODT from the note or the notes in the list, handed to the share sheet or saved to Files; the report as on the desktop. DOCX and EPUB stay desktop only (ADR-0025)
 - [ ] History: compare two versions of a note, or a version with the note (F-14 "browse, compare, restore"; browsing and restoring exist)
 - [ ] Settings view: history retention, the Pandoc path, the update check (ADR-0036); room for the reading view later

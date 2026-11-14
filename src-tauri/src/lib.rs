@@ -10,6 +10,8 @@ mod importing;
 mod indexing;
 mod smart_folders;
 mod songs;
+#[cfg(target_os = "ios")]
+mod spike_pdf;
 mod vault_location;
 mod watching;
 
@@ -813,6 +815,11 @@ pub fn run() {
     let builder = builder
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| Ok(install_menu(app)?));
+    #[cfg(target_os = "ios")]
+    let builder = builder.setup(|app| {
+        spike_pdf::start(app.handle().clone());
+        Ok(())
+    });
     builder
         .invoke_handler(tauri::generate_handler![
             pick_vault,
