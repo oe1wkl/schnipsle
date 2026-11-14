@@ -1,6 +1,6 @@
 # ADR-0037: PDF on iOS, with the links put back
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-14
 - Deciders: Willi Kraml
 - Related: F-06, ADR-0010, ADR-0021, ADR-0022, ADR-0024, ADR-0029, [spike](../spikes/ios-pdf.md)
