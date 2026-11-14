@@ -1,6 +1,6 @@
 # ADR-0036: Installing and updating
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-13
 - Deciders: Willi Kraml
 - Related: N-02, N-05, N-07, ADR-0003, ADR-0005, ADR-0010, ADR-0019, ADR-0022, ADR-0025
