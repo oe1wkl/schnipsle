@@ -192,6 +192,8 @@ mod printing {
     use std::time::Duration;
 
     use schnipsle_apple::{PdfPage, print_pdf};
+    #[cfg(target_os = "ios")]
+    use schnipsle_export::{Anchor, Line, Place};
     use schnipsle_export::{PrintJob, Printer};
     use tauri::AppHandle;
 
@@ -221,6 +223,41 @@ mod printing {
             receiver
                 .recv_timeout(LIMIT)
                 .map_err(|_| io::Error::other("Printing the PDF did not finish"))?
+        }
+
+        /// The print path of iOS loses the links; they are found by their texts
+        /// (ADR-0037). On this thread, as `PDFKit` needs no other.
+        #[cfg(target_os = "ios")]
+        fn find_anchors(
+            &self,
+            pdf: &[u8],
+            anchors: &[Anchor],
+        ) -> Option<io::Result<Vec<Option<Place>>>> {
+            let texts: Vec<schnipsle_apple::AnchorText<'_>> = anchors
+                .iter()
+                .map(|anchor| schnipsle_apple::AnchorText {
+                    before: &anchor.before,
+                    text: &anchor.text,
+                    moves_on: anchor.moves_on(),
+                })
+                .collect();
+            let found = schnipsle_apple::find_anchors(pdf, &texts).map(|found| {
+                found
+                    .into_iter()
+                    .map(|lines| {
+                        lines.map(|lines| Place {
+                            lines: lines
+                                .into_iter()
+                                .map(|line| Line {
+                                    page: line.page,
+                                    rect: line.rect,
+                                })
+                                .collect(),
+                        })
+                    })
+                    .collect()
+            });
+            Some(found)
         }
     }
 }

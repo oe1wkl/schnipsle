@@ -8,6 +8,7 @@
 //! [`PdfExporter`] has that HTML printed, [`OdtExporter`] writes ODT, and
 //! [`PandocExporter`] has Markdown converted to DOCX and EPUB.
 
+mod anchors;
 mod document;
 mod docx_package;
 mod html;
@@ -18,6 +19,7 @@ mod output;
 mod pandoc;
 mod pdf;
 mod pdf_dates;
+mod pdf_links;
 mod pdf_pages;
 mod raw_html;
 mod songs;
@@ -27,6 +29,7 @@ use std::path::Path;
 use schnipsle_core::vault::{Result, Vault};
 use serde::{Deserialize, Serialize};
 
+pub use anchors::{Anchor, AnchorKind, Line, Place};
 pub use html::HtmlExporter;
 pub use music::{Score, ScoreBlock};
 pub use odt::OdtExporter;

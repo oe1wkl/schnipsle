@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 //! PDF export: the HTML of [`crate::html`], printed by the platform's web view
 //! (ADR-0010, ADR-0022). The printing happens behind [`Printer`], as it depends
-//! on the platform and its main thread; on macOS the app shell runs it with
-//! `schnipsle_apple::print_pdf`.
+//! on the platform and its main thread; on macOS and iOS the app shell runs it
+//! with `schnipsle_apple::print_pdf`. The print path of iOS loses the links,
+//! which are put back afterwards (ADR-0037, [`crate::pdf_links`]).
 
 use std::collections::HashMap;
 use std::fs;
@@ -11,11 +12,13 @@ use std::path::Path;
 
 use schnipsle_core::vault::{Result, Vault};
 
+use crate::anchors::{Anchor, Place};
 use crate::document::{self, Collected, Rules, Source};
 use crate::html;
 use crate::music::{Music, Output};
 use crate::output::{self, Names};
 use crate::pdf_dates;
+use crate::pdf_links;
 use crate::pdf_pages::{self, Numbering};
 use crate::{Exporter, Format, Input, Layout, Options, Paper, Report};
 
@@ -48,6 +51,19 @@ pub trait Printer {
     /// # Errors
     /// If printing fails.
     fn print(&self, job: PrintJob) -> io::Result<Vec<u8>>;
+
+    /// Where the texts of `anchors` are on the pages of `pdf`, which this
+    /// printer printed, one place or `None` per anchor in their order (ADR-0037).
+    /// A printer whose PDFs keep their links, as on macOS, returns `None`, which
+    /// is the default.
+    fn find_anchors(
+        &self,
+        pdf: &[u8],
+        anchors: &[Anchor],
+    ) -> Option<io::Result<Vec<Option<Place>>>> {
+        let _ = (pdf, anchors);
+        None
+    }
 }
 
 /// Exports notes as PDF through a [`Printer`].
@@ -62,9 +78,11 @@ impl<P: Printer> PdfExporter<P> {
         Self { printer }
     }
 
+    #[allow(clippy::too_many_arguments)] // what a print needs, as the callers have it
     fn print(
         &self,
-        html: String,
+        html: &str,
+        anchors: &[Anchor],
         title: &str,
         note: Option<&Source>,
         paper: Paper,
@@ -77,13 +95,29 @@ impl<P: Printer> PdfExporter<P> {
         };
         let date = |key| note.and_then(|note| document::date_of(note, key));
         let mut pdf = self.printer.print(PrintJob {
-            html,
+            html: text_arrows(html),
             width,
             height,
             margin: MARGIN,
             title: title.to_owned(),
         })?;
         pdf_dates::set_dates(&mut pdf, date("created"), date("modified"));
+        if let Some(places) = self.printer.find_anchors(&pdf, anchors) {
+            match places.and_then(|places| pdf_links::add_links(&pdf, anchors, &places)) {
+                Ok((linked, missed)) => {
+                    pdf = linked;
+                    if missed > 0 {
+                        let links = if missed == 1 { "link" } else { "links" };
+                        collected
+                            .warnings
+                            .push(format!("{title}: {missed} {links} could not be put back"));
+                    }
+                }
+                Err(error) => collected
+                    .warnings
+                    .push(format!("{title}: links could not be added: {error}")),
+            }
+        }
         if !footer && !contents {
             return Ok(pdf);
         }
@@ -121,7 +155,8 @@ impl<P: Printer> PdfExporter<P> {
             document::has_contents(options, notes),
         );
         let pdf = self.print(
-            one.page,
+            &one.page,
+            &one.anchors,
             &one.title,
             one.note,
             options.paper,
@@ -168,10 +203,11 @@ impl<P: Printer> PdfExporter<P> {
         };
         let mut names = Names::new(to);
         for note in notes {
-            let page = html::page_of_note(note, &rules, collected)?;
+            let (page, anchors) = html::page_of_note(note, &rules, collected)?;
             let numbers = (options.page_numbers, false);
             let pdf = self.print(
-                page,
+                &page,
+                &anchors,
                 &note.title,
                 Some(note),
                 options.paper,
@@ -185,6 +221,13 @@ impl<P: Printer> PdfExporter<P> {
         collected.numbered.append(&mut names.numbered);
         Ok(())
     }
+}
+
+/// The page with the arrow of a footnote's link back in its text form, as iOS
+/// draws it as a picture otherwise, which cannot be found to put the link back
+/// (ADR-0037).
+fn text_arrows(html: &str) -> String {
+    html.replace("\">↩", "\">↩\u{fe0e}")
 }
 
 impl<P: Printer> Exporter for PdfExporter<P> {

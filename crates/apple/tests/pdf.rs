@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 //! The real print path (ADR-0022), read back with `PDFKit`: pages, paper size, title,
-//! links, and with the exporter the dates of a note (ADR-0024). Not in the test
-//! harness, as it needs the main thread.
+//! links, and with the exporter the dates of a note (ADR-0024). The links of iOS
+//! put back (ADR-0037) are checked here against those `WebKit` makes on macOS. Not
+//! in the test harness, as it needs the main thread.
 
 // The blocks here hold only plain getters on valid objects, one after the other.
 #![allow(clippy::multiple_unsafe_ops_per_block)]
@@ -24,11 +25,12 @@ mod macos {
         PDFDisplayBox, PDFDocument, PDFDocumentCreationDateAttribute,
         PDFDocumentModificationDateAttribute, PDFDocumentTitleAttribute,
     };
-    use schnipsle_apple::{PdfPage, print_pdf};
+    use schnipsle_apple::{AnchorText, PdfPage, find_anchors, print_pdf};
     use schnipsle_core::dates::parse_rfc3339;
     use schnipsle_core::vault::Vault;
     use schnipsle_export::{
-        Exporter as _, Input, Layout, Options, Paper, PdfExporter, PrintJob, Printer,
+        Anchor, Exporter as _, Input, Layout, Line, Options, Paper, PdfExporter, Place, PrintJob,
+        Printer, Report,
     };
 
     const HTML: &str = r##"<!doctype html><html><head><meta charset="utf-8"><style>
@@ -115,20 +117,119 @@ mod macos {
 
     type Request = (PrintJob, mpsc::Sender<io::Result<Vec<u8>>>);
 
-    /// Hands the job to the main thread, as the app shell does.
-    struct MainThreadPrinter(mpsc::Sender<Request>);
+    /// A link annotation: its page, its rectangle, and whether it goes to a web address.
+    type Link = (usize, [f64; 4], bool);
+
+    /// Hands the job to the main thread, as the app shell does. With `ios`, it
+    /// takes the links out of the PDF, as the print path of iOS leaves none, and
+    /// keeps them to compare, then finds the anchors as iOS does.
+    struct MainThreadPrinter {
+        requests: mpsc::Sender<Request>,
+        ios: Option<mpsc::Sender<Vec<Link>>>,
+    }
 
     impl Printer for MainThreadPrinter {
         fn print(&self, job: PrintJob) -> io::Result<Vec<u8>> {
             let (sender, receiver) = mpsc::channel();
-            self.0.send((job, sender)).unwrap();
-            receiver.recv().unwrap()
+            self.requests.send((job, sender)).unwrap();
+            let pdf = receiver.recv().unwrap()?;
+            let Some(links) = &self.ios else {
+                return Ok(pdf);
+            };
+            let (without, taken) = without_links(&pdf);
+            links.send(taken).unwrap();
+            Ok(without)
+        }
+
+        fn find_anchors(
+            &self,
+            pdf: &[u8],
+            anchors: &[Anchor],
+        ) -> Option<io::Result<Vec<Option<Place>>>> {
+            self.ios.as_ref()?;
+            let texts: Vec<AnchorText<'_>> = anchors
+                .iter()
+                .map(|anchor| AnchorText {
+                    before: &anchor.before,
+                    text: &anchor.text,
+                    moves_on: anchor.moves_on(),
+                })
+                .collect();
+            Some(find_anchors(pdf, &texts).map(|found| {
+                found
+                    .into_iter()
+                    .map(|lines| {
+                        lines.map(|lines| Place {
+                            lines: lines
+                                .into_iter()
+                                .map(|line| Line {
+                                    page: line.page,
+                                    rect: line.rect,
+                                })
+                                .collect(),
+                        })
+                    })
+                    .collect()
+            }))
+        }
+    }
+
+    /// The link annotations of `pdf`.
+    fn links_of(document: &PDFDocument) -> Vec<Link> {
+        let mut links = Vec::new();
+        // SAFETY: plain getters on a valid document.
+        unsafe {
+            for index in 0..document.pageCount() {
+                let page = document.pageAtIndex(index).unwrap();
+                for annotation in page.annotations() {
+                    if annotation.r#type().is_some_and(|t| t.to_string() == "Link") {
+                        let b = annotation.bounds();
+                        let web = annotation.URL().is_some()
+                            || annotation
+                                .action()
+                                .is_some_and(|a| a.r#type().to_string() == "URI");
+                        let rect = [
+                            b.origin.x,
+                            b.origin.y,
+                            b.origin.x + b.size.width,
+                            b.origin.y + b.size.height,
+                        ];
+                        links.push((index, rect, web));
+                    }
+                }
+            }
+        }
+        links
+    }
+
+    /// `pdf` without its links, and the links.
+    fn without_links(pdf: &[u8]) -> (Vec<u8>, Vec<Link>) {
+        let document = document(pdf);
+        let links = links_of(&document);
+        // SAFETY: plain calls on a valid document and its own annotations.
+        unsafe {
+            for index in 0..document.pageCount() {
+                let page = document.pageAtIndex(index).unwrap();
+                for annotation in page.annotations() {
+                    page.removeAnnotation(&annotation);
+                }
+            }
+            (document.dataRepresentation().unwrap().to_vec(), links)
         }
     }
 
     /// Exports `notes` of the sample vault on a thread and prints here, with a
     /// table of contents and page numbers if `contents`.
     fn export(notes: &[&str], contents: bool) -> Vec<u8> {
+        export_with(notes, contents, None).0
+    }
+
+    /// As [`export`], as on iOS with `ios`; also the report.
+    fn export_with(
+        notes: &[&str],
+        contents: bool,
+        ios: Option<mpsc::Sender<Vec<Link>>>,
+    ) -> (Vec<u8>, Report) {
         let vault =
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/export/vault");
         let input = Input {
@@ -141,6 +242,7 @@ mod macos {
         let target = to.clone();
         let (requests, jobs) = mpsc::channel();
         let exporting = thread::spawn(move || {
+            let printer = MainThreadPrinter { requests, ios };
             let options = Options {
                 layout: Layout::SingleFile,
                 keep_tag_line: false,
@@ -149,9 +251,9 @@ mod macos {
                 contents,
                 page_numbers: contents,
             };
-            PdfExporter::new(MainThreadPrinter(requests))
+            PdfExporter::new(printer)
                 .export(&Vault::open(vault).unwrap(), &input, &options, &target)
-                .unwrap();
+                .unwrap()
         });
         let start = Instant::now();
         while !exporting.is_finished() {
@@ -168,8 +270,8 @@ mod macos {
             }
             run_loop_for_a_moment();
         }
-        exporting.join().unwrap();
-        std::fs::read(&to).unwrap()
+        let report = exporting.join().unwrap();
+        (std::fs::read(&to).unwrap(), report)
     }
 
     /// The dates of the note reach the file on every macOS, whatever `PDFKit` does.
@@ -270,6 +372,54 @@ mod macos {
         }
     }
 
+    fn overlap(a: [f64; 4], b: [f64; 4]) -> bool {
+        a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3]
+    }
+
+    /// The links taken out of the printed samples come back where `WebKit` had
+    /// them, and the table of contents gets its page numbers (ADR-0037).
+    fn links_put_back_as_on_ios() {
+        let (sender, taken) = mpsc::channel();
+        let (bytes, report) = export_with(&SAMPLES, true, Some(sender));
+        if let Some(keep) = std::env::var_os("SCHNIPSLE_PDF_KEEP") {
+            std::fs::write(PathBuf::from(keep).join("ios-links.pdf"), &bytes).unwrap();
+        }
+        assert!(report.warnings.is_empty(), "{:?}", report.warnings);
+        let original = taken.recv().unwrap();
+        let document = document(&bytes);
+        let back = links_of(&document);
+        // WebKit's own: every entry of the contents ends with a link of one space,
+        // which has no text to find.
+        let ends = 6;
+        assert!(
+            back.len() + ends >= original.len(),
+            "{} links back of {}",
+            back.len(),
+            original.len()
+        );
+        for link in &back {
+            assert!(
+                original
+                    .iter()
+                    .any(|o| o.0 == link.0 && o.2 == link.2 && overlap(o.1, link.1)),
+                "{link:?} is not where WebKit had a link"
+            );
+        }
+        // SAFETY: plain getters on a valid document.
+        let contents = unsafe {
+            document
+                .pageAtIndex(0)
+                .unwrap()
+                .string()
+                .unwrap()
+                .to_string()
+        };
+        let words: Vec<&str> = contents.split_whitespace().collect();
+        for page in 2..=7 {
+            assert!(words.contains(&page.to_string().as_str()), "{contents}");
+        }
+    }
+
     pub fn main() {
         let mtm = MainThreadMarker::new().expect("main thread");
         let app = NSApplication::sharedApplication(mtm);
@@ -280,7 +430,8 @@ mod macos {
         a_note_keeps_its_dates();
         the_samples_start_a_page_per_note();
         contents_and_page_numbers();
-        println!("pdf: 5 checks passed");
+        links_put_back_as_on_ios();
+        println!("pdf: 6 checks passed");
     }
 }
 

@@ -16,6 +16,7 @@ use schnipsle_core::names::slug;
 use schnipsle_core::tags::parse_options;
 use schnipsle_core::vault::{Result, Vault, VaultError};
 
+use crate::anchors::{self, Anchor};
 use crate::document::{self, Collected, Rules, Source};
 use crate::music::{Music, Output};
 use crate::output::{self, Names};
@@ -148,6 +149,8 @@ pub(crate) struct OnePage<'n> {
     /// The note it holds, if only one: a document of several has no dates of its own.
     pub note: Option<&'n Source>,
     pub page: String,
+    /// Its links and their targets, for a printer that loses links (ADR-0037).
+    pub anchors: Vec<Anchor>,
 }
 
 /// One page of all `notes`, with an anchor per note.
@@ -170,15 +173,26 @@ pub(crate) fn one_page<'n>(
     );
     let contents = document::has_contents(options, notes);
     let mut body = String::new();
+    let mut found = Vec::new();
     if contents {
         body.push_str(&contents_of(notes, &anchors));
+        found.extend(notes.iter().zip(&anchors).map(|(note, anchor)| {
+            anchors::contents_entry(&note.title, &document::href_of(anchor))
+        }));
     }
     for (note, anchor) in notes.iter().zip(&anchors) {
-        body.push_str(&section(note, anchor, &rules, collected)?);
+        let (html, mut more) = section(note, anchor, &rules, collected)?;
+        body.push_str(&html);
+        found.append(&mut more);
     }
     let (title, note) = document::title_of_one_document(notes, input);
     let page = page(&title, note, &body, contents);
-    Ok(OnePage { title, note, page })
+    Ok(OnePage {
+        title,
+        note,
+        page,
+        anchors: found,
+    })
 }
 
 /// A document per note, linking to each other.
@@ -215,22 +229,22 @@ fn file_per_note(
         music: Music::of(&input.scores, Output::Html, options.abc_source),
     };
     for (note, name) in notes.iter().zip(files) {
-        let page = page_of_note(note, &rules, collected)?;
+        let (page, _) = page_of_note(note, &rules, collected)?;
         output::write_new(&to.join(&name), page.as_bytes())?;
         report.files.push(name);
     }
     Ok(())
 }
 
-/// The page of `note` alone.
+/// The page of `note` alone, and its links and their targets.
 pub(crate) fn page_of_note(
     note: &Source,
     rules: &Rules<'_>,
     collected: &mut Collected,
-) -> Result<String> {
+) -> Result<(String, Vec<Anchor>)> {
     let anchor = format!("note-{}", slug(&note.title));
-    let body = section(note, &anchor, rules, collected)?;
-    Ok(page(&note.title, Some(note), &body, false))
+    let (body, anchors) = section(note, &anchor, rules, collected)?;
+    Ok((page(&note.title, Some(note), &body, false), anchors))
 }
 
 /// The table of contents: the title of each note, linking to it. A second link
@@ -250,19 +264,19 @@ fn contents_of(notes: &[Source], anchors: &[String]) -> String {
     out
 }
 
-/// The HTML of `note`.
+/// The HTML of `note`, and its links and their targets.
 fn section(
     note: &Source,
     anchor: &str,
     rules: &Rules<'_>,
     collected: &mut Collected,
-) -> Result<String> {
+) -> Result<(String, Vec<Anchor>)> {
     let arena = Arena::new();
     let root = document::prepare(&arena, note, anchor, rules, collected);
     let mut out = format!("<section id=\"{}\">\n", escape(anchor));
     render(root, &mut out)?;
     out.push_str("</section>\n");
-    Ok(out)
+    Ok((out, anchors::of_section(root, anchor)))
 }
 
 fn render<'a>(root: &'a AstNode<'a>, out: &mut String) -> Result<()> {

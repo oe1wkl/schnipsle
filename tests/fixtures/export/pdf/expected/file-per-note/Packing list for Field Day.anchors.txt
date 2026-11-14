@@ -1,0 +1,3 @@
+target note-packing-list-for-field-day
+  before: 
+  text: Packing list for Field

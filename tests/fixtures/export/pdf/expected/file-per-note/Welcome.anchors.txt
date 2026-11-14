@@ -1,0 +1,24 @@
+target note-welcome
+  before: 
+  text: Welcome
+link https://github.com/oe1wkl/schnipsle
+  before: page on the web:
+  text: Schnipsle
+link mailto:club@example.org
+  before: An address:
+  text: write to the club
+link http://www.example.org
+  before: A bare one:
+  text: www.example.org
+link https://example.org/qrp
+  before: bare one: www.example.org and
+  text: https://example.org/qrp
+link #fn-note-welcome-1 (id fnref-note-welcome-1)
+  before: A footnote.
+  text: 1
+target fn-note-welcome-1
+  before: 
+  text: Footnotes go to the
+link #fnref-note-welcome-1
+  before: end of the note.
+  text: ↩

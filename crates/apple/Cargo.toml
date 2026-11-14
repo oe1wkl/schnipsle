@@ -47,6 +47,15 @@ objc2-core-foundation = { version = "0.3", default-features = false, features = 
   "CFString",
 ] }
 
+# Finding the texts of links on printed pages (ADR-0037). Already in the lock
+# file through the Tauri shell.
+objc2-pdf-kit = { version = "0.3", default-features = false, features = [
+  "std",
+  "PDFDocument",
+  "PDFPage",
+  "PDFSelection",
+] }
+
 # PDF through the print path (ADR-0022).
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2-app-kit = { version = "0.3", default-features = false, features = [
