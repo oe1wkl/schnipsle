@@ -160,7 +160,7 @@ pub async fn export_notes(
     })
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "ios"))]
 fn export_pdf(
     app: &AppHandle,
     vault: &schnipsle_core::vault::Vault,
@@ -172,7 +172,7 @@ fn export_pdf(
     Ok(exporter.export(vault, input, &options, to)?)
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(target_os = "macos", target_os = "ios")))]
 fn export_pdf(
     _app: &AppHandle,
     _vault: &schnipsle_core::vault::Vault,
@@ -185,7 +185,7 @@ fn export_pdf(
     ))
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "ios"))]
 mod printing {
     use std::io;
     use std::sync::mpsc;

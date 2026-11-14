@@ -37,13 +37,13 @@ Decisions made on 2026-11-13 (below). Goal: a 1.0 people can install and trust o
 
 To decide first:
 
-- [x] Ways to install: the Mac by Developer ID, notarized, from GitHub, with Tauri's updater; the iPhone by the App Store and TestFlight; no Mac App Store build (ADR-0036, proposed)
+- [x] Ways to install: the Mac by Developer ID, notarized, from GitHub, with Tauri's updater; the iPhone by the App Store and TestFlight; no Mac App Store build (ADR-0036)
 - [x] Language: English only in 1.0, with the strings in one place ready for German (N-06)
 - [x] Joining 1.0: a settings view, and renaming and merging tags (F-11). Import on the iPhone waits
 
 Work:
 
-- [ ] PDF on iOS: a spike of `UIPrintPageRenderer` with the web view's print formatter (`docs/spikes/pdf-print.md`), then an ADR for the iOS path of ADR-0022, page numbers and table of contents included (ADR-0029)
+- [ ] PDF on iOS: a spike of `UIPrintPageRenderer` with the web view's print formatter (`docs/spikes/pdf-print.md`), then an ADR for the iOS path of ADR-0022, page numbers and table of contents included (ADR-0029). Spike done 2026-11-14 (`docs/spikes/ios-pdf.md`): the pages work; links are lost and are put back from the exporter's HTML
 - [ ] Export on iOS (F-06): HTML, PDF and ODT from the note or the notes in the list, handed to the share sheet or saved to Files; the report as on the desktop. DOCX and EPUB stay desktop only (ADR-0025)
 - [ ] History: compare two versions of a note, or a version with the note (F-14 "browse, compare, restore"; browsing and restoring exist)
 - [ ] Settings view: history retention, the Pandoc path, the update check (ADR-0036); room for the reading view later
