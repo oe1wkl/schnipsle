@@ -18,11 +18,12 @@ iOS has no `NSPrintOperation`, which makes the pages on macOS (`docs/spikes/pdf-
     - `UIGraphicsBeginPDFContextToData`;
     - `UIGraphicsPDFRenderer`;
     - `WKWebView.createPDF` of the whole page, for comparison.
-  - `objc2-web-kit` binds `WKWebView` on macOS only, so the module declares the four methods it needs itself, as wry does.
-- `src-tauri/src/spike_pdf.rs`: runs on an iPhone when the app is started with `SCHNIPSLE_SPIKE_PDF` set (`xcrun devicectl device process launch --environment-variables`).
-  - It copies the invented export samples (`tests/fixtures/export/vault`) into a temporary vault.
-  - It prints the golden page `pdf/expected/one-document/all.html` and a stress page, and exports the samples through `PdfExporter` as the dialog would.
-  - It writes everything to `Documents/spike-pdf/` in the app's container, which `xcrun devicectl device copy from --domain-type appDataContainer` copies to the Mac.
+  - `objc2-web-kit` binds `WKWebView` on macOS only, so the module declares the methods it needs itself, as wry does.
+  - Only the first way stays in the code; the other two are in commit `a2b71c6`.
+- `src-tauri/src/spike_pdf.rs`, removed after the spike and kept in commit `a2b71c6`: ran on an iPhone when the app is started with `SCHNIPSLE_SPIKE_PDF` set (`xcrun devicectl device process launch --environment-variables`).
+  - It copied the invented export samples (`tests/fixtures/export/vault`) into a temporary vault.
+  - It printed the golden page `pdf/expected/one-document/all.html` and a stress page, and exported the samples through `PdfExporter` as the dialog would.
+  - It wrote everything to `Documents/spike-pdf/` in the app's container, which `xcrun devicectl device copy from --domain-type appDataContainer` copies to the Mac.
 - The export command now prints on iOS too, through the same `MainThreadPrinter` as on macOS.
 
 Tested on an iPhone 18 Pro with iOS 27, release build; the PDFs were read with PDFKit on the Mac and looked at as page images.

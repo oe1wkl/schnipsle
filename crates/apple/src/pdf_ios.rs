@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-//! PDF pages from an HTML page on iOS (spike, `docs/spikes/ios-pdf.md`).
+//! PDF pages from an HTML page on iOS (`docs/spikes/ios-pdf.md`).
 //!
 //! iOS has no `NSPrintOperation`. [`print_pdf`] loads the page into a web view
 //! that is never shown, with JavaScript off, and draws the pages of its print
@@ -14,33 +14,20 @@ use block2::RcBlock;
 use objc2::rc::{Allocated, Retained};
 use objc2::runtime::{AnyObject, NSObjectProtocol, ProtocolObject};
 use objc2::{
-    AnyThread as _, DefinedClass, MainThreadMarker, MainThreadOnly, Message as _, define_class,
-    extern_class, extern_methods, msg_send,
+    AnyThread as _, DefinedClass, MainThreadMarker, MainThreadOnly, define_class, extern_class,
+    extern_methods, msg_send,
 };
 use objc2_core_foundation::{CGPoint, CGRect, CGSize};
 use objc2_foundation::{
-    NSData, NSDictionary, NSError, NSMutableData, NSObject, NSRange, NSRunLoop, NSString, NSURL,
+    NSDictionary, NSError, NSMutableData, NSObject, NSRange, NSRunLoop, NSString, NSURL,
 };
 use objc2_ui_kit::{
     UIGraphicsBeginPDFContextToData, UIGraphicsBeginPDFPage, UIGraphicsEndPDFContext,
-    UIGraphicsGetPDFContextBounds, UIGraphicsPDFRenderer, UIGraphicsPDFRendererContext,
-    UIGraphicsPDFRendererFormat, UIPrintPageRenderer, UIResponder, UIView,
+    UIGraphicsGetPDFContextBounds, UIPrintPageRenderer, UIResponder, UIView,
 };
 use objc2_web_kit::{
-    WKNavigation, WKNavigationDelegate, WKPDFConfiguration, WKWebViewConfiguration,
-    WKWebpagePreferences,
+    WKNavigation, WKNavigationDelegate, WKWebViewConfiguration, WKWebpagePreferences,
 };
-
-/// How the spike draws the pages.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Method {
-    /// `UIPrintPageRenderer` into `UIGraphicsBeginPDFContextToData`.
-    Context,
-    /// `UIPrintPageRenderer` into `UIGraphicsPDFRenderer`.
-    Renderer,
-    /// `WKWebView.createPDF` of the whole page.
-    CreatePdf,
-}
 
 /// A page to print. Lengths are in points, 1/72 of an inch.
 #[derive(Debug, Clone, PartialEq)]
@@ -90,14 +77,6 @@ impl WebView {
             html: &NSString,
             base: Option<&NSURL>,
         ) -> Option<Retained<WKNavigation>>;
-
-        #[unsafe(method(createPDFWithConfiguration:completionHandler:))]
-        #[unsafe(method_family = none)]
-        fn create_pdf(
-            &self,
-            configuration: Option<&WKPDFConfiguration>,
-            handler: &block2::DynBlock<dyn Fn(*mut NSData, *mut NSError)>,
-        );
     );
 }
 
@@ -141,7 +120,6 @@ type Done = Box<dyn FnOnce(io::Result<Vec<u8>>)>;
 
 struct State {
     page: PdfPage,
-    method: Method,
     done: Cell<Option<Done>>,
     web_view: OnceCell<Retained<WebView>>,
     /// The job itself, as nothing else holds on to it until it has finished.
@@ -160,10 +138,6 @@ define_class!(
     unsafe impl WKNavigationDelegate for PrintJob {
         #[unsafe(method(webView:didFinishNavigation:))]
         fn did_finish(&self, _web_view: &AnyObject, _navigation: Option<&AnyObject>) {
-            if self.ivars().method == Method::CreatePdf {
-                self.create_pdf();
-                return;
-            }
             let result = self.print();
             self.finish(result);
         }
@@ -248,31 +222,6 @@ impl PrintJob {
         if pages <= 0 {
             return Err(failed("the page has no pages to print"));
         }
-        if state.method == Method::Renderer {
-            let format = UIGraphicsPDFRendererFormat::new();
-            let pdf = UIGraphicsPDFRenderer::initWithBounds_format(
-                UIGraphicsPDFRenderer::alloc(),
-                paper,
-                &format,
-            );
-            #[allow(clippy::cast_sign_loss)] // checked above
-            let range = NSRange::new(0, pages as usize);
-            let actions = RcBlock::new(
-                move |context: std::ptr::NonNull<UIGraphicsPDFRendererContext>| {
-                    // SAFETY: the renderer passes a valid context for the time of the call.
-                    let context = unsafe { context.as_ref() };
-                    renderer.prepareForDrawingPages(range);
-                    let bounds = context.pdfContextBounds();
-                    for index in 0..pages {
-                        context.beginPage();
-                        renderer.drawPageAtIndex_inRect(index, bounds);
-                    }
-                },
-            );
-            // SAFETY: a valid block, called before the method returns.
-            let data = unsafe { pdf.PDFDataWithActions(RcBlock::as_ptr(&actions)) };
-            return Ok(data.to_vec());
-        }
         let data = NSMutableData::new();
         let title = NSString::from_str(&page.title);
         let key = NSString::from_str("Title");
@@ -299,28 +248,6 @@ impl PrintJob {
         }
     }
 
-    /// `createPDF` of the whole page, reported when it is done.
-    fn create_pdf(&self) {
-        let Some(web_view) = self.ivars().web_view.get() else {
-            return;
-        };
-        // SAFETY: a plain new configuration; its rect is null, the whole page.
-        let configuration = unsafe { WKPDFConfiguration::new(self.mtm()) };
-        let this = self.retain();
-        let handler = RcBlock::new(move |data: *mut NSData, error: *mut NSError| {
-            // SAFETY: WebKit passes a valid object or null.
-            let data = unsafe { data.as_ref() };
-            // SAFETY: as above.
-            let error = unsafe { error.as_ref() };
-            this.finish(match (data, error) {
-                (Some(data), _) => Ok(data.to_vec()),
-                (None, Some(error)) => Err(failed(&error.localizedDescription().to_string())),
-                (None, None) => Err(failed("createPDF gave nothing")),
-            });
-        });
-        web_view.create_pdf(Some(&configuration), &handler);
-    }
-
     /// Reports `result`, the first time. Called from the web view's callbacks,
     /// so the job goes only after the callback has returned.
     fn finish(&self, result: io::Result<Vec<u8>>) {
@@ -340,15 +267,6 @@ impl PrintJob {
 /// Shows nothing and returns at once. Call on the main thread, with its run loop
 /// running; on another thread `done` gets an error right away.
 pub fn print_pdf(page: PdfPage, done: impl FnOnce(io::Result<Vec<u8>>) + 'static) {
-    print_pdf_with(page, Method::Context, done);
-}
-
-/// [`print_pdf`] by `method` (spike).
-pub fn print_pdf_with(
-    page: PdfPage,
-    method: Method,
-    done: impl FnOnce(io::Result<Vec<u8>>) + 'static,
-) {
     let Some(mtm) = MainThreadMarker::new() else {
         done(Err(failed("it was not started on the main thread")));
         return;
@@ -357,7 +275,6 @@ pub fn print_pdf_with(
         mtm,
         State {
             page,
-            method,
             done: Cell::new(Some(Box::new(done))),
             web_view: OnceCell::new(),
             keep: Cell::new(None),

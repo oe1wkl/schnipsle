@@ -186,7 +186,7 @@ fn export_pdf(
 }
 
 #[cfg(any(target_os = "macos", target_os = "ios"))]
-pub(crate) mod printing {
+mod printing {
     use std::io;
     use std::sync::mpsc;
     use std::time::Duration;

@@ -34,7 +34,7 @@ pub use coordinator::FileCoordinator;
 #[cfg(target_os = "macos")]
 pub use pdf::{PdfPage, print_pdf};
 #[cfg(target_os = "ios")]
-pub use pdf_ios::{Method, PdfPage, print_pdf, print_pdf_with};
+pub use pdf_ios::{PdfPage, print_pdf};
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 pub use picture::{ConvertedPicture, convert_picture, is_turned};
 #[cfg(any(target_os = "macos", target_os = "ios"))]
