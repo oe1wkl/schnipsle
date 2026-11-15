@@ -6,14 +6,15 @@
 
 use std::cell::RefCell;
 use std::collections::BTreeMap;
+use std::fmt::Write as _;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
 use schnipsle_core::vault::Vault;
 use schnipsle_export::{
-    Exporter, Format, Input, Layout, Options, Paper, PdfExporter, PrintJob, Printer, ProblemKind,
-    Report, Score,
+    Anchor, AnchorKind, Exporter, Format, Input, Layout, Line, Options, Paper, PdfExporter, Place,
+    PrintJob, Printer, ProblemKind, Report, Score,
 };
 
 const NOTES: [&str; 6] = [
@@ -28,6 +29,7 @@ const NOTES: [&str; 6] = [
 #[derive(Default)]
 struct FakePrinter {
     jobs: RefCell<Vec<PrintJob>>,
+    anchors: RefCell<Vec<Vec<Anchor>>>,
 }
 
 impl Printer for &FakePrinter {
@@ -35,6 +37,81 @@ impl Printer for &FakePrinter {
         self.jobs.borrow_mut().push(job);
         Ok(b"%PDF-fake".to_vec())
     }
+
+    /// Keeps what it is asked to find, and finds nothing, as on macOS.
+    fn find_anchors(
+        &self,
+        _pdf: &[u8],
+        anchors: &[Anchor],
+    ) -> Option<io::Result<Vec<Option<Place>>>> {
+        self.anchors.borrow_mut().push(anchors.to_vec());
+        None
+    }
+}
+
+/// Prints empty pages without links, as iOS prints, and finds every anchor but
+/// those with `missing` in their text: each on a line of its own on the first page.
+struct LinklessPrinter {
+    missing: &'static str,
+}
+
+impl Printer for LinklessPrinter {
+    fn print(&self, _job: PrintJob) -> io::Result<Vec<u8>> {
+        Ok(empty_pages(3))
+    }
+
+    fn find_anchors(
+        &self,
+        _pdf: &[u8],
+        anchors: &[Anchor],
+    ) -> Option<io::Result<Vec<Option<Place>>>> {
+        let places = anchors
+            .iter()
+            .enumerate()
+            .map(|(index, anchor)| {
+                #[allow(clippy::cast_precision_loss)]
+                let top = 800.0 - 14.0 * index as f64;
+                (!anchor.text.contains(self.missing)).then(|| Place {
+                    lines: vec![Line {
+                        page: 0,
+                        rect: [60.0, top - 12.0, 300.0, top],
+                    }],
+                })
+            })
+            .collect();
+        Some(Ok(places))
+    }
+}
+
+/// A PDF of `count` empty A4 pages.
+fn empty_pages(count: usize) -> Vec<u8> {
+    use lopdf::{Document, Object, dictionary};
+    let mut document = Document::with_version("1.4");
+    let tree = document.new_object_id();
+    let kids: Vec<Object> = (0..count)
+        .map(|_| {
+            document
+                .add_object(dictionary! {
+                    "Type" => "Page",
+                    "Parent" => tree,
+                    "MediaBox" => vec![0.into(), 0.into(), 595.into(), 842.into()],
+                })
+                .into()
+        })
+        .collect();
+    document.objects.insert(
+        tree,
+        Object::Dictionary(dictionary! {
+            "Type" => "Pages",
+            "Kids" => kids,
+            "Count" => i64::try_from(count).unwrap(),
+        }),
+    );
+    let catalog = document.add_object(dictionary! { "Type" => "Catalog", "Pages" => tree });
+    document.trailer.set("Root", catalog);
+    let mut out = Vec::new();
+    document.save_to(&mut out).unwrap();
+    out
 }
 
 /// Prints what a Mac prints: a file with an Info dictionary holding the time of printing.
@@ -99,14 +176,29 @@ fn pretty(report: &Report) -> Vec<u8> {
     json
 }
 
-/// The golden form of a job: its page, and the rest in a small text file.
-fn add_job(actual: &mut BTreeMap<String, Vec<u8>>, name: &str, job: &PrintJob) {
+/// The golden form of a job: its page, the rest in a small text file, and
+/// the anchors a printer that loses links is asked to find (ADR-0037).
+fn add_job(actual: &mut BTreeMap<String, Vec<u8>>, name: &str, job: &PrintJob, anchors: &[Anchor]) {
     actual.insert(format!("{name}.html"), job.html.clone().into_bytes());
     let text = format!(
         "title: {}\npaper: {:.0} x {:.0}\nmargin: {:.0}\n",
         job.title, job.width, job.height, job.margin
     );
     actual.insert(format!("{name}.job.txt"), text.into_bytes());
+    let mut text = String::new();
+    for anchor in anchors {
+        let what = match &anchor.kind {
+            AnchorKind::Link { href, id: None } => format!("link {href}"),
+            AnchorKind::Link { href, id: Some(id) } => format!("link {href} (id {id})"),
+            AnchorKind::Target { id } => format!("target {id}"),
+        };
+        let _ = write!(
+            text,
+            "{what}\n  before: {}\n  text: {}\n",
+            anchor.before, anchor.text
+        );
+    }
+    actual.insert(format!("{name}.anchors.txt"), text.into_bytes());
 }
 
 #[test]
@@ -130,7 +222,12 @@ fn golden_files() {
     assert_eq!(report.files, ["all.pdf"]);
     let jobs = printer.jobs.borrow();
     assert_eq!(jobs.len(), 1);
-    add_job(&mut actual, "one-document/all", &jobs[0]);
+    add_job(
+        &mut actual,
+        "one-document/all",
+        &jobs[0],
+        &printer.anchors.borrow()[0],
+    );
     actual.insert("one-document/report.json".to_owned(), pretty(&report));
 
     let printer = FakePrinter::default();
@@ -140,11 +237,12 @@ fn golden_files() {
         .export(&vault, &all_notes(), &options(Layout::FilePerNote), &to)
         .unwrap();
     let jobs = printer.jobs.borrow();
+    let anchors = printer.anchors.borrow();
     assert_eq!(report.files.len(), 6);
-    for (name, job) in report.files.iter().zip(jobs.iter()) {
+    for ((name, job), anchors) in report.files.iter().zip(jobs.iter()).zip(anchors.iter()) {
         assert_eq!(fs::read(to.join(name)).unwrap(), b"%PDF-fake");
         let stem = Path::new(name).file_stem().unwrap().to_string_lossy();
-        add_job(&mut actual, &format!("file-per-note/{stem}"), job);
+        add_job(&mut actual, &format!("file-per-note/{stem}"), job, anchors);
     }
     actual.insert("file-per-note/report.json".to_owned(), pretty(&report));
 
@@ -323,4 +421,44 @@ fn a_failed_print_writes_nothing_and_keeps_what_is_there() {
     );
     assert!(result.is_err());
     assert_eq!(fs::read(&to).unwrap(), b"mine");
+}
+
+/// The links of a printer that loses them are put back, and the contents
+/// entries get their page numbers from them (ADR-0037, ADR-0029).
+#[test]
+fn links_lost_in_printing_are_put_back() {
+    let dir = tempfile::tempdir().unwrap();
+    let to = dir.path().join("all.pdf");
+    let options = Options {
+        contents: true,
+        page_numbers: true,
+        ..options(Layout::SingleFile)
+    };
+    let report = PdfExporter::new(LinklessPrinter { missing: "\u{1f}" })
+        .export(&vault(), &all_notes(), &options, &to)
+        .unwrap();
+    assert!(report.warnings.is_empty(), "{:?}", report.warnings);
+    let document = lopdf::Document::load_mem(&fs::read(&to).unwrap()).unwrap();
+    let first = document.get_pages()[&1];
+    let links = document.get_page_annotations(first).unwrap();
+    // Six contents entries, five web links, a footnote and its link back, two
+    // links between notes.
+    assert_eq!(links.len(), 15, "{links:?}");
+    let web = links.iter().filter(|link| link.get(b"A").is_ok()).count();
+    assert_eq!(web, 5);
+}
+
+#[test]
+fn links_not_found_are_counted_in_the_report() {
+    let dir = tempfile::tempdir().unwrap();
+    let to = dir.path().join("welcome.pdf");
+    let input = Input {
+        notes: vec!["welcome.md".to_owned()],
+        name: None,
+        scores: Vec::new(),
+    };
+    let report = PdfExporter::new(LinklessPrinter { missing: "club" })
+        .export(&vault(), &input, &options(Layout::SingleFile), &to)
+        .unwrap();
+    assert_eq!(report.warnings, ["Welcome: 1 link could not be put back"]);
 }

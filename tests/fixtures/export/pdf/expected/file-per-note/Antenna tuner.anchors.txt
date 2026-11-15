@@ -1,0 +1,6 @@
+target note-antenna-tuner
+  before: 
+  text: Antenna tuner
+link https://example.org/images/tuner.jpg
+  before: 
+  text: A picture on the web

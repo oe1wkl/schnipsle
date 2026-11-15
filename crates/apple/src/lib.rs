@@ -6,7 +6,8 @@
 //! iCloud Drive and other apps (format.md §10). [`VaultPresenter`] is an
 //! `NSFilePresenter` on the vault folder that reports changes made elsewhere, and
 //! [`ICloudVersions`] lists and resolves iCloud conflict versions (ADR-0006).
-//! On macOS, [`print_pdf`] turns an HTML page into a PDF with real pages (ADR-0022).
+//! [`print_pdf`] turns an HTML page into a PDF with real pages (ADR-0022), and
+//! [`find_anchors`] finds the texts of the links that printing on iOS loses (ADR-0037).
 //! [`convert_picture`] turns a picture many programs cannot show into one they can
 //! (ADR-0027), and [`is_turned`] tells one that only its orientation turns upright
 //! (ADR-0028).
@@ -15,6 +16,8 @@
 //! a `// SAFETY:` comment, and the public API is safe. On other platforms the
 //! crate is empty.
 
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+mod anchors;
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 mod coordinator;
 
@@ -29,6 +32,8 @@ mod presenter;
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 mod versions;
 
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+pub use anchors::{AnchorText, FoundLine, find_anchors};
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 pub use coordinator::FileCoordinator;
 #[cfg(target_os = "macos")]

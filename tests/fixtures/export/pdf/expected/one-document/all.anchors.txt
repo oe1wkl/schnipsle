@@ -1,0 +1,48 @@
+target note-welcome
+  before: 
+  text: Welcome
+link https://github.com/oe1wkl/schnipsle
+  before: page on the web:
+  text: Schnipsle
+link mailto:club@example.org
+  before: An address:
+  text: write to the club
+link http://www.example.org
+  before: A bare one:
+  text: www.example.org
+link https://example.org/qrp
+  before: bare one: www.example.org and
+  text: https://example.org/qrp
+link #fn-note-welcome-1 (id fnref-note-welcome-1)
+  before: A footnote.
+  text: 1
+target fn-note-welcome-1
+  before: 
+  text: Footnotes go to the
+link #fnref-note-welcome-1
+  before: end of the note.
+  text: ↩
+target note-packing-list-for-field-day
+  before: 
+  text: Packing list for Field
+target note-antenna-tuner
+  before: 
+  text: Antenna tuner
+link https://example.org/images/tuner.jpg
+  before: 
+  text: A picture on the web
+link #note-welcome
+  before: See the
+  text: welcome note
+link #note-packing-list-for-field-day
+  before: the welcome note, the
+  text: Packing list for Field Day
+target note-bread-rolls
+  before: 
+  text: Bread rolls
+target note-abendlied
+  before: 
+  text: Abendlied
+target note-raw-html
+  before: 
+  text: Raw HTML
