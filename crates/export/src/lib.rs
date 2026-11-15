@@ -33,7 +33,7 @@ pub use anchors::{Anchor, AnchorKind, Line, Place};
 pub use html::HtmlExporter;
 pub use music::{Score, ScoreBlock};
 pub use odt::OdtExporter;
-pub use output::{check_target, suggested_file_name};
+pub use output::{check_target, share_target, suggested_file_name};
 pub use pandoc::{ConversionJob, Converted, Converter, JobPicture, Pandoc, PandocExporter};
 pub use pdf::{PdfExporter, PrintJob, Printer};
 

@@ -9,13 +9,13 @@
 use std::collections::HashSet;
 use std::fs;
 use std::io;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use schnipsle_core::vault::{Result, TempFile, Vault, VaultError};
 use unicode_normalization::UnicodeNormalization;
 
-use crate::Format;
 use crate::document::DEFAULT_TITLE;
+use crate::{Format, Layout};
 
 /// Longest file name stem in bytes; file systems allow 255, and `-n.html` must fit.
 const MAX_STEM: usize = 200;
@@ -50,6 +50,33 @@ pub(crate) fn file_stem(title: &str) -> String {
 pub fn suggested_file_name(title: Option<&str>, format: Format) -> String {
     let stem = file_stem(title.unwrap_or(DEFAULT_TITLE));
     format!("{stem}.{}", format.extension())
+}
+
+/// Where an export to be shared goes, on iOS, where it is handed to the share
+/// sheet rather than written to a place the user picked: in `base`, a folder of
+/// the app's own, emptied of the exports shared before. The file or folder is
+/// named as the save dialog would suggest, so it keeps that name wherever it is
+/// shared to.
+///
+/// # Errors
+/// If `base` cannot be emptied or made.
+pub fn share_target(
+    base: &Path,
+    title: Option<&str>,
+    format: Format,
+    layout: Layout,
+) -> io::Result<PathBuf> {
+    match fs::remove_dir_all(base) {
+        Err(e) if e.kind() != io::ErrorKind::NotFound => return Err(e),
+        _ => {}
+    }
+    fs::create_dir_all(base)?;
+    let name = if layout == Layout::SingleFile {
+        suggested_file_name(title, format)
+    } else {
+        file_stem(title.unwrap_or(DEFAULT_TITLE))
+    };
+    Ok(base.join(name))
 }
 
 /// Refuses an export into the vault itself: its copies would sync to every
@@ -147,6 +174,21 @@ pub(crate) fn copy_new(target: &Path, bytes: &[u8]) -> io::Result<bool> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_shared_export_goes_into_an_emptied_folder() {
+        let dir = tempfile::tempdir().unwrap();
+        let base = dir.path().join("exports");
+        fs::create_dir_all(base.join("old")).unwrap();
+        fs::write(base.join("old/earlier.pdf"), b"x").unwrap();
+        let to = share_target(&base, Some("Field Day"), Format::Pdf, Layout::SingleFile).unwrap();
+        assert_eq!(to, base.join("Field Day.pdf"));
+        assert!(base.is_dir());
+        assert!(!base.join("old").exists(), "earlier exports are gone");
+        let to = share_target(&base, None, Format::Html, Layout::FilePerNote).unwrap();
+        assert_eq!(to.parent(), Some(base.as_path()));
+        assert!(!to.exists(), "the export makes its folder itself");
+    }
 
     #[test]
     fn suggested_names_come_from_the_title() {
