@@ -7,7 +7,7 @@ All notable changes to this project are documented here. The format follows [Kee
 ### Added
 
 - Repository foundation: Cargo workspace (`schnipsle-core`, `-import`, `-export`, Tauri 2 shell), TypeScript UI, CI, dependency licence checks, macOS bootstrap script.
-- Architecture decision records ADR-0001 to ADR-0035.
+- Architecture decision records ADR-0001 to ADR-0037.
 - Vault format specification, draft revision 0.15 (notes, front matter, tags, links, attachments, music in ABC, song sheets in ChordPro, history, trash, smart folders, imported notes and the import log).
 - Hashtag extraction in `schnipsle-core` following format.md §5.3, with the specification examples as tests.
 - Vault access in `schnipsle-core`: list notes (with iCloud placeholders), read, atomic write with conflict detection, create (spike, see docs/spikes/ios-vault.md).
@@ -63,6 +63,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - Apple Notes import: reads the Markdown export together with `apple-notes-metadata.json`, so notes keep their dates and land in their real Notes folders with a matching tag. Notes' line-end spaces are removed where they change nothing, stray line separators dropped, and PDFs linked instead of shown as images. The report lists files without a matching note, locked notes, and notes the export left out because another note in the folder has the same title.
 - `scripts/apple-notes-metadata.js` prepares an Apple Notes import (ADR-0019): run with `osascript -l JavaScript`, it writes `apple-notes-metadata.json` with each note's ID, folder and dates into the folder of a Markdown export, which leaves these out. It only reads Notes.
 - Pinning: the Pin button next to History pins the open note, and pinned notes are listed first in the note list, tag folders and search results (marked 📌). It sets `pinned: true` in the front matter (format.md §4); unpinning removes the key. Nothing else in the note changes, not even `modified`, so pinning does not count as an edit.
+- Export on the iPhone and iPad: an Export button in the open note's bar, and one above the note list for the notes it shows, open the export dialog of the Mac, with HTML, PDF and ODT. The export is written into the app's own folder, the report shows what is different from the notes, and Share… hands the file or folder to the share sheet, to save it in Files, send it or print it. PDFs made on iOS get their pages, links, table of contents and page numbers as on the Mac (ADR-0037).
 - Test UI: open a vault folder, edit notes with autosave, reload external changes, resolve conflicts (spike).
 
 ### Changed

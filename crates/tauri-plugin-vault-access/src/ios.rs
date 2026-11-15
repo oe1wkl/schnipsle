@@ -27,6 +27,11 @@ struct PathResponse {
     path: Option<String>,
 }
 
+#[derive(Deserialize)]
+struct ShareResponse {
+    completed: bool,
+}
+
 #[derive(Serialize)]
 struct PathArgs<'a> {
     path: &'a str,
@@ -51,6 +56,17 @@ impl<R: Runtime> VaultAccess<R> {
     ) -> Result<Option<PathBuf>, tauri::plugin::mobile::PluginInvokeError> {
         let response: PathResponse = self.0.run_mobile_plugin("restoreFolder", ())?;
         Ok(response.path.map(PathBuf::from))
+    }
+
+    /// Shows the share sheet for the file or folder at `path`, and waits until
+    /// it closes. `Ok(true)` if something was done with it, `Ok(false)` if the
+    /// user closed the sheet.
+    ///
+    /// # Errors
+    /// If the sheet cannot be shown or the chosen action failed.
+    pub fn share(&self, path: &str) -> Result<bool, tauri::plugin::mobile::PluginInvokeError> {
+        let response: ShareResponse = self.0.run_mobile_plugin("share", PathArgs { path })?;
+        Ok(response.completed)
     }
 
     /// Starts downloading an iCloud file that is only a placeholder on this device.

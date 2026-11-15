@@ -31,6 +31,9 @@ export const ui = {
   addImage: el("add-image") as HTMLButtonElement,
   addMusic: el("add-music") as HTMLButtonElement,
   showHistory: el("show-history") as HTMLButtonElement,
+  /** Export, on iOS, which has no File menu. */
+  exportNote: el("export-note") as HTMLButtonElement,
+  exportList: el("export-list") as HTMLButtonElement,
   history: el("history"),
   historyHint: el("history-hint"),
   historyRestore: el("history-restore") as HTMLButtonElement,

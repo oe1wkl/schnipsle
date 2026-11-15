@@ -511,6 +511,7 @@ function closeEditor(): void {
   trashShown = null;
   closeHistory();
   ui.showHistory.disabled = true;
+  ui.exportNote.disabled = true;
   window.clearTimeout(snapshotTimer);
   changedSinceSnapshot = false;
   current = null;
@@ -601,6 +602,7 @@ function load(content: NoteContent): void {
   trashShown = null;
   closeHistory();
   ui.showHistory.disabled = false;
+  ui.exportNote.disabled = false;
   window.clearTimeout(snapshotTimer);
   changedSinceSnapshot = false;
   images.forget();
@@ -1298,6 +1300,15 @@ const exporter = createExport({
     void openNote({ path, title, modifiedMs: 0, available: true, pinned: false });
   },
 });
+
+// On iOS, with no File menu, Export has buttons: in the note's bar for the note,
+// above the list for the notes it shows.
+void invoke<boolean>("exports_are_shared").then((shared) => {
+  ui.exportNote.hidden = !shared;
+  ui.exportList.hidden = !shared;
+});
+ui.exportNote.addEventListener("click", () => void exporter.open("note"));
+ui.exportList.addEventListener("click", () => void exporter.open("list"));
 
 // File menu (desktop): same actions as the buttons, plus Import…, Imports… and Export….
 void listen<string>("menu", (event) => {

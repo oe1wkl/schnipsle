@@ -2,6 +2,10 @@
 //! Exporting notes (ADR-0010, ADR-0021) for File › Export…: where to, the
 //! export, and showing the result. A PDF is printed on the main thread, which
 //! the export waits for (ADR-0022), so this runs only from an `async` command.
+//!
+//! On iOS there is no save dialog: an export goes into a folder of the app's
+//! own and is then handed to the share sheet, from which it can be saved to
+//! Files, sent or printed.
 
 use std::path::Path;
 
@@ -22,12 +26,20 @@ pub struct ExportChoices {
     pandoc: Option<String>,
 }
 
+/// Whether an export is shared afterwards ([`share_export`]) rather than
+/// written to a place picked first, and so started by buttons of its own
+/// rather than from the File menu: on iOS.
+#[tauri::command]
+pub async fn exports_are_shared() -> bool {
+    cfg!(mobile)
+}
+
 /// The formats this computer can write. Looks for Pandoc each time, so one
 /// installed meanwhile counts.
 #[tauri::command]
 pub async fn export_choices() -> ExportChoices {
     let mut formats = vec![Format::Html];
-    if cfg!(target_os = "macos") {
+    if cfg!(any(target_os = "macos", target_os = "ios")) {
         formats.push(Format::Pdf);
     }
     formats.push(Format::Odt);
@@ -48,7 +60,9 @@ fn find_pandoc() -> Option<Pandoc> {
 }
 
 /// Asks where the export goes: a file for one document, which the save dialog
-/// asks about replacing, otherwise a folder. `None` if the user cancelled.
+/// asks about replacing, otherwise a folder. `None` if the user cancelled. On
+/// iOS nothing is asked: the place is in the app's own temporary folder, for
+/// [`share_export`] afterwards.
 #[tauri::command]
 pub async fn pick_export(
     app: AppHandle,
@@ -82,9 +96,30 @@ pub async fn pick_export(
     }
     #[cfg(mobile)]
     {
-        let _ = (app, format, layout, title);
+        let _ = app;
+        let base = std::env::temp_dir().join("exports");
+        let to = schnipsle_export::share_target(&base, title.as_deref(), format, layout)
+            .map_err(crate::CommandError::other)?;
+        Ok(Some(to.display().to_string()))
+    }
+}
+
+/// Shows the share sheet for an export made on iOS, and waits until it closes.
+/// Whether something was done with it.
+#[tauri::command]
+pub async fn share_export(app: AppHandle, path: String) -> CmdResult<bool> {
+    #[cfg(target_os = "ios")]
+    {
+        use tauri_plugin_vault_access::VaultAccessExt as _;
+        app.vault_access()
+            .share(&path)
+            .map_err(crate::CommandError::other)
+    }
+    #[cfg(not(target_os = "ios"))]
+    {
+        let _ = (app, path);
         Err(crate::CommandError::other(
-            "Export is available in Schnipsle on the Mac",
+            "Sharing an export is only on the iPhone and iPad",
         ))
     }
 }

@@ -564,6 +564,9 @@ button.danger {
   gap: 8px;
 }
 .import-choose select {
+  /* Narrower than its longest choice on a phone, rather than past the dialog's edge. */
+  min-width: 0;
+  max-width: 100%;
   font: inherit;
   padding: 4px 8px;
   border: 1px solid var(--line);
