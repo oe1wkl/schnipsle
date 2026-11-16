@@ -6,7 +6,7 @@
 // no note readable, `?numbered` for files with names already taken, `?warnings`
 // for what a converter said, `?nopandoc` without Pandoc, `?unsaved` for an open note with unsaved changes, `?nonote`
 // with no note open, `?noscores` for notes without music, `?ios` as on iOS, where
-// the export is shared afterwards. The scores engraved
+// the export is shared afterwards; Share… shares at once as on macOS. The scores engraved
 // for the export are kept in `window.engravedScores`.
 import scoreAbc from "../../../tests/fixtures/format/5.6-index/score.abc?raw";
 import type { EngravedScore } from "../score";
@@ -43,25 +43,27 @@ async function answer(cmd: string, args?: Record<string, unknown>): Promise<unkn
   switch (cmd) {
     case "export_choices":
       return params.has("nopandoc")
-        ? { formats: ["html", "pdf", "odt"], pandoc: null }
-        : { formats: ["html", "pdf", "odt", "docx", "epub"], pandoc: "3.12.1" };
+        ? { formats: ["html", "pdf", "odt"], pandoc: null, share: true }
+        : { formats: ["html", "pdf", "odt", "docx", "epub"], pandoc: "3.12.1", share: true };
     case "exports_are_shared":
       return params.has("ios");
     case "share_export":
       await wait(300);
       document.title = `Would share ${String(args?.path)}`;
       return true;
-    case "pick_export":
+    case "pick_export": {
       await wait(300);
-      if (params.has("ios")) {
-        const name = typeof args?.title === "string" ? args.title : "Notes";
-        return args?.layout === "singleFile"
-          ? `/private/var/mobile/tmp/exports/${name}.${String(args.format)}`
-          : `/private/var/mobile/tmp/exports/${name}`;
+      const name = typeof args?.title === "string" ? args.title : "Notes";
+      const extension = args?.layout === "zip" ? "zip" : String(args?.format);
+      const shared = params.has("ios") || args?.share === true;
+      let base = "/Users/you/Documents";
+      if (params.has("ios")) base = "/private/var/mobile/tmp/exports";
+      else if (shared) base = "/Users/you/Library/Caches/cc.kraml.schnipsle/exports";
+      if (args?.layout === "singleFile" || args?.layout === "zip") {
+        return `${base}/${name}.${extension}`;
       }
-      return args?.layout === "singleFile"
-        ? `/Users/you/Documents/${typeof args.title === "string" ? args.title : "Notes"}.${String(args.format)}`
-        : "/Users/you/Documents/Export";
+      return shared ? `${base}/${name}` : `${base}/Export`;
+    }
     case "export_scores":
       return params.has("noscores") ? [] : SCORES;
     case "export_notes": {

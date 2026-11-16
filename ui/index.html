@@ -321,6 +321,10 @@
               />
               <span id="export-many-label"></span>
             </label>
+            <label>
+              <input id="export-layout-zip" type="radio" name="export-layout" value="zip" />
+              <span id="export-zip-label"></span>
+            </label>
           </fieldset>
           <label id="export-paper-row">
             Page size
@@ -368,6 +372,7 @@
         <p id="export-error" class="folder-error" role="alert" hidden></p>
         <div class="folder-buttons">
           <span class="spacer"></span>
+          <button id="export-share" type="button" hidden>Share…</button>
           <button id="export-reveal" type="button" hidden></button>
           <button id="export-cancel" type="button">Cancel</button>
           <button id="export-start" type="button">Export…</button>

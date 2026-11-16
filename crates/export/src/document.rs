@@ -85,7 +85,12 @@ pub(crate) struct Rules<'r> {
 /// Whether one document of `notes` starts with a table of contents: asked for,
 /// and more than one note (ADR-0029).
 pub(crate) fn has_contents(options: Options, notes: &[Source]) -> bool {
-    options.contents && notes.len() > 1 && options.layout != crate::Layout::FilePerNote
+    options.contents
+        && notes.len() > 1
+        && !matches!(
+            options.layout,
+            crate::Layout::FilePerNote | crate::Layout::Zip
+        )
 }
 
 /// Whether the pages of a format with pages are numbered: asked for, and always

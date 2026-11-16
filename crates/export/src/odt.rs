@@ -50,7 +50,7 @@ impl Exporter for OdtExporter {
         }
         let mut collected = Collected::default();
         match options.layout {
-            Layout::FilePerNote => {
+            Layout::FilePerNote | Layout::Zip => {
                 file_per_note(
                     vault,
                     &notes,
