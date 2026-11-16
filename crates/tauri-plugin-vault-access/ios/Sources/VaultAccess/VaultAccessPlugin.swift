@@ -100,6 +100,36 @@ class VaultAccessPlugin: Plugin {
     }
   }
 
+  /// Hands an exported file or folder to the share sheet, from which it can be
+  /// saved to Files, sent or printed. Resolves `{ completed }` once the sheet
+  /// has closed: whether something was done with it.
+  @objc public func share(_ invoke: Invoke) throws {
+    let args = try invoke.parseArgs(PathArgs.self)
+    let url = URL(fileURLWithPath: args.path)
+    DispatchQueue.main.async {
+      guard let presenter = self.manager.viewController else {
+        invoke.reject("No view controller to present the share sheet")
+        return
+      }
+      let sheet = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+      sheet.completionWithItemsHandler = { _, completed, _, error in
+        if let error = error {
+          invoke.reject("Sharing failed: \(error.localizedDescription)")
+        } else {
+          invoke.resolve(["completed": completed])
+        }
+      }
+      // On the iPad the sheet is a popover, which needs a place to point at.
+      if let popover = sheet.popoverPresentationController {
+        popover.sourceView = presenter.view
+        popover.sourceRect = CGRect(
+          x: presenter.view.bounds.midX, y: presenter.view.bounds.midY, width: 0, height: 0)
+        popover.permittedArrowDirections = []
+      }
+      presenter.present(sheet, animated: true, completion: nil)
+    }
+  }
+
   /// Asks iCloud to download a file that exists here only as a placeholder.
   @objc public func download(_ invoke: Invoke) throws {
     let args = try invoke.parseArgs(PathArgs.self)

@@ -8,7 +8,9 @@
 //!
 //! - [`VaultAccess::pick_folder`]: show the picker, start access, store a bookmark;
 //! - [`VaultAccess::restore_folder`]: re-open the stored folder after a restart;
-//! - [`VaultAccess::download`]: ask iCloud to download a note that is only a placeholder.
+//! - [`VaultAccess::download`]: ask iCloud to download a note that is only a placeholder;
+//! - [`VaultAccess::share`]: hand an exported file to the share sheet, as an
+//!   export on iOS has no save dialog.
 //!
 //! On other platforms the plugin does nothing; desktop apps use the dialog plugin.
 //! All methods block until iOS answers, so call them from async commands, never

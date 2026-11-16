@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
-// Export (ADR-0010, ADR-0021), desktop only: File › Export… asks for the open
-// note or the notes in the list, the format (Word and EPUB if Pandoc is there),
-// one document or one file per note, the page size and whether to keep the line
-// of tags; then a save dialog or folder picker. The report says what is different in the export, each note
-// openable from it, and the result can be shown in Finder.
+// Export (ADR-0010, ADR-0021): File › Export… on the desktop, the Export buttons
+// on iOS, asks for the open note or the notes in the list, the format (Word and
+// EPUB if Pandoc is there), one document or one file per note, the page size and
+// whether to keep the line of tags. On the desktop a save dialog or folder picker
+// comes next, and the result can be shown in Finder; on iOS the export goes into
+// a folder of the app's own and is shared from the report, to Files, Mail, AirDrop
+// or a printer. The report says what is different in the export, each note
+// openable from it.
 import { invoke } from "@tauri-apps/api/core";
 
 import { asError, el } from "./dom";
@@ -140,10 +143,17 @@ function numberedSentence(names: string[]): string {
     : `${String(names.length)} files got a number, as their names were already taken: ${shown}${rest}.`;
 }
 
-export function createExport(hooks: ExportHooks): { open(): Promise<void> } {
+/** What the dialog starts with: the open note, or the notes in the list. */
+export type ExportStart = "note" | "list";
+
+export function createExport(hooks: ExportHooks): {
+  open(start?: ExportStart): Promise<void>;
+} {
   let selection: ExportSelection = { note: null, list: null };
-  /** Where the last export went, for "Show in Finder". */
+  /** Where the last export went, for "Show in Finder" or "Share…". */
   let target: string | null = null;
+  /** On iOS: the export is shared afterwards, not written to a place picked first. */
+  let shared = false;
   /** Picking or writing: the dialog cannot be closed. */
   let busy = false;
   /** Page numbers as the user chose them; a table of contents turns them on. */
@@ -260,14 +270,15 @@ export function createExport(hooks: ExportHooks): { open(): Promise<void> } {
     showError(null);
   }
 
-  async function open(): Promise<void> {
+  async function open(start: ExportStart = "note"): Promise<void> {
     // Another dialog is open, or this one.
     if (document.querySelector("dialog[open]")) return;
     showForm();
     target = null;
     selection = { note: null, list: null };
     busy = false;
-    whatNote.checked = true;
+    whatNote.checked = start === "note";
+    whatList.checked = start === "list";
     if (!hooks.vaultOpen()) {
       update();
       showError("Open a vault first: the notes are exported from it.");
@@ -275,11 +286,15 @@ export function createExport(hooks: ExportHooks): { open(): Promise<void> } {
       return;
     }
     try {
-      const [{ formats, pandoc }, selected] = await Promise.all([
+      const [{ formats, pandoc }, sharedHere, selected] = await Promise.all([
         invoke<ExportChoices>("export_choices"),
+        invoke<boolean>("exports_are_shared"),
         hooks.selection(),
       ]);
       selection = selected;
+      shared = sharedHere;
+      // Pandoc is for the desktop only (ADR-0025), so its absence is no news here.
+      startButton.textContent = shared ? "Export" : "Export…";
       const settings = loadSettings();
       formatSelect.replaceChildren(
         ...formats.map((value) => {
@@ -292,7 +307,7 @@ export function createExport(hooks: ExportHooks): { open(): Promise<void> } {
           return option;
         }),
       );
-      noPandoc.hidden = pandoc !== null;
+      noPandoc.hidden = pandoc !== null || shared;
       if (settings.format && formats.includes(settings.format)) {
         formatSelect.value = settings.format;
       }
@@ -388,9 +403,16 @@ export function createExport(hooks: ExportHooks): { open(): Promise<void> } {
     cancelButton.textContent = "Close";
     report.hidden = false;
     const written = result.files.length;
+    const name = to.split("/").pop() ?? to;
     if (written === 0) {
       target = null;
       summary.textContent = "Nothing was exported.";
+    } else if (shared) {
+      // The place is the app's own; what counts is the name it is shared under.
+      summary.textContent =
+        chosenLayout === "singleFile"
+          ? `Exported “${name}”. Share it to save it in Files, send it or print it.`
+          : `Exported ${plural(written, "file", "files")} into the folder “${name}”. Share it to save it in Files or send it.`;
     } else if (chosenLayout === "singleFile") {
       summary.textContent = `Exported to ${to}.`;
     } else {
@@ -413,9 +435,11 @@ export function createExport(hooks: ExportHooks): { open(): Promise<void> } {
     problemsTable.hidden = count === 0;
     problems.replaceChildren(...result.problems.map(problemRow));
     revealButton.hidden = target === null;
-    revealButton.textContent = /Mac/.test(navigator.userAgent)
-      ? "Show in Finder"
-      : "Show in folder";
+    if (shared) revealButton.textContent = "Share…";
+    else
+      revealButton.textContent = /Mac/.test(navigator.userAgent)
+        ? "Show in Finder"
+        : "Show in folder";
   }
 
   function problemRow(problem: ExportProblem): HTMLTableRowElement {
@@ -441,9 +465,16 @@ export function createExport(hooks: ExportHooks): { open(): Promise<void> } {
     if (target === null) return;
     showError(null);
     try {
-      await invoke("reveal_export", { path: target });
+      if (shared) {
+        revealButton.disabled = true;
+        await invoke<boolean>("share_export", { path: target });
+      } else {
+        await invoke("reveal_export", { path: target });
+      }
     } catch (e) {
       showError(asError(e).message);
+    } finally {
+      revealButton.disabled = false;
     }
   }
 

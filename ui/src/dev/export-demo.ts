@@ -5,7 +5,8 @@
 // problems, `?failed` for one that stops with an error, `?nothing` for one with
 // no note readable, `?numbered` for files with names already taken, `?warnings`
 // for what a converter said, `?nopandoc` without Pandoc, `?unsaved` for an open note with unsaved changes, `?nonote`
-// with no note open, `?noscores` for notes without music. The scores engraved
+// with no note open, `?noscores` for notes without music, `?ios` as on iOS, where
+// the export is shared afterwards. The scores engraved
 // for the export are kept in `window.engravedScores`.
 import scoreAbc from "../../../tests/fixtures/format/5.6-index/score.abc?raw";
 import type { EngravedScore } from "../score";
@@ -44,8 +45,20 @@ async function answer(cmd: string, args?: Record<string, unknown>): Promise<unkn
       return params.has("nopandoc")
         ? { formats: ["html", "pdf", "odt"], pandoc: null }
         : { formats: ["html", "pdf", "odt", "docx", "epub"], pandoc: "3.12.1" };
+    case "exports_are_shared":
+      return params.has("ios");
+    case "share_export":
+      await wait(300);
+      document.title = `Would share ${String(args?.path)}`;
+      return true;
     case "pick_export":
       await wait(300);
+      if (params.has("ios")) {
+        const name = typeof args?.title === "string" ? args.title : "Notes";
+        return args?.layout === "singleFile"
+          ? `/private/var/mobile/tmp/exports/${name}.${String(args.format)}`
+          : `/private/var/mobile/tmp/exports/${name}`;
+      }
       return args?.layout === "singleFile"
         ? `/Users/you/Documents/${typeof args.title === "string" ? args.title : "Notes"}.${String(args.format)}`
         : "/Users/you/Documents/Export";
