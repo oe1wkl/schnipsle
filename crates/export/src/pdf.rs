@@ -243,7 +243,7 @@ impl<P: Printer> Exporter for PdfExporter<P> {
         }
         let mut collected = Collected::default();
         match options.layout {
-            Layout::FilePerNote => {
+            Layout::FilePerNote | Layout::Zip => {
                 self.file_per_note(
                     vault,
                     &notes,

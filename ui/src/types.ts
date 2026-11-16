@@ -211,9 +211,11 @@ export interface ExportChoices {
   formats: ExportFormat[];
   /** The version of the Pandoc found, if any. */
   pandoc: string | null;
+  /** An export can be shared afterwards (`share_export`): macOS and iOS. */
+  share: boolean;
 }
 /** Where the notes go (schnipsle-export `Layout`). */
-export type ExportLayout = "singleFile" | "folder" | "filePerNote";
+export type ExportLayout = "singleFile" | "folder" | "filePerNote" | "zip";
 /** The paper of a format with pages (schnipsle-export `Paper`). */
 export type ExportPaper = "a4" | "letter";
 /** What happened to a link, picture or note (schnipsle-export `ProblemKind`). */

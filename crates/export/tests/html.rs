@@ -154,6 +154,57 @@ fn golden_files() {
     check(&actual);
 }
 
+/// A zip archive holds what a folder export of one file per note writes, under
+/// a folder named as the archive, and replaces what was there.
+#[test]
+fn a_zip_archive_holds_the_folder_export() {
+    let vault = vault();
+    let dir = tempfile::tempdir().unwrap();
+    let folder = dir.path().join("folder");
+    let unpacked = schnipsle_export::export_to(
+        &HtmlExporter,
+        &vault,
+        &all_notes(),
+        &options(Layout::FilePerNote),
+        &folder,
+    )
+    .unwrap();
+    let mut expected = BTreeMap::new();
+    files(&folder, "Samples/", &mut expected);
+
+    let to = dir.path().join("Samples.zip");
+    fs::write(&to, "an older file").unwrap();
+    let report = schnipsle_export::export_to(
+        &HtmlExporter,
+        &vault,
+        &all_notes(),
+        &options(Layout::Zip),
+        &to,
+    )
+    .unwrap();
+    assert_eq!(report, unpacked);
+    let mut archive = zip::ZipArchive::new(fs::File::open(&to).unwrap()).unwrap();
+    let mut packed = BTreeMap::new();
+    for index in 0..archive.len() {
+        let mut entry = archive.by_index(index).unwrap();
+        let mut bytes = Vec::new();
+        std::io::Read::read_to_end(&mut entry, &mut bytes).unwrap();
+        packed.insert(entry.name().unwrap().into_owned(), bytes);
+    }
+    assert_eq!(packed, expected);
+
+    // Nothing to export: nothing is written.
+    let none = dir.path().join("None.zip");
+    let input = Input {
+        notes: vec!["not-there.md".to_owned()],
+        name: None,
+        scores: Vec::new(),
+    };
+    schnipsle_export::export_to(&HtmlExporter, &vault, &input, &options(Layout::Zip), &none)
+        .unwrap();
+    assert!(!none.exists());
+}
+
 fn check(actual: &BTreeMap<String, Vec<u8>>) {
     let expected_dir = fixtures().join("html/expected");
     if std::env::var_os("SCHNIPSLE_BLESS").is_some() {
