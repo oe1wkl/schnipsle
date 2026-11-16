@@ -23,6 +23,7 @@ mod pdf_links;
 mod pdf_pages;
 mod raw_html;
 mod songs;
+mod zipped;
 
 use std::path::Path;
 
@@ -33,7 +34,7 @@ pub use anchors::{Anchor, AnchorKind, Line, Place};
 pub use html::HtmlExporter;
 pub use music::{Score, ScoreBlock};
 pub use odt::OdtExporter;
-pub use output::{check_target, share_target, suggested_file_name};
+pub use output::{check_target, share_target, suggested_archive_name, suggested_file_name};
 pub use pandoc::{ConversionJob, Converted, Converter, JobPicture, Pandoc, PandocExporter};
 pub use pdf::{PdfExporter, PrintJob, Printer};
 
@@ -114,6 +115,10 @@ pub enum Layout {
     /// One document per note in the folder `to`, named after its note's title,
     /// with copies of the attachments they link to.
     FilePerNote,
+    /// As [`Layout::FilePerNote`], packed into the zip archive `to` by
+    /// [`export_to`]; an [`Exporter`] given it writes the folder. Replaces what
+    /// is there: the save dialog has asked.
+    Zip,
 }
 
 /// The paper of a format with pages.
@@ -216,6 +221,26 @@ pub trait Exporter {
     /// # Errors
     /// I/O errors while writing; files written before stay.
     fn export(&self, vault: &Vault, input: &Input, options: &Options, to: &Path) -> Result<Report>;
+}
+
+/// Exports `input` with `exporter` to `to`, a file, a folder or a zip archive
+/// as [`Layout`] says.
+///
+/// # Errors
+/// I/O errors while writing; files written before stay, but a zip archive is
+/// written whole or not at all.
+pub fn export_to(
+    exporter: &dyn Exporter,
+    vault: &Vault,
+    input: &Input,
+    options: &Options,
+    to: &Path,
+) -> Result<Report> {
+    if options.layout == Layout::Zip {
+        zipped::export(exporter, vault, input, *options, to)
+    } else {
+        exporter.export(vault, input, options, to)
+    }
 }
 
 #[cfg(test)]

@@ -5,13 +5,14 @@
 //!
 //! On iOS there is no save dialog: an export goes into a folder of the app's
 //! own and is then handed to the share sheet, from which it can be saved to
-//! Files, sent or printed.
+//! Files, sent or printed. On macOS Share… does the same, with the share menu.
+//! Several notes can also go into a zip archive, one file per note.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use schnipsle_export::{
-    Exporter as _, Format, HtmlExporter, Input, Layout, OdtExporter, Options, Pandoc,
-    PandocExporter, Report, ScoreBlock,
+    Format, HtmlExporter, Input, Layout, OdtExporter, Options, Pandoc, PandocExporter, Report,
+    ScoreBlock, export_to,
 };
 use serde::Serialize;
 use tauri::{AppHandle, State};
@@ -24,6 +25,8 @@ pub struct ExportChoices {
     formats: Vec<Format>,
     /// The version of the Pandoc found, on desktop (ADR-0010).
     pandoc: Option<String>,
+    /// An export can be shared afterwards ([`share_export`]): on macOS and iOS.
+    share: bool,
 }
 
 /// Whether an export is shared afterwards ([`share_export`]) rather than
@@ -47,7 +50,11 @@ pub async fn export_choices() -> ExportChoices {
     if pandoc.is_some() {
         formats.extend([Format::Docx, Format::Epub]);
     }
-    ExportChoices { formats, pandoc }
+    ExportChoices {
+        formats,
+        pandoc,
+        share: cfg!(any(target_os = "macos", target_os = "ios")),
+    }
 }
 
 /// iOS and Android start no other programs.
@@ -60,16 +67,23 @@ fn find_pandoc() -> Option<Pandoc> {
 }
 
 /// Asks where the export goes: a file for one document, which the save dialog
-/// asks about replacing, otherwise a folder. `None` if the user cancelled. On
-/// iOS nothing is asked: the place is in the app's own temporary folder, for
-/// [`share_export`] afterwards.
+/// asks about replacing, otherwise a folder. `None` if the user cancelled. To
+/// be shared ([`share_export`] afterwards), as with `share` on macOS and always
+/// on iOS, nothing is asked: the place is in a folder of the app's own.
 #[tauri::command]
 pub async fn pick_export(
     app: AppHandle,
     format: Format,
     layout: Layout,
     title: Option<String>,
+    share: Option<bool>,
 ) -> CmdResult<Option<String>> {
+    if share == Some(true) || cfg!(mobile) {
+        let to =
+            schnipsle_export::share_target(&share_base(&app)?, title.as_deref(), format, layout)
+                .map_err(crate::CommandError::other)?;
+        return Ok(Some(to.display().to_string()));
+    }
     #[cfg(desktop)]
     {
         use tauri_plugin_dialog::DialogExt as _;
@@ -83,6 +97,11 @@ pub async fn pick_export(
                     format,
                 ))
                 .blocking_save_file()
+        } else if layout == Layout::Zip {
+            dialog
+                .add_filter("Zip archive", &["zip"])
+                .set_file_name(schnipsle_export::suggested_archive_name(title.as_deref()))
+                .blocking_save_file()
         } else {
             dialog
                 .set_can_create_directories(true)
@@ -95,31 +114,61 @@ pub async fn pick_export(
         Ok(Some(path.display().to_string()))
     }
     #[cfg(mobile)]
-    {
-        let _ = app;
-        let base = std::env::temp_dir().join("exports");
-        let to = schnipsle_export::share_target(&base, title.as_deref(), format, layout)
+    unreachable!("exports are always shared on mobile")
+}
+
+/// The folder exports to be shared go to, emptied each time: in the app's own
+/// temporary folder on iOS; on the desktop, where the temporary folder is
+/// every app's, in the app's own caches.
+fn share_base(app: &AppHandle) -> CmdResult<PathBuf> {
+    if cfg!(mobile) {
+        Ok(std::env::temp_dir().join("exports"))
+    } else {
+        use tauri::Manager as _;
+        let caches = app
+            .path()
+            .app_cache_dir()
             .map_err(crate::CommandError::other)?;
-        Ok(Some(to.display().to_string()))
+        Ok(caches.join("exports"))
     }
 }
 
-/// Shows the share sheet for an export made on iOS, and waits until it closes.
-/// Whether something was done with it.
+/// Shows the share sheet for an export on iOS, and waits until it closes:
+/// whether something was done with it. On macOS shows the share menu next to
+/// `anchor` (left, top, width, height in the page), and returns at once.
 #[tauri::command]
-pub async fn share_export(app: AppHandle, path: String) -> CmdResult<bool> {
+pub async fn share_export(
+    app: AppHandle,
+    path: String,
+    anchor: Option<[f64; 4]>,
+) -> CmdResult<bool> {
     #[cfg(target_os = "ios")]
     {
         use tauri_plugin_vault_access::VaultAccessExt as _;
+        let _ = anchor;
         app.vault_access()
             .share(&path)
             .map_err(crate::CommandError::other)
     }
-    #[cfg(not(target_os = "ios"))]
+    #[cfg(target_os = "macos")]
     {
-        let _ = (app, path);
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let anchor = anchor.unwrap_or([0.0, 0.0, 1.0, 1.0]);
+        app.run_on_main_thread(move || {
+            let _ = sender.send(schnipsle_apple::share_files(Path::new(&path), anchor));
+        })
+        .map_err(crate::CommandError::other)?;
+        receiver
+            .recv()
+            .map_err(crate::CommandError::other)?
+            .map_err(crate::CommandError::other)?;
+        Ok(true)
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "ios")))]
+    {
+        let _ = (app, path, anchor);
         Err(crate::CommandError::other(
-            "Sharing an export is only on the iPhone and iPad",
+            "Sharing an export is not available on this platform",
         ))
     }
 }
@@ -183,13 +232,14 @@ pub async fn export_notes(
             ..crate::CommandError::other(e)
         })?;
         Ok(match format {
-            Format::Html => HtmlExporter.export(vault, &input, &options, to)?,
-            Format::Odt => OdtExporter.export(vault, &input, &options, to)?,
+            Format::Html => export_to(&HtmlExporter, vault, &input, &options, to)?,
+            Format::Odt => export_to(&OdtExporter, vault, &input, &options, to)?,
             Format::Pdf => export_pdf(&app, vault, &input, options, to)?,
             Format::Docx | Format::Epub => {
                 let pandoc = find_pandoc()
                     .ok_or_else(|| crate::CommandError::other("Pandoc is not there any more"))?;
-                PandocExporter::new(format, pandoc).export(vault, &input, &options, to)?
+                let exporter = PandocExporter::new(format, pandoc);
+                export_to(&exporter, vault, &input, &options, to)?
             }
         })
     })
@@ -204,7 +254,7 @@ fn export_pdf(
     to: &Path,
 ) -> CmdResult<Report> {
     let exporter = schnipsle_export::PdfExporter::new(printing::MainThreadPrinter(app.clone()));
-    Ok(exporter.export(vault, input, &options, to)?)
+    Ok(export_to(&exporter, vault, input, &options, to)?)
 }
 
 #[cfg(not(any(target_os = "macos", target_os = "ios")))]
