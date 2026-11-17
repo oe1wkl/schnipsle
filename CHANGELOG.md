@@ -7,7 +7,7 @@ All notable changes to this project are documented here. The format follows [Kee
 ### Added
 
 - Repository foundation: Cargo workspace (`schnipsle-core`, `-import`, `-export`, Tauri 2 shell), TypeScript UI, CI, dependency licence checks, macOS bootstrap script.
-- Architecture decision records ADR-0001 to ADR-0037.
+- Architecture decision records ADR-0001 to ADR-0038.
 - Vault format specification, draft revision 0.15 (notes, front matter, tags, links, attachments, music in ABC, song sheets in ChordPro, history, trash, smart folders, imported notes and the import log).
 - Hashtag extraction in `schnipsle-core` following format.md §5.3, with the specification examples as tests.
 - Vault access in `schnipsle-core`: list notes (with iCloud placeholders), read, atomic write with conflict detection, create (spike, see docs/spikes/ios-vault.md).
@@ -67,6 +67,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - Share… in the export dialog on the Mac, next to Export…: the export is written into the app's own folder and the macOS share menu opens at once, to send it by Mail or Messages, by AirDrop or to another app, with no save dialog first. The report can share it again; an export saved with Export… can be shared from its report too.
 - Export into a zip archive: a third choice next to one document and one file per note in a folder. The archive holds one file per note, with copies of their attachments for HTML, in a folder named as the archive, and can be saved with Export… or shared with Share…, on the Mac and on the iPhone and iPad.
 - App icon for macOS and iOS: a spiral-bound notepad with a hashtag on a warm background. The SVG masters are in `src-tauri/icons/source/`; `scripts/make-icons.sh` makes the macOS icon on the system icon grid and a full-bleed iOS icon without an alpha channel.
+- Comparing versions in the history (ADR-0038): Compare shows what changed between the selected version and the note as it is now, or another version chosen next to it, always from the older to the newer. Lines removed and added are shown one under the other in the Markdown source, with the words changed inside a line marked, and a count of lines added and removed. Front matter changes are listed by key (`modified` in local time); a version that differs only in the time of its last change says so. Unchanged lines away from the changes are folded and open on a click. Restore and As new note work on the selected version as before.
 - Test UI: open a vault folder, edit notes with autosave, reload external changes, resolve conflicts (spike).
 
 ### Changed

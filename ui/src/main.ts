@@ -8,6 +8,7 @@ import { listen } from "@tauri-apps/api/event";
 import { asError, setStatus, ui } from "./dom";
 import { createEditor, type EditorMode, frontMatterLength, isPinned } from "./editor";
 import { createExport } from "./export";
+import { createHistory, versionLabel } from "./history";
 import { createImageCache, fileName } from "./images";
 import { createImport } from "./import";
 import { createImports } from "./imports";
@@ -28,7 +29,6 @@ import type {
   SavedNote,
   TrashedNote,
   AddedAttachment,
-  Version,
   NewNote,
   SearchHit,
   SnippetPart,
@@ -110,6 +110,56 @@ const historyView = createEditor(ui.historyPreview, {
   loadImage: (url) => images.load(url),
   placeholderText: "Select a version",
   songs,
+});
+
+// --- History of the open note (ADR-0011, ADR-0038) ---
+
+const noteHistory = createHistory({
+  note: () => current?.path ?? null,
+  flush: flushSave,
+  readOnly: () => readOnly !== null,
+  preview: historyView,
+  status: setStatus,
+  restore: (version) => {
+    const note = current;
+    if (!note) return;
+    saving = saving.then(save).then(async () => {
+      if (isDirty() || conflictHash !== undefined) {
+        setStatus("Not restored: the note has unsaved changes or a conflict.");
+        return;
+      }
+      try {
+        await invoke<SavedNote>("restore_version", {
+          path: note.path,
+          name: version.name,
+          expectedHash: note.hash,
+        });
+        const content = await invoke<NoteContent>("read_note", { path: note.path });
+        load(content);
+        setStatus(
+          `Restored the version of ${versionLabel(version)}; the text before is in the history.`,
+        );
+      } catch (e) {
+        setStatus(`Not restored: ${asError(e).message}`);
+      }
+    });
+  },
+  copy: (version) => {
+    const note = current;
+    if (!note) return;
+    void leaveNote()
+      .then(() => invoke<NewNote>("copy_version", { path: note.path, name: version.name }))
+      .then(async (created) => {
+        const content = await invoke<NoteContent>("read_note", { path: created.path });
+        if (listMode === "trash") setListMode("notes");
+        load(content);
+        setStatus(`Copied the version of ${versionLabel(version)} as a new note.`);
+        await refreshList();
+      })
+      .catch((e: unknown) => {
+        setStatus(`Not copied: ${asError(e).message}`);
+      });
+  },
 });
 
 /**
@@ -509,7 +559,7 @@ function leaveNote(): Promise<void> {
 /** Empties the editor: no note open. */
 function closeEditor(): void {
   trashShown = null;
-  closeHistory();
+  noteHistory.close();
   ui.showHistory.disabled = true;
   ui.exportNote.disabled = true;
   window.clearTimeout(snapshotTimer);
@@ -600,7 +650,7 @@ async function openLink(link: string): Promise<void> {
 
 function load(content: NoteContent): void {
   trashShown = null;
-  closeHistory();
+  noteHistory.close();
   ui.showHistory.disabled = false;
   ui.exportNote.disabled = false;
   window.clearTimeout(snapshotTimer);
@@ -991,134 +1041,6 @@ ui.deleteNote.addEventListener("click", () => {
       setStatus(`Not deleted: ${asError(e).message}`);
     }
   });
-});
-
-// --- History of the open note (ADR-0011) ---
-
-let selectedVersion: Version | null = null;
-
-const versionLabel = (v: Version): string =>
-  v.takenMs === null ? v.name : new Date(v.takenMs).toLocaleString();
-
-function closeHistory(): void {
-  selectedVersion = null;
-  ui.history.hidden = true;
-  ui.editorHost.hidden = false;
-  ui.showHistory.setAttribute("aria-pressed", "false");
-}
-
-/** Shows the open note's versions in place of the editor, newest first. */
-async function openHistory(): Promise<void> {
-  await flushSave();
-  const note = current;
-  if (!note) return;
-  let versions: Version[];
-  try {
-    versions = await invoke<Version[]>("list_versions", { path: note.path });
-  } catch (e) {
-    setStatus(`History not available: ${asError(e).message}`);
-    return;
-  }
-  if (current !== note) return;
-  ui.editorHost.hidden = true;
-  ui.history.hidden = false;
-  ui.showHistory.setAttribute("aria-pressed", "true");
-  ui.historyHint.textContent =
-    versions.length === 0
-      ? "No earlier versions yet. One is stored after a pause in typing and when you leave the note."
-      : `${String(versions.length)} earlier ${versions.length === 1 ? "version" : "versions"}`;
-  historyView.load("");
-  ui.historyRestore.disabled = true;
-  ui.historyCopy.disabled = true;
-  const buttons = versions.map((version) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.textContent = versionLabel(version);
-    button.addEventListener("click", () => void selectVersion(version, button));
-    return button;
-  });
-  ui.historyList.replaceChildren(
-    ...buttons.map((button) => {
-      const item = document.createElement("li");
-      item.append(button);
-      return item;
-    }),
-  );
-  const [newest] = versions;
-  const [first] = buttons;
-  if (newest && first) await selectVersion(newest, first);
-}
-
-async function selectVersion(version: Version, button: HTMLButtonElement): Promise<void> {
-  const note = current;
-  if (!note) return;
-  for (const other of ui.historyList.querySelectorAll("button")) {
-    other.removeAttribute("aria-current");
-  }
-  button.setAttribute("aria-current", "true");
-  try {
-    const text = await invoke<string>("read_version", { path: note.path, name: version.name });
-    if (current !== note) return;
-    selectedVersion = version;
-    historyView.load(text);
-    ui.historyRestore.disabled = readOnly !== null;
-    ui.historyCopy.disabled = readOnly !== null;
-  } catch (e) {
-    historyView.load(`This version cannot be read: ${asError(e).message}`);
-    selectedVersion = null;
-    ui.historyRestore.disabled = true;
-    ui.historyCopy.disabled = true;
-  }
-}
-
-ui.showHistory.addEventListener("click", () => {
-  if (ui.history.hidden) void openHistory();
-  else closeHistory();
-});
-ui.historyClose.addEventListener("click", closeHistory);
-
-ui.historyRestore.addEventListener("click", () => {
-  const note = current;
-  const version = selectedVersion;
-  if (!note || !version) return;
-  saving = saving.then(save).then(async () => {
-    if (isDirty() || conflictHash !== undefined) {
-      setStatus("Not restored: the note has unsaved changes or a conflict.");
-      return;
-    }
-    try {
-      await invoke<SavedNote>("restore_version", {
-        path: note.path,
-        name: version.name,
-        expectedHash: note.hash,
-      });
-      const content = await invoke<NoteContent>("read_note", { path: note.path });
-      load(content);
-      setStatus(
-        `Restored the version of ${versionLabel(version)}; the text before is in the history.`,
-      );
-    } catch (e) {
-      setStatus(`Not restored: ${asError(e).message}`);
-    }
-  });
-});
-
-ui.historyCopy.addEventListener("click", () => {
-  const note = current;
-  const version = selectedVersion;
-  if (!note || !version) return;
-  void leaveNote()
-    .then(() => invoke<NewNote>("copy_version", { path: note.path, name: version.name }))
-    .then(async (created) => {
-      const content = await invoke<NoteContent>("read_note", { path: created.path });
-      if (listMode === "trash") setListMode("notes");
-      load(content);
-      setStatus(`Copied the version of ${versionLabel(version)} as a new note.`);
-      await refreshList();
-    })
-    .catch((e: unknown) => {
-      setStatus(`Not copied: ${asError(e).message}`);
-    });
 });
 
 musicMenu(ui.addMusic, {

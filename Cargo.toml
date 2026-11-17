@@ -42,6 +42,8 @@ base64 = "0.23"
 percent-encoding = "2"
 # Smart folders file (format.md §9): YAML 1.2, keeps key order, MIT OR Apache-2.0.
 yaml-rust2 = { version = "0.13", default-features = false }
+# Comparing versions in the history (ADR-0038): line and word diffs, Apache-2.0.
+similar = { version = "3.2", default-features = false, features = ["std", "unicode"] }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

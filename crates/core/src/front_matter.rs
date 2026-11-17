@@ -70,6 +70,13 @@ pub fn block(text: &str) -> Option<&str> {
     Some(&text[..text.len() - parts.body.len()])
 }
 
+/// The lines between the two `---` lines of the front matter, without line
+/// endings, if `text` has (terminated) front matter.
+#[must_use]
+pub fn lines(text: &str) -> Option<Vec<&str>> {
+    split(text).lines
+}
+
 /// `text` without its front matter block.
 #[must_use]
 pub fn body(text: &str) -> &str {
