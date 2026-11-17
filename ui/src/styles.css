@@ -11,6 +11,11 @@
   --accent: #0a66d8;
   --warn-bg: #fff4d6;
   --warn-fg: #5c4100;
+  /* Compared versions (ADR-0038): lines, and the words changed in them. */
+  --diff-removed: #fdecec;
+  --diff-removed-word: #f6b8b8;
+  --diff-added: #e8f6ea;
+  --diff-added-word: #a9dfb1;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -22,6 +27,10 @@
     --accent: #4c9bff;
     --warn-bg: #3d3216;
     --warn-fg: #ffe08a;
+    --diff-removed: #3b2222;
+    --diff-removed-word: #7a3434;
+    --diff-added: #1f3324;
+    --diff-added-word: #2f6b3c;
   }
 }
 
@@ -397,6 +406,11 @@ button.small {
 .history-bar .muted {
   flex: 1;
 }
+.history-bar button[aria-pressed="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg);
+}
 .history-body {
   flex: 1;
   display: grid;
@@ -424,6 +438,121 @@ button.small {
 }
 .history-preview {
   min-width: 0; /* long lines wrap instead of widening the page */
+}
+.history-preview[hidden],
+.history-diff[hidden],
+#history-with[hidden] {
+  display: none;
+}
+
+/* Two versions compared (ADR-0038): one column of source lines. */
+.history-diff {
+  min-width: 0;
+  overflow-y: auto;
+  padding: 8px 12px 24px;
+  font-size: 14px;
+}
+.diff-heading {
+  margin: 4px 0 0;
+  font-weight: 600;
+}
+.diff-summary {
+  margin: 2px 0 10px;
+  color: var(--muted);
+}
+.diff-front-matter {
+  margin: 0 0 12px;
+  padding: 6px 10px;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+}
+.diff-front-matter li {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.diff-key {
+  color: var(--muted);
+}
+.diff-front-matter .diff-block {
+  display: block;
+}
+.diff-front-matter del,
+.diff-front-matter ins {
+  border-radius: 3px;
+  padding: 0 2px;
+}
+.diff-body {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.diff-row {
+  display: grid;
+  grid-template-columns: 3.5em 1.5em 1fr;
+}
+.diff-number {
+  padding-right: 6px;
+  text-align: right;
+  color: var(--muted);
+  user-select: none;
+}
+.diff-sign {
+  text-align: center;
+  color: var(--muted);
+  user-select: none;
+}
+.diff-text {
+  min-width: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  text-decoration: none;
+}
+/* An empty line still takes a line's height. */
+.diff-text:empty::after {
+  content: "\200b";
+}
+.diff-removed,
+.diff-front-matter del {
+  background: var(--diff-removed);
+  text-decoration: none;
+}
+.diff-added,
+.diff-front-matter ins {
+  background: var(--diff-added);
+  text-decoration: none;
+}
+.diff-row mark {
+  color: inherit;
+  border-radius: 2px;
+}
+.diff-removed mark {
+  background: var(--diff-removed-word);
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+.diff-added mark {
+  background: var(--diff-added-word);
+}
+.diff-fold {
+  display: block;
+  width: 100%;
+  border: none;
+  border-radius: 0;
+  padding: 2px 0 2px 5em;
+  text-align: left;
+  font: inherit;
+  color: var(--muted);
+  background: var(--panel);
+}
+.diff-fold:hover {
+  color: var(--accent);
 }
 
 /* Phone: one view at a time. */
@@ -459,6 +588,16 @@ button.small {
   #history-list {
     border-right: none;
     border-bottom: 1px solid var(--line);
+  }
+  /* Width for the text: no line numbers on the phone. */
+  .diff-row {
+    grid-template-columns: 1.25em 1fr;
+  }
+  .diff-number {
+    display: none;
+  }
+  .diff-fold {
+    padding-left: 1.25em;
   }
 }
 @media (min-width: 701px) {

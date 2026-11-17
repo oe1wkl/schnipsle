@@ -1,6 +1,6 @@
 # Roadmap and status
 
-- Updated: 2026-11-13
+- Updated: 2026-11-17
 - Current milestone: **M7 – Release 1.0**
 
 Each milestone ends in a usable build. Scope can move between milestones; the order should not.
@@ -48,7 +48,7 @@ Work:
 - [x] Export on iOS (F-06): HTML, PDF and ODT from the note or the notes in the list, handed to the share sheet or saved to Files; the report as on the desktop. DOCX and EPUB stay desktop only (ADR-0025). Chosen on 2026-11-15: an Export button in the note's bar and one above the list; the export goes into the app's temporary folder (`share_target`), and Share… in the report opens the share sheet, which saves to Files too. Checked by the owner on an iPhone on 2026-11-15: a PDF saved to Files, and a folder export
 - [x] Share… on the Mac (2026-11-15, asked for by the owner): next to Export… in the dialog; the export goes into the app's caches (`share_target`) and `NSSharingServicePicker` opens next to the button (`schnipsle_apple::share_files`). Checked by the owner in the app on 2026-11-16
 - [x] Zip archive as a third layout (2026-11-16, asked for by the owner): one file per note with their attachments, packed by `schnipsle_export::export_to` under a folder named as the archive; it only packs what ADR-0021 rule 3 puts in a folder. Checked by the owner in the app on 2026-11-16
-- [ ] History: compare two versions of a note, or a version with the note (F-14 "browse, compare, restore"; browsing and restoring exist)
+- [x] History: compare two versions of a note, or a version with the note (F-14 "browse, compare, restore"; browsing and restoring exist). Decided in ADR-0038 (accepted 2026-11-17): one column of source lines with the changed words marked, front matter by key, unchanged lines folded. `schnipsle_core::diff` (with `similar`, golden files in `tests/fixtures/format/7-compare/`), `Vault::compare_versions` and the `compare_versions` command; the history view moved to `ui/src/history.ts` with Compare and a choice of what to compare with. Playground without Tauri: `/dev/history.html`. Checked by the owner on the Mac and on an iPhone on 2026-11-17
 - [ ] Settings view: history retention, the Pandoc path, the update check (ADR-0036); room for the reading view later
 - [ ] Renaming and merging tags (F-11): a tag renamed, or merged into another, in every note that has it, with a report of what changes before it does; written as format.md §10 asks
 - [ ] Localisation and access (N-06): UI strings in one place, ready for German; every view usable by keyboard on the Mac and with VoiceOver on both
