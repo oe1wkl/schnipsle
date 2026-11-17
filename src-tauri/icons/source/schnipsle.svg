@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!--
+  Schnipsle app icon, master artwork: full-bleed 1024 x 1024, opaque.
+  Used as is for iOS (the system masks the corners) and embedded by
+  schnipsle-macos.svg for the macOS icon grid. Regenerate the icon set
+  with scripts/make-icons.sh after editing.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FBF4E6"/>
+      <stop offset="1" stop-color="#F0DFC2"/>
+    </linearGradient>
+    <!-- page outline, dog-eared at the top right -->
+    <path id="page" d="M328,150 H710 L830,270 V852 Q830,880 802,880 H328 Q300,880 300,852 V178 Q300,150 328,150Z"/>
+    <clipPath id="page-clip"><use href="#page"/></clipPath>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="14" stdDeviation="16" flood-color="#6B4A1F" flood-opacity="0.28"/>
+    </filter>
+    <!-- one spiral ring: punched hole and the wire looping over the cover edge -->
+    <g id="ring">
+      <circle cx="334" cy="0" r="15" fill="#D9C7A4"/>
+      <path d="M334,0 C310,-46 195,-40 208,4" fill="none" stroke="#2E6DB4" stroke-width="26" stroke-linecap="round"/>
+    </g>
+  </defs>
+
+  <!-- warm background -->
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+
+  <!-- the notepad, tilted slightly -->
+  <g transform="rotate(-6 540 520)">
+    <!-- red-orange cover behind the page -->
+    <rect x="210" y="154" width="640" height="752" rx="44" fill="#E0563B" filter="url(#soft)"/>
+
+    <!-- page -->
+    <use href="#page" fill="#FFFBF2"/>
+    <g clip-path="url(#page-clip)">
+      <!-- ruled lines -->
+      <g fill="#C9DAEE">
+        <rect x="360" y="300" width="470" height="8"/>
+        <rect x="360" y="382" width="470" height="8"/>
+        <rect x="360" y="464" width="470" height="8"/>
+        <rect x="360" y="546" width="470" height="8"/>
+        <rect x="360" y="628" width="470" height="8"/>
+        <rect x="360" y="710" width="470" height="8"/>
+        <rect x="360" y="792" width="470" height="8"/>
+      </g>
+      <!-- hashtag -->
+      <g stroke="#2E6DB4" stroke-width="30" stroke-linecap="round">
+        <line x1="457" y1="190" x2="421" y2="324"/>
+        <line x1="511" y1="190" x2="475" y2="324"/>
+        <line x1="391" y1="236" x2="545" y2="236"/>
+        <line x1="391" y1="284" x2="545" y2="284"/>
+      </g>
+      <!-- lines of writing -->
+      <g fill="#33475E">
+        <rect x="575" y="260" width="140" height="30" rx="15"/>
+        <rect x="385" y="342" width="320" height="30" rx="15"/>
+        <rect x="385" y="424" width="250" height="30" rx="15"/>
+        <rect x="385" y="506" width="180" height="30" rx="15"/>
+      </g>
+      <!-- blue and red diagonal stripes across the lower right corner -->
+      <polygon points="1410,0 1474,0 374,1100 310,1100" fill="#2E6DB4"/>
+      <polygon points="1510,0 1574,0 474,1100 410,1100" fill="#E0563B"/>
+    </g>
+
+    <!-- dog-ear fold -->
+    <path d="M710,150 L720,252 Q724,268 740,266 L830,270Z" fill="#EADCC0"/>
+    <path d="M710,150 L830,270" stroke="#D9C7A4" stroke-width="6" stroke-linecap="round"/>
+
+    <!-- spiral binding -->
+    <use href="#ring" y="220"/>
+    <use href="#ring" y="318"/>
+    <use href="#ring" y="417"/>
+    <use href="#ring" y="515"/>
+    <use href="#ring" y="613"/>
+    <use href="#ring" y="712"/>
+    <use href="#ring" y="810"/>
+  </g>
+</svg>
