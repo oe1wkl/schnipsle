@@ -1,0 +1,38 @@
+{
+  "frontMatter": [
+    {
+      "key": "modified",
+      "before": null,
+      "after": "2026-11-17T07:01:30Z"
+    }
+  ],
+  "added": 3,
+  "removed": 0,
+  "rows": [
+    {
+      "kind": "added",
+      "after": 6,
+      "parts": [
+        {
+          "text": "# Bread rolls",
+          "changed": false
+        }
+      ]
+    },
+    {
+      "kind": "added",
+      "after": 7,
+      "parts": []
+    },
+    {
+      "kind": "added",
+      "after": 8,
+      "parts": [
+        {
+          "text": "Pick up six from the bakery on the way home.",
+          "changed": false
+        }
+      ]
+    }
+  ]
+}

@@ -10,6 +10,7 @@ pub mod chordpro;
 pub mod conflicts;
 pub mod coordination;
 pub mod dates;
+pub mod diff;
 mod flat_yaml;
 pub mod front_matter;
 pub mod history;
@@ -36,6 +37,7 @@ pub use conflicts::{
     ConflictVersion, NoIdLookup, NoSyncConflicts, NotesById, RawVersion, SyncConflicts,
 };
 pub use coordination::{Coordinator, Uncoordinated};
+pub use diff::{Comparison, KeyChange, Part, Row};
 pub use history::{Retention, Thinning, Version};
 pub use import_log::{ImportLog, ImportLogError, LogAction, LogEntry};
 pub use index::{Index, IndexError};

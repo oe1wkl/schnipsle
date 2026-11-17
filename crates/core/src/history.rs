@@ -15,7 +15,8 @@
 //! The history view works with note paths: [`Vault::versions`] lists the
 //! snapshots of a note, [`Vault::restore_version`] makes one the note's text
 //! again (storing the current text first), [`Vault::copy_version`] turns one
-//! into a new note with its own `id`.
+//! into a new note with its own `id`, [`Vault::compare_versions`] compares
+//! two versions, or one with the note as it is now (ADR-0038).
 
 use std::collections::HashMap;
 use std::fs;
@@ -26,6 +27,7 @@ use ruzstd::encoding::{CompressionLevel, compress_to_vec};
 
 use serde::Serialize;
 
+use crate::diff::{Comparison, compare};
 use crate::front_matter;
 use crate::names::NewNote;
 use crate::stamp::{compact_utc, is_ulid, new_ulid, now_ms, parse_compact_utc, rfc3339_utc};
@@ -283,6 +285,26 @@ impl Vault {
     /// [`VaultError::InvalidPath`], or I/O errors.
     pub fn read_version(&self, path: &str, name: &str) -> Result<String> {
         self.read_snapshot(&self.history_id(path)?, name)
+    }
+
+    /// Compares two versions of the note at `path` (ADR-0038): the snapshot
+    /// named `before` (the older) with the one named `after`, where `None`
+    /// stands for the note as it is on disk. Nothing is written.
+    ///
+    /// # Errors
+    /// As for [`Vault::read_version`], or [`VaultError::NotDownloaded`] if
+    /// the note is not on this device.
+    pub fn compare_versions(
+        &self,
+        path: &str,
+        before: Option<&str>,
+        after: Option<&str>,
+    ) -> Result<Comparison> {
+        let text = |name: Option<&str>| match name {
+            Some(name) => self.read_version(path, name),
+            None => Ok(self.read_note_text(path)?.text),
+        };
+        Ok(compare(&text(before)?, &text(after)?))
     }
 
     /// Makes the snapshot `name` the text of the note at `path` again. The
@@ -679,6 +701,50 @@ mod tests {
             std::fs::read_to_string(dir.path().join("notes").join(&path)).unwrap(),
             restored.text
         );
+    }
+
+    #[test]
+    fn compares_versions_with_each_other_and_the_note() {
+        use crate::diff::Row;
+        let (_dir, vault) = vault();
+        let note = vault.create_titled("", "# Soup\n\nTwo onions\n").unwrap();
+        let path = note.path;
+        vault.snapshot_note(&path, None).unwrap();
+        let saved = vault
+            .write_note(
+                &path,
+                &note.saved.text.replace("Two", "Three"),
+                &note.saved.hash,
+            )
+            .unwrap();
+        vault.snapshot_note(&path, None).unwrap();
+        vault
+            .write_note(
+                &path,
+                &saved.text.replace("onions", "onions, a leek"),
+                &saved.hash,
+            )
+            .unwrap();
+        let versions = vault.versions(&path).unwrap();
+        let (newer, older) = (&versions[0].name, &versions[1].name);
+
+        let c = vault
+            .compare_versions(&path, Some(older), Some(newer))
+            .unwrap();
+        assert_eq!((c.added, c.removed), (1, 1));
+        let c = vault.compare_versions(&path, Some(older), None).unwrap();
+        let Some(Row::Added { parts, .. }) = c.rows.last() else {
+            panic!("{:?}", c.rows);
+        };
+        let text: String = parts.iter().map(|p| p.text.as_str()).collect();
+        assert_eq!(text, "Three onions, a leek");
+        // The note with itself: nothing differs.
+        let c = vault.compare_versions(&path, None, None).unwrap();
+        assert!(c.same_body() && c.front_matter.is_empty());
+        assert!(matches!(
+            vault.compare_versions(&path, Some("../x.md.zst"), None),
+            Err(VaultError::InvalidPath(_))
+        ));
     }
 
     #[test]

@@ -92,6 +92,34 @@ export interface Version {
   name: string;
   takenMs: number | null;
 }
+/** Two versions of a note compared (schnipsle-core `Comparison`, ADR-0038). */
+export interface Comparison {
+  /** Front matter keys whose value differs. */
+  frontMatter: KeyChange[];
+  /** Lines of the body only the newer version has. */
+  added: number;
+  /** Lines of the body only the older version has. */
+  removed: number;
+  rows: DiffRow[];
+}
+export interface KeyChange {
+  key: string;
+  /** `null` if only the newer version has the key. */
+  before: string | null;
+  /** `null` if the newer version no longer has it. */
+  after: string | null;
+}
+/** A piece of a changed line; `changed` marks words the other version lacks. */
+export interface DiffPart {
+  text: string;
+  changed: boolean;
+}
+/** A row of the compared body; line numbers count from the top of the file. */
+export type DiffRow =
+  | { kind: "same"; before: number; after: number; text: string }
+  | { kind: "removed"; before: number; parts: DiffPart[] }
+  | { kind: "added"; after: number; parts: DiffPart[] }
+  | { kind: "folded"; before: number; after: number; lines: string[] };
 export interface NewNote {
   path: string;
   saved: SavedNote;

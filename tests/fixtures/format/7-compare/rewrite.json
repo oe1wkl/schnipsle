@@ -1,0 +1,69 @@
+{
+  "frontMatter": [],
+  "added": 3,
+  "removed": 2,
+  "rows": [
+    {
+      "kind": "same",
+      "before": 4,
+      "after": 4,
+      "text": "# Ideas"
+    },
+    {
+      "kind": "same",
+      "before": 5,
+      "after": 5,
+      "text": ""
+    },
+    {
+      "kind": "removed",
+      "before": 6,
+      "parts": [
+        {
+          "text": "The garden shed needs a new roof before winter.",
+          "changed": false
+        }
+      ]
+    },
+    {
+      "kind": "removed",
+      "before": 7,
+      "parts": [
+        {
+          "text": "Ask the neighbours about the ladder.",
+          "changed": false
+        }
+      ]
+    },
+    {
+      "kind": "added",
+      "after": 6,
+      "parts": [
+        {
+          "text": "Learn the second movement by heart.",
+          "changed": false
+        }
+      ]
+    },
+    {
+      "kind": "added",
+      "after": 7,
+      "parts": [
+        {
+          "text": "Practise slowly, with the metronome at 60.",
+          "changed": false
+        }
+      ]
+    },
+    {
+      "kind": "added",
+      "after": 8,
+      "parts": [
+        {
+          "text": "Record it once a week.",
+          "changed": false
+        }
+      ]
+    }
+  ]
+}

@@ -19,9 +19,9 @@ use std::sync::{Arc, Mutex};
 
 use schnipsle_core::layout::VAULT_FILE;
 use schnipsle_core::{
-    AddedAttachment, Coordinator, Folder, LinkTarget, MovedNotes, NewNote, NoteContent, NoteEntry,
-    SavedNote, SearchHit, SortOrder, StrayNotes, Tag, TagFolder, TrashedNote, Vault, VaultError,
-    Version,
+    AddedAttachment, Comparison, Coordinator, Folder, LinkTarget, MovedNotes, NewNote, NoteContent,
+    NoteEntry, SavedNote, SearchHit, SortOrder, StrayNotes, Tag, TagFolder, TrashedNote, Vault,
+    VaultError, Version,
 };
 use serde::Serialize;
 use tauri::State;
@@ -437,6 +437,20 @@ async fn read_version(state: State<'_, AppState>, path: String, name: String) ->
     with_vault(&state, |v| Ok(v.read_version(&path, &name)?))
 }
 
+/// Compares two versions of a note (ADR-0038): the snapshot `before` (the
+/// older) with `after`; a missing name stands for the note as it is on disk.
+#[tauri::command]
+async fn compare_versions(
+    state: State<'_, AppState>,
+    path: String,
+    before: Option<String>,
+    after: Option<String>,
+) -> CmdResult<Comparison> {
+    with_vault(&state, |v| {
+        Ok(v.compare_versions(&path, before.as_deref(), after.as_deref())?)
+    })
+}
+
 /// Makes a version the note's text again; the current text goes into the
 /// history first. Returns what is now on disk.
 #[tauri::command]
@@ -841,6 +855,7 @@ pub fn run() {
             snapshot_note,
             list_versions,
             read_version,
+            compare_versions,
             restore_version,
             copy_version,
             add_attachment,

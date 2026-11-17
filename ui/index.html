@@ -129,6 +129,10 @@
           <div class="history-bar">
             <strong>History</strong>
             <span id="history-hint" class="muted"></span>
+            <button id="history-compare" type="button" class="small" aria-pressed="false" disabled>
+              Compare
+            </button>
+            <select id="history-with" class="small" aria-label="Compare with" hidden></select>
             <button id="history-restore" type="button" class="small" disabled>
               Restore this version
             </button>
@@ -138,6 +142,7 @@
           <div class="history-body">
             <ul id="history-list" aria-label="Versions"></ul>
             <div id="history-preview" class="editor-host history-preview"></div>
+            <div id="history-diff" class="history-diff" hidden></div>
           </div>
         </div>
         <footer class="status">
