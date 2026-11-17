@@ -15,6 +15,8 @@ export const ui = {
   vaultName: el("vault-name"),
   vaultHint: el("vault-hint"),
   pick: el("pick-vault") as HTMLButtonElement,
+  /** Settings, on iOS, which has no app menu (ADR-0039). */
+  showSettings: el("show-settings") as HTMLButtonElement,
   newNote: el("new-note") as HTMLButtonElement,
   empty: el("empty"),
   notes: el("notes") as HTMLUListElement,

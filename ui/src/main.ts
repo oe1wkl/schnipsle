@@ -11,6 +11,7 @@ import { createExport } from "./export";
 import { createImageCache, fileName } from "./images";
 import { createImport } from "./import";
 import { createImports } from "./imports";
+import { createSettings } from "./settings";
 import { createSidebar, type ListFilter } from "./sidebar";
 import { musicMenu } from "./snippets";
 import type { SongHost } from "./song";
@@ -1310,6 +1311,29 @@ void invoke<boolean>("exports_are_shared").then((shared) => {
 ui.exportNote.addEventListener("click", () => void exporter.open("note"));
 ui.exportList.addEventListener("click", () => void exporter.open("list"));
 
+const settingsView = createSettings({
+  vaultState: () => (vaultIsOpen ? { open: true, readOnly } : { open: false }),
+  chordNamesChanged: () => {
+    // Read the open note again, so its song sheets show the new names.
+    void leaveNote().then(async () => {
+      const note = current;
+      if (!note || isDirty() || conflictHash !== undefined) return;
+      try {
+        load(await invoke<NoteContent>("read_note", { path: note.path }));
+      } catch (e) {
+        setStatus(
+          `Song sheets show the new names when the note is opened again: ${asError(e).message}`,
+        );
+      }
+    });
+  },
+});
+// The iPhone has no menu: Settings sits in the bar there.
+void invoke<boolean>("exports_are_shared").then((mobile) => {
+  ui.showSettings.hidden = !mobile;
+});
+ui.showSettings.addEventListener("click", () => void settingsView.open());
+
 // File menu (desktop): same actions as the buttons, plus Import…, Imports… and Export….
 void listen<string>("menu", (event) => {
   if (event.payload === "open-vault") ui.pick.click();
@@ -1317,6 +1341,7 @@ void listen<string>("menu", (event) => {
   else if (event.payload === "import") importer.open();
   else if (event.payload === "imports") imports.open();
   else if (event.payload === "export") void exporter.open();
+  else if (event.payload === "settings") void settingsView.open();
 });
 
 /** Runs a check after any save in progress, so a save's own echo is not mistaken for a change. */

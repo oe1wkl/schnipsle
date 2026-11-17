@@ -71,19 +71,17 @@ impl Retention {
     /// shorter than the first is extended to it.
     #[must_use]
     pub fn from_settings(settings: &str) -> Self {
-        let defaults = Self::default();
-        let days = |key: &str, default: u64| {
-            crate::flat_yaml::value(settings, key)
-                .and_then(|v| v.parse::<u64>().ok())
-                .unwrap_or(default)
-        };
-        let all_days = days("history_keep_all_days", defaults.all_days);
-        let daily_days = days("history_keep_daily_days", defaults.daily_days).max(all_days);
-        Self {
-            all_days,
-            daily_days,
-        }
+        crate::settings::VaultSettings::from_text(settings).retention()
     }
+}
+
+/// What thinning the history would remove ([`Vault::history_to_thin`]).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+pub struct Thinning {
+    /// Snapshots it would remove.
+    pub versions: usize,
+    /// Notes that would lose at least one.
+    pub notes: usize,
 }
 
 /// Folder of all snapshots, relative to the vault root.
@@ -189,21 +187,10 @@ impl Vault {
     /// a snapshot that cannot be removed is skipped.
     pub fn thin_history(&self, retention: Retention, now_ms: u64) -> Result<usize> {
         self.check_writable()?;
-        let root = self.root().join(HISTORY_DIR);
-        let entries = match fs::read_dir(&root) {
-            Ok(entries) => entries,
-            Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(0),
-            Err(e) => return Err(e.into()),
-        };
         let mut removed = 0;
-        for entry in entries.flatten() {
-            let id = entry.file_name().to_string_lossy().into_owned();
-            if !is_ulid(&id) || !entry.file_type().is_ok_and(|t| t.is_dir()) {
-                continue;
-            }
-            let names = self.snapshots(&id)?;
+        for (folder, names) in self.histories()? {
             for name in to_thin(&names, retention, now_ms / 1000) {
-                let file = entry.path().join(name);
+                let file = folder.join(name);
                 let gone =
                     self.coordinated(Access::Delete, &file, |file| match fs::remove_file(file) {
                         Ok(()) => Ok(true),
@@ -218,6 +205,42 @@ impl Vault {
             }
         }
         Ok(removed)
+    }
+
+    /// What [`Vault::thin_history`] with `retention` would remove as of
+    /// `now_ms`, removing nothing: asked before a change of the retention is
+    /// saved (ADR-0039).
+    ///
+    /// # Errors
+    /// I/O errors reading the history folder.
+    pub fn history_to_thin(&self, retention: Retention, now_ms: u64) -> Result<Thinning> {
+        let mut thinning = Thinning::default();
+        for (_, names) in self.histories()? {
+            let versions = to_thin(&names, retention, now_ms / 1000).len();
+            if versions > 0 {
+                thinning.versions += versions;
+                thinning.notes += 1;
+            }
+        }
+        Ok(thinning)
+    }
+
+    /// Each note's history folder, with its snapshots oldest first.
+    fn histories(&self) -> Result<Vec<(std::path::PathBuf, Vec<String>)>> {
+        let root = self.root().join(HISTORY_DIR);
+        let entries = match fs::read_dir(&root) {
+            Ok(entries) => entries,
+            Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
+            Err(e) => return Err(e.into()),
+        };
+        let mut histories = Vec::new();
+        for entry in entries.flatten() {
+            let id = entry.file_name().to_string_lossy().into_owned();
+            if is_ulid(&id) && entry.file_type().is_ok_and(|t| t.is_dir()) {
+                histories.push((entry.path(), self.snapshots(&id)?));
+            }
+        }
+        Ok(histories)
     }
 
     /// The `id` of the note at `path` as on disk, if it has a valid one.
@@ -565,6 +588,28 @@ mod tests {
         std::fs::write(history.join("notes.txt"), "not a snapshot").unwrap();
         std::fs::create_dir_all(dir.path().join(HISTORY_DIR).join("not-an-id")).unwrap();
 
+        // Counted first without removing anything.
+        let counted = vault
+            .history_to_thin(Retention::default(), now * 1000)
+            .unwrap();
+        assert_eq!(
+            counted,
+            Thinning {
+                versions: 1,
+                notes: 1
+            }
+        );
+        assert!(history.join(day(old[0])).exists());
+        // Keeping everything for longer removes nothing.
+        let longer = Retention {
+            all_days: 365,
+            daily_days: 365,
+        };
+        assert_eq!(
+            vault.history_to_thin(longer, now * 1000).unwrap(),
+            Thinning::default()
+        );
+
         assert_eq!(
             vault
                 .thin_history(Retention::default(), now * 1000)
@@ -573,6 +618,12 @@ mod tests {
         );
         assert!(!history.join(day(old[0])).exists());
         assert!(history.join(day(old[1])).exists());
+        assert_eq!(
+            vault
+                .history_to_thin(Retention::default(), now * 1000)
+                .unwrap(),
+            Thinning::default()
+        );
         assert!(history.join("notes.txt").exists());
         assert_eq!(
             vault

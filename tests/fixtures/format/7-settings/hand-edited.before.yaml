@@ -1,0 +1,4 @@
+chord_notation: "German" # quoted by hand
+history_keep_daily_days:
+  - not a number
+last_line: no newline

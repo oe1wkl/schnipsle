@@ -13,6 +13,8 @@ publish.workspace = true
 comrak.workspace = true
 unicode-normalization.workspace = true
 serde.workspace = true
+# The device's settings file (ADR-0039).
+serde_json.workspace = true
 sha2.workspace = true
 rusqlite.workspace = true
 yaml-rust2.workspace = true
@@ -24,7 +26,6 @@ ruzstd = "0.9"
 notify = "8.2"
 
 [dev-dependencies]
-serde_json.workspace = true
 tempfile.workspace = true
 
 [lints]

@@ -183,6 +183,12 @@ impl Pandoc {
         Ok(Self { path, version })
     }
 
+    /// The program.
+    #[must_use]
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
     /// Its version, such as `3.1.3`.
     #[must_use]
     pub fn version(&self) -> &str {

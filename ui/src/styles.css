@@ -594,6 +594,80 @@ button.danger {
   margin-bottom: 4px;
   padding: 0;
 }
+/* The settings view (ADR-0039). */
+.settings-dialog {
+  width: min(560px, calc(100vw - 32px));
+}
+.settings-dialog .import {
+  overflow-y: auto;
+}
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.settings-section + .settings-section {
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.settings-section h3 {
+  margin: 0;
+  font-size: 15px;
+}
+.settings-section p {
+  margin: 0;
+}
+.settings-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.settings-fields fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+.settings-fields legend {
+  margin-bottom: 4px;
+  padding: 0;
+  font-weight: 600;
+}
+.settings-fields label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.settings-fields input[type="text"] {
+  width: 4.5em;
+  font: inherit;
+  font-size: 16px; /* smaller text makes iOS zoom in */
+  padding: 4px 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--fg);
+  text-align: right;
+}
+.settings-fields select {
+  min-width: 0;
+  max-width: 100%;
+  font: inherit;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--fg);
+}
+#settings-pandoc-status {
+  overflow-wrap: anywhere;
+}
+.settings-section [hidden] {
+  display: none;
+}
 .export-choose .import-box,
 .export-choose .muted {
   margin: 0;

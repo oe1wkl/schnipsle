@@ -1,0 +1,4 @@
+# Settings of this vault, shared by every device (format.md §7).
+history_keep_all_days: 14     # keep every version for two weeks
+history_keep_daily_days: 180  # then the last version of each day for half a year
+reading_font: serif           # a key of a newer Schnipsle, kept as it is

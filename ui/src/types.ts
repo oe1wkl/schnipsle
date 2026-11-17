@@ -209,8 +209,10 @@ export type ExportFormat = "html" | "pdf" | "odt" | "docx" | "epub";
 /** What `export_choices` returns. */
 export interface ExportChoices {
   formats: ExportFormat[];
-  /** The version of the Pandoc found, if any. */
+  /** The version of the Pandoc in use, if any. */
   pandoc: string | null;
+  /** Why the Pandoc chosen in Settings does not run (ADR-0039). */
+  pandocProblem: string | null;
   /** An export can be shared afterwards (`share_export`): macOS and iOS. */
   share: boolean;
 }
@@ -281,4 +283,43 @@ export interface SongSheet {
   transpose: number;
   lyricsOnly: boolean;
   nosource: boolean;
+}
+
+/** A setting of the vault, as `read_settings` returns it (ADR-0039). */
+export interface Setting<T> {
+  /** The value in effect. */
+  value: T;
+  /** What applies when the file does not set it. */
+  default: T;
+  /** The value as `settings.yaml` has it; `null` if it does not set it. */
+  written: string | null;
+  /** Why `value` is not what the file says, if it is not. */
+  deviation: "invalid" | "extended" | null;
+}
+export type ChordNotation = "english" | "german";
+/** The settings of the open vault (schnipsle-core `VaultSettings`). */
+export interface VaultSettings {
+  historyKeepAllDays: Setting<number>;
+  historyKeepDailyDays: Setting<number>;
+  chordNotation: Setting<ChordNotation>;
+}
+/** A change of one setting of the vault; `null` removes it from the file. */
+export type SettingChange =
+  | { key: "historyKeepAllDays"; value: number | null }
+  | { key: "historyKeepDailyDays"; value: number | null }
+  | { key: "chordNotation"; value: ChordNotation | null };
+/** What thinning the history would remove (`history_to_thin`). */
+export interface Thinning {
+  versions: number;
+  notes: number;
+}
+/** The settings of this device (`read_device_settings`); none on a phone. */
+export interface DeviceSettings {
+  /** The Pandoc program picked; `null` to find it. */
+  pandocChosen: string | null;
+  /** The Pandoc in use, if one runs. */
+  pandoc: { path: string; version: string } | null;
+  /** Why the picked Pandoc does not run. */
+  pandocProblem: string | null;
+  checkForUpdates: boolean;
 }

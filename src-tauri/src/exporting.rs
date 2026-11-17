@@ -11,8 +11,8 @@
 use std::path::{Path, PathBuf};
 
 use schnipsle_export::{
-    Format, HtmlExporter, Input, Layout, OdtExporter, Options, Pandoc, PandocExporter, Report,
-    ScoreBlock, export_to,
+    Format, HtmlExporter, Input, Layout, OdtExporter, Options, PandocExporter, Report, ScoreBlock,
+    export_to,
 };
 use serde::Serialize;
 use tauri::{AppHandle, State};
@@ -21,10 +21,13 @@ use crate::{AppState, CmdResult, with_vault};
 
 /// What the dialog can offer on this computer.
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ExportChoices {
     formats: Vec<Format>,
-    /// The version of the Pandoc found, on desktop (ADR-0010).
+    /// The version of the Pandoc in use, on desktop (ADR-0010).
     pandoc: Option<String>,
+    /// Why the Pandoc chosen in the settings does not run (ADR-0039).
+    pandoc_problem: Option<String>,
     /// An export can be shared afterwards ([`share_export`]): on macOS and iOS.
     share: bool,
 }
@@ -40,29 +43,24 @@ pub async fn exports_are_shared() -> bool {
 /// The formats this computer can write. Looks for Pandoc each time, so one
 /// installed meanwhile counts.
 #[tauri::command]
-pub async fn export_choices() -> ExportChoices {
+pub async fn export_choices(app: AppHandle) -> ExportChoices {
     let mut formats = vec![Format::Html];
     if cfg!(any(target_os = "macos", target_os = "ios")) {
         formats.push(Format::Pdf);
     }
     formats.push(Format::Odt);
-    let pandoc = find_pandoc().map(|pandoc| pandoc.version().to_owned());
+    let (pandoc, pandoc_problem) = match crate::settings::pandoc(&app) {
+        Ok(pandoc) => (pandoc.map(|pandoc| pandoc.version().to_owned()), None),
+        Err(problem) => (None, Some(problem)),
+    };
     if pandoc.is_some() {
         formats.extend([Format::Docx, Format::Epub]);
     }
     ExportChoices {
         formats,
         pandoc,
+        pandoc_problem,
         share: cfg!(any(target_os = "macos", target_os = "ios")),
-    }
-}
-
-/// iOS and Android start no other programs.
-fn find_pandoc() -> Option<Pandoc> {
-    if cfg!(any(target_os = "ios", target_os = "android")) {
-        None
-    } else {
-        Pandoc::find()
     }
 }
 
@@ -236,7 +234,8 @@ pub async fn export_notes(
             Format::Odt => export_to(&OdtExporter, vault, &input, &options, to)?,
             Format::Pdf => export_pdf(&app, vault, &input, options, to)?,
             Format::Docx | Format::Epub => {
-                let pandoc = find_pandoc()
+                let pandoc = crate::settings::pandoc(&app)
+                    .map_err(crate::CommandError::other)?
                     .ok_or_else(|| crate::CommandError::other("Pandoc is not there any more"))?;
                 let exporter = PandocExporter::new(format, pandoc);
                 export_to(&exporter, vault, &input, &options, to)?

@@ -1,9 +1,9 @@
 # Vault File Format Specification
 
 - Format version: **1** (draft)
-- Spec revision: 0.15, 2026-11-07 (§5.7 rule 6 names the vault default `chord_notation`; 0.14: §5.2 a first heading of any level gives the title; 0.13: §12.4 rule 4 notes an undo cannot change; 0.12: §12.1 rule 7 the source's title as a heading; 0.11: §12.1 rule 6 notes from the source's trash; 0.10: §12 imported notes, import log, re-import and undo; 0.9: §9 reading and writing smart folders; 0.8: §7 retention settings; 0.7: §5.5 relative links are kept working when a note moves; 0.6: §8 `original_path` is relative to the vault root; 0.5: §8 trash names for notes without `id` and for collisions; 0.4: §5.3 refined by the first implementation, §5.6 music notation, §5.7 lyrics with chords)
+- Spec revision: 0.16, 2026-11-17 (§7 how `settings.yaml` is written; 0.15: §5.7 rule 6 names the vault default `chord_notation`; 0.14: §5.2 a first heading of any level gives the title; 0.13: §12.4 rule 4 notes an undo cannot change; 0.12: §12.1 rule 7 the source's title as a heading; 0.11: §12.1 rule 6 notes from the source's trash; 0.10: §12 imported notes, import log, re-import and undo; 0.9: §9 reading and writing smart folders; 0.8: §7 retention settings; 0.7: §5.5 relative links are kept working when a note moves; 0.6: §8 `original_path` is relative to the vault root; 0.5: §8 trash names for notes without `id` and for collisions; 0.4: §5.3 refined by the first implementation, §5.6 music notation, §5.7 lyrics with chords)
 - Status: Draft — becomes normative when M1 ships
-- Related: ADR-0004, ADR-0008, ADR-0009, ADR-0011, ADR-0013, ADR-0014, ADR-0012, ADR-0016, ADR-0017, ADR-0018, ADR-0019, ADR-0020, ADR-0026, ADR-0030
+- Related: ADR-0004, ADR-0008, ADR-0009, ADR-0011, ADR-0013, ADR-0014, ADR-0012, ADR-0016, ADR-0017, ADR-0018, ADR-0019, ADR-0020, ADR-0026, ADR-0030, ADR-0039
 
 The key words MUST, MUST NOT, SHOULD, SHOULD NOT and MAY are used as described in RFC 2119.
 
@@ -228,6 +228,8 @@ Rules:
   ```
 
   A missing or invalid value means its default; a daily period shorter than the first is extended to it.
+
+- Writing `settings.yaml` (ADR-0039): a writer changes only the line of each top-level key it sets, together with any lines indented under it, and keeps a `# comment` after the old value. All other lines MUST stay as they are: comments, keys it does not know and their order. A key the file lacks is added at the end; a key set back to its default MAY be removed. The file is written as §10 says. Settings of one device (a program's path, the update check) MUST NOT be written here (§1). Examples: `tests/fixtures/format/7-settings/`.
 
 ## 8. Trash
 

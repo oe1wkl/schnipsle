@@ -21,6 +21,7 @@ pub mod links;
 pub mod names;
 pub mod query;
 pub mod search;
+pub mod settings;
 pub mod smart_folders;
 pub mod stamp;
 pub mod strays;
@@ -35,13 +36,14 @@ pub use conflicts::{
     ConflictVersion, NoIdLookup, NoSyncConflicts, NotesById, RawVersion, SyncConflicts,
 };
 pub use coordination::{Coordinator, Uncoordinated};
-pub use history::{Retention, Version};
+pub use history::{Retention, Thinning, Version};
 pub use import_log::{ImportLog, ImportLogError, LogAction, LogEntry};
 pub use index::{Index, IndexError};
 pub use index_sync::IndexSync;
 pub use layout::{Folder, VaultIdentity, inspect};
 pub use names::{NewNote, slug};
 pub use search::{SearchHit, SnippetPart};
+pub use settings::{Change, Deviation, DeviceSettings, Setting, VaultSettings};
 pub use smart_folders::{FolderSort, SmartFolder, SmartFolderError, SmartFolders};
 pub use strays::{MovedNotes, StrayNotes};
 pub use tag_folders::{FolderKind, TagFolder};

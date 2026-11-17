@@ -4,7 +4,8 @@
 // IPC answers the export commands. Parameters: `?clean` for an export without
 // problems, `?failed` for one that stops with an error, `?nothing` for one with
 // no note readable, `?numbered` for files with names already taken, `?warnings`
-// for what a converter said, `?nopandoc` without Pandoc, `?unsaved` for an open note with unsaved changes, `?nonote`
+// for what a converter said, `?nopandoc` without Pandoc, `?brokenpandoc` with a
+// picked one that does not run, `?unsaved` for an open note with unsaved changes, `?nonote`
 // with no note open, `?noscores` for notes without music, `?ios` as on iOS, where
 // the export is shared afterwards; Share… shares at once as on macOS. The scores engraved
 // for the export are kept in `window.engravedScores`.
@@ -42,9 +43,23 @@ const SCORES = [
 async function answer(cmd: string, args?: Record<string, unknown>): Promise<unknown> {
   switch (cmd) {
     case "export_choices":
+      if (params.has("brokenpandoc")) {
+        return {
+          formats: ["html", "pdf", "odt"],
+          pandoc: null,
+          pandocProblem:
+            "The Pandoc chosen in Settings, /Users/you/bin/pandoc, does not run: No such file or directory (os error 2)",
+          share: true,
+        };
+      }
       return params.has("nopandoc")
-        ? { formats: ["html", "pdf", "odt"], pandoc: null, share: true }
-        : { formats: ["html", "pdf", "odt", "docx", "epub"], pandoc: "3.12.1", share: true };
+        ? { formats: ["html", "pdf", "odt"], pandoc: null, pandocProblem: null, share: true }
+        : {
+            formats: ["html", "pdf", "odt", "docx", "epub"],
+            pandoc: "3.12.1",
+            pandocProblem: null,
+            share: true,
+          };
     case "exports_are_shared":
       return params.has("ios");
     case "share_export":

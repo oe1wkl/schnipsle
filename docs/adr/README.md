@@ -51,3 +51,4 @@ This folder records every significant architectural decision of the project, one
 | [0035](0035-playing-scores.md) | Playing scores | Accepted | 2026-11-10 |
 | [0036](0036-installing-and-updating.md) | Installing and updating | Accepted | 2026-11-13 |
 | [0037](0037-pdf-on-ios.md) | PDF on iOS, with the links put back | Accepted | 2026-11-14 |
+| [0039](0039-settings-what-is-set-where.md) | Settings: what is set where | Accepted | 2026-11-17 |

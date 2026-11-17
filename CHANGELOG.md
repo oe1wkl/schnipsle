@@ -7,8 +7,8 @@ All notable changes to this project are documented here. The format follows [Kee
 ### Added
 
 - Repository foundation: Cargo workspace (`schnipsle-core`, `-import`, `-export`, Tauri 2 shell), TypeScript UI, CI, dependency licence checks, macOS bootstrap script.
-- Architecture decision records ADR-0001 to ADR-0037.
-- Vault format specification, draft revision 0.15 (notes, front matter, tags, links, attachments, music in ABC, song sheets in ChordPro, history, trash, smart folders, imported notes and the import log).
+- Architecture decision records ADR-0001 to ADR-0039.
+- Vault format specification, draft revision 0.16 (notes, front matter, tags, links, attachments, music in ABC, song sheets in ChordPro, history, trash, smart folders, imported notes and the import log).
 - Hashtag extraction in `schnipsle-core` following format.md §5.3, with the specification examples as tests.
 - Vault access in `schnipsle-core`: list notes (with iCloud placeholders), read, atomic write with conflict detection, create (spike, see docs/spikes/ios-vault.md).
 - `tauri-plugin-vault-access`: iOS folder picker with security-scoped bookmarks and iCloud download requests (spike).
@@ -66,6 +66,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - Export on the iPhone and iPad: an Export button in the open note's bar, and one above the note list for the notes it shows, open the export dialog of the Mac, with HTML, PDF and ODT. The export is written into the app's own folder, the report shows what is different from the notes, and Share… hands the file or folder to the share sheet, to save it in Files, send it or print it. PDFs made on iOS get their pages, links, table of contents and page numbers as on the Mac (ADR-0037).
 - Share… in the export dialog on the Mac, next to Export…: the export is written into the app's own folder and the macOS share menu opens at once, to send it by Mail or Messages, by AirDrop or to another app, with no save dialog first. The report can share it again; an export saved with Export… can be shared from its report too.
 - Export into a zip archive: a third choice next to one document and one file per note in a folder. The archive holds one file per note, with copies of their attachments for HTML, in a folder named as the archive, and can be saved with Export… or shared with Share…, on the Mac and on the iPhone and iPad.
+- Settings (ADR-0039): Settings… (⌘,) in the app menu on the Mac, a gear button in the bar on the iPhone. For the vault, on every device: how long earlier versions are kept, and English or German chord names in song sheets. A change that would remove versions says how many and asks first; the history is then thinned at once. The app writes `.notesapp/settings.yaml` by changing only the lines it sets, so comments and keys it does not know stay (format.md 0.16 §7). For the Mac only, in the app's own folder: which Pandoc DOCX and EPUB use (found, or a program you choose; one that does not run is said, not replaced), and the update check, on by default, which the updater will read once it comes.
 - Test UI: open a vault folder, edit notes with autosave, reload external changes, resolve conflicts (spike).
 
 ### Changed
