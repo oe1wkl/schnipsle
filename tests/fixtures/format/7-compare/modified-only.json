@@ -1,0 +1,25 @@
+{
+  "frontMatter": [
+    {
+      "key": "modified",
+      "before": "2026-11-17T10:02:00Z",
+      "after": "2026-11-17T10:31:00Z"
+    }
+  ],
+  "added": 0,
+  "removed": 0,
+  "rows": [
+    {
+      "kind": "folded",
+      "before": 6,
+      "after": 6,
+      "lines": [
+        "# Antenna tuner",
+        "",
+        "Order the variable capacitor and two toroid cores.",
+        "",
+        "#radio"
+      ]
+    }
+  ]
+}

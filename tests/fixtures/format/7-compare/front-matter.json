@@ -1,0 +1,38 @@
+{
+  "frontMatter": [
+    {
+      "key": "modified",
+      "before": "2026-11-15T21:12:09Z",
+      "after": "2026-11-17T08:00:41Z"
+    },
+    {
+      "key": "pinned",
+      "before": null,
+      "after": "true"
+    },
+    {
+      "key": "aliases",
+      "before": "  - Club evening",
+      "after": "  - Club evening\n  - Christmas meeting"
+    },
+    {
+      "key": "draft",
+      "before": "true",
+      "after": null
+    }
+  ],
+  "added": 0,
+  "removed": 0,
+  "rows": [
+    {
+      "kind": "folded",
+      "before": 9,
+      "after": 10,
+      "lines": [
+        "# Club meeting in December",
+        "",
+        "Second Thursday, 19:30, in the back room."
+      ]
+    }
+  ]
+}

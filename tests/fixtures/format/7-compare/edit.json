@@ -1,0 +1,437 @@
+{
+  "frontMatter": [
+    {
+      "key": "modified",
+      "before": "2026-11-16T18:40:12Z",
+      "after": "2026-11-17T09:05:47Z"
+    }
+  ],
+  "added": 8,
+  "removed": 6,
+  "rows": [
+    {
+      "kind": "folded",
+      "before": 6,
+      "after": 6,
+      "lines": [
+        "# Pumpkin soup",
+        "",
+        "For four people, about an hour.",
+        ""
+      ]
+    },
+    {
+      "kind": "same",
+      "before": 10,
+      "after": 10,
+      "text": "## Shopping"
+    },
+    {
+      "kind": "same",
+      "before": 11,
+      "after": 11,
+      "text": ""
+    },
+    {
+      "kind": "same",
+      "before": 12,
+      "after": 12,
+      "text": "- 1 Hokkaido pumpkin"
+    },
+    {
+      "kind": "removed",
+      "before": 13,
+      "parts": [
+        {
+          "text": "- ",
+          "changed": false
+        },
+        {
+          "text": "2",
+          "changed": true
+        },
+        {
+          "text": " onions",
+          "changed": false
+        }
+      ]
+    },
+    {
+      "kind": "added",
+      "after": 13,
+      "parts": [
+        {
+          "text": "- ",
+          "changed": false
+        },
+        {
+          "text": "3",
+          "changed": true
+        },
+        {
+          "text": " onions",
+          "changed": false
+        }
+      ]
+    },
+    {
+      "kind": "same",
+      "before": 14,
+      "after": 14,
+      "text": "- 1 piece of ginger"
+    },
+    {
+      "kind": "same",
+      "before": 15,
+      "after": 15,
+      "text": "- 400 ml coconut milk"
+    },
+    {
+      "kind": "removed",
+      "before": 16,
+      "parts": [
+        {
+          "text": "- ",
+          "changed": false
+        },
+        {
+          "text": "Vegetable",
+          "changed": true
+        },
+        {
+          "text": " stock",
+          "changed": false
+        }
+      ]
+    },
+    {
+      "kind": "added",
+      "after": 16,
+      "parts": [
+        {
+          "text": "- ",
+          "changed": false
+        },
+        {
+          "text": "1 l vegetable",
+          "changed": true
+        },
+        {
+          "text": " stock",
+          "changed": false
+        }
+      ]
+    },
+    {
+      "kind": "added",
+      "after": 17,
+      "parts": [
+        {
+          "text": "- Pumpkin seed oil",
+          "changed": false
+        }
+      ]
+    },
+    {
+      "kind": "same",
+      "before": 17,
+      "after": 18,
+      "text": ""
+    },
+    {
+      "kind": "same",
+      "before": 18,
+      "after": 19,
+      "text": "## Cooking"
+    },
+    {
+      "kind": "same",
+      "before": 19,
+      "after": 20,
+      "text": ""
+    },
+    {
+      "kind": "same",
+      "before": 20,
+      "after": 21,
+      "text": "1. Cut the pumpkin into cubes, seeds and all."
+    },
+    {
+      "kind": "removed",
+      "before": 21,
+      "parts": [
+        {
+          "text": "2. Fry the onions in a little ",
+          "changed": false
+        },
+        {
+          "text": "oil",
+          "changed": true
+        },
+        {
+          "text": " until soft.",
+          "changed": false
+        }
+      ]
+    },
+    {
+      "kind": "added",
+      "after": 22,
+      "parts": [
+        {
+          "text": "2. Fry the onions in a little ",
+          "changed": false
+        },
+        {
+          "text": "butter",
+          "changed": true
+        },
+        {
+          "text": " until soft.",
+          "changed": false
+        }
+      ]
+    },
+    {
+      "kind": "same",
+      "before": 22,
+      "after": 23,
+      "text": "3. Add the pumpkin and the ginger, fry for five minutes."
+    },
+    {
+      "kind": "same",
+      "before": 23,
+      "after": 24,
+      "text": "4. Pour in the stock until everything is covered."
+    },
+    {
+      "kind": "removed",
+      "before": 24,
+      "parts": [
+        {
+          "text": "5. Simmer for ",
+          "changed": false
+        },
+        {
+          "text": "25",
+          "changed": true
+        },
+        {
+          "text": " minutes.",
+          "changed": false
+        }
+      ]
+    },
+    {
+      "kind": "added",
+      "after": 25,
+      "parts": [
+        {
+          "text": "5. Simmer for ",
+          "changed": false
+        },
+        {
+          "text": "20",
+          "changed": true
+        },
+        {
+          "text": " minutes.",
+          "changed": false
+        }
+      ]
+    },
+    {
+      "kind": "same",
+      "before": 25,
+      "after": 26,
+      "text": "6. Blend, then stir in the coconut milk."
+    },
+    {
+      "kind": "same",
+      "before": 26,
+      "after": 27,
+      "text": ""
+    },
+    {
+      "kind": "same",
+      "before": 27,
+      "after": 28,
+      "text": "Season with salt and a little lemon juice."
+    },
+    {
+      "kind": "added",
+      "after": 29,
+      "parts": [
+        {
+          "text": "Serve with a few drops of pumpkin seed oil.",
+          "changed": false
+        }
+      ]
+    },
+    {
+      "kind": "same",
+      "before": 28,
+      "after": 30,
+      "text": ""
+    },
+    {
+      "kind": "same",
+      "before": 29,
+      "after": 31,
+      "text": "## Notes"
+    },
+    {
+      "kind": "same",
+      "before": 30,
+      "after": 32,
+      "text": ""
+    },
+    {
+      "kind": "folded",
+      "before": 31,
+      "after": 33,
+      "lines": [
+        "Keeps for three days in the fridge.",
+        "Freezes well, without the coconut milk."
+      ]
+    },
+    {
+      "kind": "same",
+      "before": 33,
+      "after": 35,
+      "text": ""
+    },
+    {
+      "kind": "same",
+      "before": 34,
+      "after": 36,
+      "text": "```chordpro"
+    },
+    {
+      "kind": "same",
+      "before": 35,
+      "after": 37,
+      "text": "{title: Soup song}"
+    },
+    {
+      "kind": "removed",
+      "before": 36,
+      "parts": [
+        {
+          "text": "[",
+          "changed": false
+        },
+        {
+          "text": "D",
+          "changed": true
+        },
+        {
+          "text": "]Pumpkin in the [",
+          "changed": false
+        },
+        {
+          "text": "G",
+          "changed": true
+        },
+        {
+          "text": "]pot, [",
+          "changed": false
+        },
+        {
+          "text": "A",
+          "changed": true
+        },
+        {
+          "text": "]stir it while it's [",
+          "changed": false
+        },
+        {
+          "text": "D",
+          "changed": true
+        },
+        {
+          "text": "]hot",
+          "changed": false
+        }
+      ]
+    },
+    {
+      "kind": "added",
+      "after": 38,
+      "parts": [
+        {
+          "text": "[",
+          "changed": false
+        },
+        {
+          "text": "E",
+          "changed": true
+        },
+        {
+          "text": "]Pumpkin in the [",
+          "changed": false
+        },
+        {
+          "text": "A",
+          "changed": true
+        },
+        {
+          "text": "]pot, [",
+          "changed": false
+        },
+        {
+          "text": "B",
+          "changed": true
+        },
+        {
+          "text": "]stir it while it's [",
+          "changed": false
+        },
+        {
+          "text": "E",
+          "changed": true
+        },
+        {
+          "text": "]hot",
+          "changed": false
+        }
+      ]
+    },
+    {
+      "kind": "same",
+      "before": 37,
+      "after": 39,
+      "text": "```"
+    },
+    {
+      "kind": "same",
+      "before": 38,
+      "after": 40,
+      "text": ""
+    },
+    {
+      "kind": "removed",
+      "before": 39,
+      "parts": [
+        {
+          "text": "#recipes #autumn",
+          "changed": false
+        }
+      ]
+    },
+    {
+      "kind": "added",
+      "after": 41,
+      "parts": [
+        {
+          "text": "#recipes #autumn",
+          "changed": false
+        },
+        {
+          "text": " #soup",
+          "changed": true
+        }
+      ]
+    }
+  ]
+}
