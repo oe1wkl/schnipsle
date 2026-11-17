@@ -18,6 +18,16 @@
       <button id="pick-vault" type="button" title="Open another vault, or make a folder a new one">
         Open Vault…
       </button>
+      <button
+        id="show-settings"
+        class="icon"
+        type="button"
+        aria-label="Settings"
+        title="Settings"
+        hidden
+      >
+        &#x2699;&#xFE0E;
+      </button>
     </header>
 
     <div id="setup" class="banner" role="alertdialog" aria-labelledby="setup-text" hidden>
@@ -420,6 +430,82 @@
           <span class="spacer"></span>
           <button id="imports-close" type="button">Close</button>
           <button id="imports-start" type="button" hidden>Undo import</button>
+        </div>
+      </div>
+    </dialog>
+    <dialog
+      id="settings-dialog"
+      class="import-dialog settings-dialog"
+      aria-labelledby="settings-title"
+    >
+      <div class="import">
+        <h2 id="settings-title">Settings</h2>
+        <section class="settings-section" aria-labelledby="settings-vault-title">
+          <h3 id="settings-vault-title">This vault</h3>
+          <p id="settings-vault-hint" class="muted"></p>
+          <div id="settings-vault-fields" class="settings-fields">
+            <fieldset>
+              <legend>Earlier versions of a note</legend>
+              <label>
+                Keep every version for
+                <input id="settings-keep-all" type="text" inputmode="numeric" size="4" />
+                days,
+              </label>
+              <label>
+                then one a day until
+                <input id="settings-keep-daily" type="text" inputmode="numeric" size="4" />
+                days, then one a week.
+              </label>
+              <p id="settings-retention-note" class="muted"></p>
+            </fieldset>
+            <div id="settings-confirm" class="folder-confirm" role="alertdialog" hidden>
+              <span id="settings-confirm-text"></span>
+              <button id="settings-confirm-yes" type="button" class="danger">Remove them</button>
+              <button id="settings-confirm-no" type="button">Keep them</button>
+            </div>
+            <label>
+              Chord names in song sheets
+              <select id="settings-chords">
+                <option value="english">English: B and B♭</option>
+                <option value="german">German: H and B</option>
+              </select>
+            </label>
+            <p id="settings-chords-note" class="muted" hidden></p>
+          </div>
+          <p id="settings-vault-error" class="folder-error" role="alert" hidden></p>
+        </section>
+        <section
+          id="settings-device"
+          class="settings-section"
+          aria-labelledby="settings-device-title"
+          hidden
+        >
+          <h3 id="settings-device-title">This Mac</h3>
+          <p class="muted">Saved on this Mac only.</p>
+          <div class="settings-fields">
+            <fieldset>
+              <legend>Pandoc, for Word and EPUB</legend>
+              <p id="settings-pandoc-status"></p>
+              <div class="folder-buttons">
+                <button id="settings-pandoc-pick" type="button">Choose Program…</button>
+                <button id="settings-pandoc-find" type="button" hidden>
+                  Find It Automatically
+                </button>
+              </div>
+            </fieldset>
+            <label>
+              <input id="settings-updates" type="checkbox" />
+              Check for updates once a day
+            </label>
+            <p class="muted">
+              Schnipsle then asks GitHub whether a newer version exists. It sends nothing else.
+            </p>
+          </div>
+          <p id="settings-device-error" class="folder-error" role="alert" hidden></p>
+        </section>
+        <div class="folder-buttons">
+          <span class="spacer"></span>
+          <button id="settings-close" type="button">Done</button>
         </div>
       </div>
     </dialog>

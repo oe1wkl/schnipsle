@@ -304,7 +304,7 @@ export function createExport(hooks: ExportHooks): {
       return;
     }
     try {
-      const [{ formats, pandoc, share }, sharedHere, selected] = await Promise.all([
+      const [{ formats, pandoc, pandocProblem, share }, sharedHere, selected] = await Promise.all([
         invoke<ExportChoices>("export_choices"),
         invoke<boolean>("exports_are_shared"),
         hooks.selection(),
@@ -326,6 +326,10 @@ export function createExport(hooks: ExportHooks): {
           return option;
         }),
       );
+      noPandoc.textContent =
+        pandocProblem === null
+          ? "Word and EPUB appear here once Pandoc is installed."
+          : `Word and EPUB need Pandoc. ${pandocProblem}. Choose another one in Settings.`;
       noPandoc.hidden = pandoc !== null || shared;
       // On macOS Share… exports and shares in one go; on iOS Export does.
       shareButton.hidden = !canShare || shared;

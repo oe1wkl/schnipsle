@@ -8,6 +8,7 @@
 mod exporting;
 mod importing;
 mod indexing;
+mod settings;
 mod smart_folders;
 mod songs;
 mod vault_location;
@@ -737,6 +738,10 @@ fn install_menu(app: &tauri::App) -> tauri::Result<()> {
             &MenuItem::with_id(app, "imports", "Imports…", true, None::<&str>)?,
             &MenuItem::with_id(app, "export", "Export…", true, None::<&str>)?,
             &separator()?,
+            #[cfg(not(target_os = "macos"))]
+            &MenuItem::with_id(app, "settings", "Settings…", true, Some("CmdOrCtrl+,"))?,
+            #[cfg(not(target_os = "macos"))]
+            &separator()?,
             &PredefinedMenuItem::close_window(app, None)?,
             #[cfg(not(target_os = "macos"))]
             &PredefinedMenuItem::quit(app, None)?,
@@ -769,25 +774,7 @@ fn install_menu(app: &tauri::App) -> tauri::Result<()> {
     )?;
 
     #[cfg(target_os = "macos")]
-    let menu = {
-        let app_menu = Submenu::with_items(
-            app,
-            info.name.clone(),
-            true,
-            &[
-                &PredefinedMenuItem::about(app, None, Some(about))?,
-                &separator()?,
-                &PredefinedMenuItem::services(app, None)?,
-                &separator()?,
-                &PredefinedMenuItem::hide(app, None)?,
-                &PredefinedMenuItem::hide_others(app, None)?,
-                &PredefinedMenuItem::show_all(app, None)?,
-                &separator()?,
-                &PredefinedMenuItem::quit(app, None)?,
-            ],
-        )?;
-        Menu::with_items(app, &[&app_menu, &file, &edit, &window])?
-    };
+    let menu = Menu::with_items(app, &[&app_menu(app, about)?, &file, &edit, &window])?;
     #[cfg(not(target_os = "macos"))]
     let menu = {
         let help = Submenu::with_items(
@@ -806,12 +793,40 @@ fn install_menu(app: &tauri::App) -> tauri::Result<()> {
         let id = event.id().as_ref();
         if matches!(
             id,
-            "new-note" | "open-vault" | "import" | "imports" | "export"
+            "new-note" | "open-vault" | "import" | "imports" | "export" | "settings"
         ) {
             let _ = app.emit("menu", id);
         }
     });
     Ok(())
+}
+
+/// The application menu of macOS, with Settings… (ADR-0039).
+#[cfg(target_os = "macos")]
+fn app_menu(
+    app: &tauri::App,
+    about: tauri::menu::AboutMetadata,
+) -> tauri::Result<tauri::menu::Submenu<tauri::Wry>> {
+    use tauri::menu::{MenuItem, PredefinedMenuItem, Submenu};
+    let separator = || PredefinedMenuItem::separator(app);
+    Submenu::with_items(
+        app,
+        app.package_info().name.clone(),
+        true,
+        &[
+            &PredefinedMenuItem::about(app, None, Some(about))?,
+            &separator()?,
+            &MenuItem::with_id(app, "settings", "Settings…", true, Some("CmdOrCtrl+,"))?,
+            &separator()?,
+            &PredefinedMenuItem::services(app, None)?,
+            &separator()?,
+            &PredefinedMenuItem::hide(app, None)?,
+            &PredefinedMenuItem::hide_others(app, None)?,
+            &PredefinedMenuItem::show_all(app, None)?,
+            &separator()?,
+            &PredefinedMenuItem::quit(app, None)?,
+        ],
+    )
 }
 
 /// Builds and runs the application. Also the iOS/Android entry point.
@@ -870,6 +885,13 @@ pub fn run() {
             extract_tags,
             songs::render_song,
             songs::apply_transposition,
+            settings::read_settings,
+            settings::history_to_thin,
+            settings::write_settings,
+            settings::read_device_settings,
+            settings::set_update_check,
+            settings::find_pandoc_again,
+            settings::pick_pandoc,
             exporting::export_choices,
             exporting::exports_are_shared,
             exporting::pick_export,
