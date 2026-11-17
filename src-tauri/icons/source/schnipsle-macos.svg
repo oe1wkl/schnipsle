@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!--
+  Schnipsle app icon for macOS: the artwork of schnipsle.svg placed on the
+  macOS icon grid (824 x 824 rounded-rect body, 100 px margin, corner
+  radius 185, drop shadow) on a transparent 1024 x 1024 canvas.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <path id="body" d="M285,100 H739 A185,185 0 0 1 924,285 V739 A185,185 0 0 1 739,924 H285 A185,185 0 0 1 100,739 V285 A185,185 0 0 1 285,100Z"/>
+    <clipPath id="body-clip"><use href="#body"/></clipPath>
+    <filter id="drop" x="-10%" y="-10%" width="120%" height="125%">
+      <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#000" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+  <use href="#body" filter="url(#drop)"/>
+  <image href="schnipsle.svg" x="100" y="100" width="824" height="824" clip-path="url(#body-clip)"/>
+</svg>

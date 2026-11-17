@@ -63,6 +63,7 @@ Then add the two lines it prints to `~/.zshrc` and open a new terminal.
 | `cargo clippy --workspace --all-targets -- -D warnings` | Rust lints, as in CI |
 | `pnpm check` | TypeScript type check, ESLint, Prettier |
 | `cargo deny check` | Dependency licences and security advisories |
+| `scripts/make-icons.sh` | Regenerate all app icons from the SVG masters in `src-tauri/icons/source/` (macOS grid and full-bleed iOS) |
 
 ## 6. iOS
 
