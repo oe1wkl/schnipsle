@@ -21,6 +21,7 @@ pub mod layout;
 pub mod links;
 pub mod names;
 pub mod query;
+pub mod retag;
 pub mod search;
 pub mod settings;
 pub mod smart_folders;
@@ -44,6 +45,10 @@ pub use index::{Index, IndexError};
 pub use index_sync::IndexSync;
 pub use layout::{Folder, VaultIdentity, inspect};
 pub use names::{NewNote, slug};
+pub use retag::{
+    InvalidRename, PlannedFolder, PlannedNote, RetagOutcome, RetagPlan, RetagUndo, SkippedNote,
+    TagRename,
+};
 pub use search::{SearchHit, SnippetPart};
 pub use settings::{Change, Deviation, DeviceSettings, Setting, VaultSettings};
 pub use smart_folders::{FolderSort, SmartFolder, SmartFolderError, SmartFolders};

@@ -13,6 +13,7 @@ import { createImageCache, fileName } from "./images";
 import { createImport } from "./import";
 import { createImports } from "./imports";
 import { createSettings } from "./settings";
+import { createRetag } from "./retag";
 import { createSidebar, type ListFilter } from "./sidebar";
 import { musicMenu } from "./snippets";
 import type { SongHost } from "./song";
@@ -207,7 +208,24 @@ const sidebar = createSidebar(
   (message) => {
     setStatus(`Smart folders not changed: ${message}`);
   },
+  {
+    can: () => vaultIsOpen && readOnly === null,
+    open: (name) => {
+      retag.open(name);
+    },
+  },
 );
+
+/** Renaming and merging tags (F-11, ADR-0040). */
+const retag = createRetag({
+  // Saved first, as the rename reads the files.
+  beforeChange: flushSave,
+  changed: (from, to) => {
+    sidebar.retagged(from, to);
+    queueCheck();
+  },
+  status: setStatus,
+});
 
 function vaultOpened(info: VaultInfo): void {
   ui.setup.hidden = true;
@@ -222,6 +240,7 @@ function vaultOpened(info: VaultInfo): void {
   ui.newNote.disabled = readOnly !== null;
   ui.empty.hidden = true;
   sidebar.reset();
+  retag.reset();
   sidebar.setEnabled(true);
   void sidebar.refresh();
 }

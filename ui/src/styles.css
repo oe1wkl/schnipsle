@@ -673,6 +673,26 @@ button.danger {
   color: #c4271b;
 }
 
+/* Renaming a tag (ADR-0040): the report scrolls, the buttons stay in view. */
+#retag-dialog {
+  width: min(480px, calc(100vw - 32px));
+}
+.retag-form [hidden] {
+  display: none;
+}
+.retag-help,
+.retag-report p {
+  margin: 0;
+  font-size: 13px;
+}
+.retag-notes {
+  max-height: min(240px, 40vh);
+  margin: 6px 0 0;
+  padding-left: 1.25em;
+  overflow-y: auto;
+  font-size: 13px;
+}
+
 /* The import dialog (desktop). */
 .import-dialog {
   width: min(760px, calc(100vw - 32px));

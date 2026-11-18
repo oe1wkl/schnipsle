@@ -8,6 +8,7 @@
 mod exporting;
 mod importing;
 mod indexing;
+mod retagging;
 mod settings;
 mod smart_folders;
 mod songs;
@@ -38,6 +39,8 @@ struct AppState {
     index: indexing::SharedIndex,
     /// The import dry run the UI shows.
     import: importing::PendingImport,
+    /// The last tag rename, for Undo (ADR-0040).
+    last_rename: retagging::LastRename,
 }
 
 /// Error sent to the UI: a machine-readable `kind` plus a message.
@@ -872,6 +875,9 @@ pub fn run() {
             read_note,
             save_note,
             set_pinned,
+            retagging::plan_tag_rename,
+            retagging::rename_tag,
+            retagging::undo_tag_rename,
             smart_folders::list_smart_folders,
             smart_folders::add_smart_folder,
             smart_folders::update_smart_folder,
