@@ -7,7 +7,7 @@
 // keeps a search as a smart folder (smart-folders.ts). The tag tree loads a folder's subfolders when it
 // is opened: hierarchy levels (`#projekte` › `tuner`) and combinations with
 // other tags (`∩ #cw`), each with its note count; it remembers which folders
-// are open across refreshes.
+// are open across refreshes. A tag's ✎ opens its rename (retag.ts).
 import { invoke } from "@tauri-apps/api/core";
 
 import { asError, el } from "./dom";
@@ -46,6 +46,12 @@ const pathKey = (keys: string[]): string => keys.join("\u0000");
 export function createSidebar(
   onFilter: (filter: ListFilter) => void,
   onError: (message: string) => void,
+  rename: {
+    /** Whether tags can be renamed now (not in a read-only vault). */
+    can: () => boolean;
+    /** The user asked to rename the tag `name` (without `#`). */
+    open: (name: string) => void;
+  },
 ): {
   /** Reloads smart folders and the tag tree, keeping open folders open. */
   refresh: () => Promise<void>;
@@ -59,6 +65,8 @@ export function createSidebar(
   showAll: () => void;
   /** Opens the tag panel (phone: the Tags view). */
   openTags: () => void;
+  /** After the tag `from` was renamed to `to`: the list and open folders follow it. */
+  retagged: (from: string, to: string) => void;
 } {
   let filter: ListFilter = { kind: "all" };
   /** The filter to return to when the search field is cleared. */
@@ -127,6 +135,18 @@ export function createSidebar(
     count.className = "tag-count";
     count.textContent = String(folder.count);
     row.append(toggle, name, count);
+    if (folder.keys.length === 1 && folder.kind !== "combination" && rename.can()) {
+      const edit = document.createElement("button");
+      edit.type = "button";
+      edit.className = "row-action";
+      edit.textContent = "✎";
+      edit.title = "Rename or merge";
+      edit.setAttribute("aria-label", `Rename #${folder.name}`);
+      edit.addEventListener("click", () => {
+        rename.open(folder.name);
+      });
+      row.append(edit);
+    }
 
     const children = document.createElement("ul");
     children.setAttribute("role", "group");
@@ -260,6 +280,39 @@ export function createSidebar(
       smartPanel.open = true;
       tagsPanel.open = true;
     },
+    retagged(from, to) {
+      const follow = renamedKey(tagKey(from), tagKey(to));
+      for (const path of [...open]) {
+        const keys = path.split("\u0000");
+        const moved = keys.map(follow);
+        if (moved.some((k, i) => k !== keys[i])) {
+          open.delete(path);
+          open.add(pathKey(moved));
+        }
+      }
+      if (filter.kind === "tag") {
+        const shown = filter.keys;
+        const keys = shown.map(follow);
+        if (keys.some((k, i) => k !== shown[i])) {
+          const label = keys.map((k) => `#${k}`).join(" ∩ ");
+          beforeSearch = { kind: "tag", keys, label };
+          select(beforeSearch);
+        }
+      }
+    },
+  };
+}
+
+/** A tag's key (format.md §5.3): NFC, then lowercase. */
+function tagKey(name: string): string {
+  return name.normalize("NFC").toLowerCase();
+}
+
+/** Maps a tag key to where a rename of `from` to `to` moved it. */
+function renamedKey(from: string, to: string): (key: string) => string {
+  return (key) => {
+    if (key === from) return to;
+    return key.startsWith(`${from}/`) ? `${to}${key.slice(from.length)}` : key;
   };
 }
 

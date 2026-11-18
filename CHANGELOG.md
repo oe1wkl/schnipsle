@@ -7,7 +7,7 @@ All notable changes to this project are documented here. The format follows [Kee
 ### Added
 
 - Repository foundation: Cargo workspace (`schnipsle-core`, `-import`, `-export`, Tauri 2 shell), TypeScript UI, CI, dependency licence checks, macOS bootstrap script.
-- Architecture decision records ADR-0001 to ADR-0039.
+- Architecture decision records ADR-0001 to ADR-0040.
 - Vault format specification, draft revision 0.16 (notes, front matter, tags, links, attachments, music in ABC, song sheets in ChordPro, history, trash, smart folders, imported notes and the import log).
 - Hashtag extraction in `schnipsle-core` following format.md §5.3, with the specification examples as tests.
 - Vault access in `schnipsle-core`: list notes (with iCloud placeholders), read, atomic write with conflict detection, create (spike, see docs/spikes/ios-vault.md).
@@ -69,6 +69,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - App icon for macOS and iOS: a spiral-bound notepad with a hashtag on a warm background. The SVG masters are in `src-tauri/icons/source/`; `scripts/make-icons.sh` makes the macOS icon on the system icon grid and a full-bleed iOS icon without an alpha channel.
 - Comparing versions in the history (ADR-0038): Compare shows what changed between the selected version and the note as it is now, or another version chosen next to it, always from the older to the newer. Lines removed and added are shown one under the other in the Markdown source, with the words changed inside a line marked, and a count of lines added and removed. Front matter changes are listed by key (`modified` in local time); a version that differs only in the time of its last change says so. Unchanged lines away from the changes are folded and open on a click. Restore and As new note work on the selected version as before.
 - Settings (ADR-0039): Settings… (⌘,) in the app menu on the Mac, a gear button in the bar on the iPhone. For the vault, on every device: how long earlier versions are kept, and English or German chord names in song sheets. A change that would remove versions says how many and asks first; the history is then thinned at once. The app writes `.notesapp/settings.yaml` by changing only the lines it sets, so comments and keys it does not know stay (format.md 0.16 §7). For the Mac only, in the app's own folder: which Pandoc DOCX and EPUB use (found, or a program you choose; one that does not run is said, not replaced), and the update check, on by default, which the updater will read once it comes.
+- Renaming and merging tags (F-11, ADR-0040): ✎ next to a tag in the sidebar renames it in every note that has it, its subtags along (`#projects/tuner` becomes `#work/tuner`), and in the smart folders that search for it. Renaming it to a tag that exists merges the two. Before anything is written, the dialog shows which notes and smart folders change. Only real tags change, never `#` in code, links or after `\#`. Each note gets a snapshot first, and a note changed since the report is left as it is. Undo puts the notes back while the app runs.
 - Test UI: open a vault folder, edit notes with autosave, reload external changes, resolve conflicts (spike).
 
 ### Changed

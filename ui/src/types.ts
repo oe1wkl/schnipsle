@@ -351,3 +351,39 @@ export interface DeviceSettings {
   pandocProblem: string | null;
   checkForUpdates: boolean;
 }
+/** A note a tag rename changes (schnipsle-core `PlannedNote`). */
+export interface PlannedNote {
+  path: string;
+  title: string;
+  hash: string;
+  occurrences: number;
+}
+/** A smart folder a tag rename changes (schnipsle-core `PlannedFolder`). */
+export interface PlannedFolder {
+  id: string;
+  name: string;
+  query: string;
+  renamed: string;
+}
+/** A note a tag rename leaves as it is, and why (schnipsle-core `SkippedNote`). */
+export interface SkippedNote {
+  path: string;
+  title: string;
+  reason: string;
+}
+/** What a tag rename would change (`plan_tag_rename`, ADR-0040). */
+export interface RetagPlan {
+  old: string;
+  new: string;
+  merge: boolean;
+  notes: PlannedNote[];
+  folders: PlannedFolder[];
+  skipped: SkippedNote[];
+}
+/** What a tag rename or its undo did (`rename_tag`, `undo_tag_rename`). */
+export interface RetagOutcome {
+  changed: string[];
+  skipped: SkippedNote[];
+  folders: number;
+  foldersError: string | null;
+}

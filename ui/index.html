@@ -202,6 +202,37 @@
       </form>
     </dialog>
 
+    <dialog id="retag-dialog" aria-labelledby="retag-title">
+      <form id="retag-form" class="folder-form retag-form" novalidate>
+        <h2 id="retag-title">Rename tag</h2>
+        <label>
+          New name
+          <input
+            id="retag-name"
+            type="text"
+            autocomplete="off"
+            autocapitalize="off"
+            spellcheck="false"
+          />
+        </label>
+        <p id="retag-help" class="muted retag-help">
+          Its subtags move along. To merge it into another tag, enter that tag. Every note changed
+          keeps its earlier version in its history.
+        </p>
+        <section id="retag-report" class="retag-report" aria-live="polite" hidden>
+          <p id="retag-summary"></p>
+          <ul id="retag-notes" class="retag-notes"></ul>
+        </section>
+        <p id="retag-error" class="folder-error" role="alert" hidden></p>
+        <div class="folder-buttons">
+          <button id="retag-undo" type="button" hidden>Undo</button>
+          <span class="spacer"></span>
+          <button id="retag-cancel" type="button">Cancel</button>
+          <button id="retag-start" type="submit" disabled>Rename</button>
+        </div>
+      </form>
+    </dialog>
+
     <dialog id="import-dialog" class="import-dialog" aria-labelledby="import-title">
       <div class="import">
         <h2 id="import-title">Import notes</h2>
