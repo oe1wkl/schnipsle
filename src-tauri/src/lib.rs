@@ -770,8 +770,10 @@ fn extract_tags(markdown: &str) -> Vec<Tag> {
 /// The app's own menu bar (desktop). Unlike Tauri's default it has "Close
 /// Window" only once, in the File menu, next to "New Note" (⌘N), "Open
 /// Vault…" (⌘O), "Import…" and "Export…". A click on those is sent to the UI as a
-/// `menu` event carrying the item id; everything else is a standard system
-/// item.
+/// `menu` event carrying the item id. Quit (⌘Q) is the app's own item too: the
+/// system's calls `terminate:` at once, which tao does not let the app hold
+/// back, so the open note would not be saved first (ADR-0042 rule 3).
+/// Everything else is a standard system item.
 #[cfg(desktop)]
 fn install_menu(app: &tauri::App) -> tauri::Result<()> {
     use tauri::Emitter as _;
@@ -812,7 +814,7 @@ fn install_menu(app: &tauri::App) -> tauri::Result<()> {
             &separator()?,
             &PredefinedMenuItem::close_window(app, None)?,
             #[cfg(not(target_os = "macos"))]
-            &PredefinedMenuItem::quit(app, None)?,
+            &quit_item(app)?,
         ],
     )?;
     let edit = Submenu::with_items(
@@ -864,9 +866,23 @@ fn install_menu(app: &tauri::App) -> tauri::Result<()> {
             "new-note" | "open-vault" | "import" | "imports" | "export" | "settings"
         ) {
             let _ = app.emit("menu", id);
+        } else if id == "quit" && closing::may_close(app) {
+            app.exit(0);
         }
     });
     Ok(())
+}
+
+/// Quit (⌘Q), which waits for the page to save the open note
+/// ([`closing::may_close`]).
+#[cfg(desktop)]
+fn quit_item(app: &tauri::App) -> tauri::Result<tauri::menu::MenuItem<tauri::Wry>> {
+    let quit = strings::menu().quit;
+    #[cfg(target_os = "macos")]
+    let label = format!("{quit} {}", app.package_info().name);
+    #[cfg(not(target_os = "macos"))]
+    let label = quit;
+    tauri::menu::MenuItem::with_id(app, "quit", label, true, Some("CmdOrCtrl+Q"))
 }
 
 /// The application menu of macOS, with Settings… (ADR-0039).
@@ -898,7 +914,7 @@ fn app_menu(
             &PredefinedMenuItem::hide_others(app, None)?,
             &PredefinedMenuItem::show_all(app, None)?,
             &separator()?,
-            &PredefinedMenuItem::quit(app, None)?,
+            &quit_item(app)?,
         ],
     )
 }
