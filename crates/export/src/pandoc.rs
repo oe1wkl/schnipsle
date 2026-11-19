@@ -27,7 +27,7 @@ use crate::document::{self, Collected, Rules, Source};
 use crate::music::{Music, Output};
 use crate::odt_content::escape;
 use crate::output::{self, Names};
-use crate::{Exporter, Format, Input, Layout, Options, Paper, Report, docx_package};
+use crate::{Exporter, Format, Input, Layout, Options, Paper, Report, Warning, docx_package};
 
 /// What Pandoc reads: plain `CommonMark` and what the tree needs of the rest, so
 /// that no other Markdown of Pandoc's changes what a note says.
@@ -295,7 +295,11 @@ fn warnings_in(text: &str) -> Vec<String> {
 /// A warning of Pandoc in words the user can act on, for the one that needs it:
 /// Pandoc names a picture by its file in the temporary folder and asks for
 /// `rsvg-convert`, without saying that the SVG is in the document all the same.
-fn explained(warning: &str, descriptions: &HashMap<String, String>) -> Option<String> {
+fn explained(
+    title: &str,
+    warning: &str,
+    descriptions: &HashMap<String, String>,
+) -> Option<Warning> {
     let (name, why) = warning
         .strip_prefix("Could not convert image ")?
         .split_once(": ")?;
@@ -304,15 +308,14 @@ fn explained(warning: &str, descriptions: &HashMap<String, String>) -> Option<St
     if !(svg && why.contains("rsvg-convert")) {
         return None;
     }
-    let picture = match descriptions.get(name).map(|d| d.trim()) {
-        Some("") | None => "An SVG drawing".to_owned(),
-        Some(description) => format!("The SVG drawing \u{201c}{description}\u{201d}"),
+    let description = match descriptions.get(name).map(|d| d.trim()) {
+        Some("") | None => None,
+        Some(description) => Some(description.to_owned()),
     };
-    Some(format!(
-        "{picture} is in the document as SVG only, which Word before 2016 and some other \
-         programs do not show. With rsvg-convert installed (on a Mac: brew install \
-         librsvg), a PNG copy is added for them."
-    ))
+    Some(Warning::SvgOnly {
+        title: title.to_owned(),
+        description,
+    })
 }
 
 /// Writes DOCX or EPUB through a [`Converter`].
@@ -482,9 +485,11 @@ impl<C: Converter> PandocExporter<C> {
         let converted = self.converter.convert(&job).map_err(VaultError::Io)?;
         collected
             .warnings
-            .extend(converted.warnings.into_iter().map(|warning| {
-                let warning = explained(&warning, &descriptions).unwrap_or(warning);
-                format!("{title}: {warning}")
+            .extend(converted.warnings.into_iter().map(|message| {
+                explained(title, &message, &descriptions).unwrap_or_else(|| Warning::Converter {
+                    title: title.to_owned(),
+                    message,
+                })
             }));
         if self.format == Format::Docx {
             let bytes = docx_package::finish(&converted.bytes, title, created.as_deref(), pages)
@@ -710,19 +715,29 @@ mod tests {
                  rsvg-convert: createProcess: posix_spawnp: does not exist\""
             )
         };
-        let named = explained(&said("picture-2.svg"), &descriptions).unwrap();
-        assert!(
-            named.starts_with(
-                "The SVG drawing \u{201c}A plan\u{201d} is in the document as SVG only"
-            )
+        let named = explained("Plans", &said("picture-2.svg"), &descriptions).unwrap();
+        assert_eq!(
+            named,
+            Warning::SvgOnly {
+                title: "Plans".to_owned(),
+                description: Some("A plan".to_owned()),
+            }
         );
-        assert!(named.contains("brew install librsvg"));
-        let unnamed = explained(&said("picture-3.svg"), &descriptions).unwrap();
-        assert!(unnamed.starts_with("An SVG drawing is in"));
-        assert!(explained(&said("picture-9.svg"), &descriptions).is_some());
+        let text = named.to_string();
+        assert!(text.starts_with(
+            "Plans: The SVG drawing \u{201c}A plan\u{201d} is in the document as SVG only"
+        ));
+        assert!(text.contains("brew install librsvg"));
+        let unnamed = explained("Plans", &said("picture-3.svg"), &descriptions).unwrap();
+        assert!(
+            unnamed
+                .to_string()
+                .starts_with("Plans: An SVG drawing is in")
+        );
+        assert!(explained("Plans", &said("picture-9.svg"), &descriptions).is_some());
         let other = "Could not convert image picture-1.png: something else";
-        assert_eq!(explained(other, &descriptions), None);
-        assert_eq!(explained("Something else", &descriptions), None);
+        assert_eq!(explained("Plans", other, &descriptions), None);
+        assert_eq!(explained("Plans", "Something else", &descriptions), None);
     }
 
     #[cfg(unix)]

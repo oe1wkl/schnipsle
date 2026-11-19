@@ -24,6 +24,7 @@ impl From<SmartFolderError> for CommandError {
             kind,
             message,
             current_hash: None,
+            value: None,
         }
     }
 }

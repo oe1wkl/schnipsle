@@ -9,12 +9,36 @@
   ],
   "numbered": [],
   "warnings": [
-    "Welcome: A warning",
-    "Packing list for Field Day: A warning",
-    "Antenna tuner: A warning",
-    "Bread rolls: A warning",
-    "Abendlied: A warning",
-    "Raw HTML: A warning"
+    {
+      "kind": "converter",
+      "title": "Welcome",
+      "message": "A warning"
+    },
+    {
+      "kind": "converter",
+      "title": "Packing list for Field Day",
+      "message": "A warning"
+    },
+    {
+      "kind": "converter",
+      "title": "Antenna tuner",
+      "message": "A warning"
+    },
+    {
+      "kind": "converter",
+      "title": "Bread rolls",
+      "message": "A warning"
+    },
+    {
+      "kind": "converter",
+      "title": "Abendlied",
+      "message": "A warning"
+    },
+    {
+      "kind": "converter",
+      "title": "Raw HTML",
+      "message": "A warning"
+    }
   ],
   "problems": [
     {

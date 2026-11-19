@@ -13,6 +13,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
 import { asError, el } from "./dom";
+import { t } from "./strings";
 import type {
   ImportNotice,
   ImportOutcome,
@@ -24,30 +25,12 @@ import type {
   SkipReason,
 } from "./types";
 
-const ACTION_LABELS: Record<PlannedAction, string> = {
-  add: "New",
-  update: "Update",
-  skip: "Skipped",
-};
+const ACTION_LABELS: Record<PlannedAction, string> = t.import.action;
 
 /** What the source's export is, for the pick button. */
-const PICK_LABELS: Record<ImportSource, string> = {
-  "apple-notes": "Choose folder…",
-  simplenote: "Choose zip file…",
-  html: "Choose folder…",
-  markdown: "Choose folder…",
-};
+const PICK_LABELS: Record<ImportSource, string> = t.import.pick;
 
-const REASON_LABELS: Record<SkipReason, string> = {
-  duplicate: "In the export twice; imported once",
-  changedHere: "Changed here since the last import, so kept as it is",
-  notNewer: "Not changed in the source since the last import",
-  noModifiedTime: "Imported before; without a modification time it is not updated",
-  missing: "Imported before and deleted here since",
-  inTrash: "Imported before and in the trash here",
-  changedMeanwhile: "Changed here during the import, so kept as it is",
-  failed: "Could not be written",
-};
+const REASON_LABELS: Record<SkipReason, string> = t.import.reason;
 
 /** Adds first, then updates, then skipped notes; otherwise in export order. */
 const ACTION_ORDER: Record<PlannedAction, number> = { add: 0, update: 1, skip: 2 };
@@ -135,7 +118,7 @@ export function createImport(hooks: ImportHooks): { open(): void } {
     progressBox.hidden = true;
     startButton.hidden = false;
     startButton.disabled = true;
-    cancelButton.textContent = "Cancel";
+    cancelButton.textContent = t.common.cancel;
     showError(null);
     setBusy(false);
   }
@@ -144,7 +127,7 @@ export function createImport(hooks: ImportHooks): { open(): void } {
   function restart(): void {
     reset();
     const state = hooks.vaultState();
-    if (!state.open) showError("Open a vault first: the notes are imported into it.");
+    if (!state.open) showError(t.import.noVault);
     else if (state.readOnly !== null) showError(state.readOnly);
     pickButton.disabled = !state.open || state.readOnly !== null;
     pickFileButton.disabled = pickButton.disabled;
@@ -183,7 +166,7 @@ export function createImport(hooks: ImportHooks): { open(): void } {
     pathText.textContent = folder;
     showHelp(false);
     setBusy(true);
-    summary.textContent = "Reading the export…";
+    summary.textContent = t.import.reading;
     report.hidden = false;
     notices.replaceChildren();
     items.replaceChildren();
@@ -216,13 +199,11 @@ export function createImport(hooks: ImportHooks): { open(): void } {
   function showMetadata(preview: ImportPreview): void {
     metadataBox.hidden = preview.plan.source !== "apple-notes";
     if (preview.hasMetadata) {
-      metadataText.textContent =
-        "Dates and folders come from apple-notes-metadata.json in this folder. If you changed notes since, read them again.";
-      metadataButton.textContent = "Read again from Notes";
+      metadataText.textContent = t.import.metadataFound;
+      metadataButton.textContent = t.import.readAgain;
     } else {
-      metadataText.textContent =
-        "Dates and folders are still missing: without them every note gets the time of the export, and importing again later with them would add the notes a second time.";
-      metadataButton.textContent = "Read dates and folders from Notes";
+      metadataText.textContent = t.import.metadataMissing;
+      metadataButton.textContent = t.import.readMetadata;
     }
     metadataBox.classList.toggle("warn", !preview.hasMetadata);
   }
@@ -232,8 +213,7 @@ export function createImport(hooks: ImportHooks): { open(): void } {
     const folder = path;
     showError(null);
     setBusy(true);
-    metadataText.textContent =
-      "Reading your notes from Notes… This takes about half a minute for a few hundred notes.";
+    metadataText.textContent = t.import.readingNotes;
     const mine = run;
     try {
       await invoke<string>("read_apple_notes_metadata", { path: folder });
@@ -243,7 +223,7 @@ export function createImport(hooks: ImportHooks): { open(): void } {
       if (mine !== run) return;
       setBusy(false);
       showError(asError(e).message);
-      metadataText.textContent = "Reading from Notes did not work.";
+      metadataText.textContent = t.import.readingFailed;
     }
   }
 
@@ -255,28 +235,26 @@ export function createImport(hooks: ImportHooks): { open(): void } {
     metadataBox.hidden = true;
     progressBox.hidden = false;
     progressBar.value = 0;
-    progressText.textContent = "Importing…";
-    summary.textContent = "Importing… The notes not yet written are the ones listed below.";
+    progressText.textContent = t.import.importing;
+    summary.textContent = t.import.importingList;
     const unlisten = await listen<{ done: number; total: number }>("import-progress", (event) => {
       const { done, total } = event.payload;
       progressBar.max = total;
       progressBar.value = done;
-      progressText.textContent = `${String(done)} of ${String(total)} notes`;
+      progressText.textContent = t.import.progress(done, total);
     });
     try {
       const outcome = await invoke<ImportOutcome>("apply_import");
       planned = false;
       showReport(outcome.plan, true);
       startButton.hidden = true;
-      cancelButton.textContent = "Close";
+      cancelButton.textContent = t.common.close;
       hooks.imported();
     } catch (e) {
       planned = false;
-      showError(
-        `${asError(e).message}. Notes written up to then are in the vault and in its import log.`,
-      );
+      showError(t.import.failed(asError(e).message));
       startButton.hidden = true;
-      cancelButton.textContent = "Close";
+      cancelButton.textContent = t.common.close;
       hooks.imported();
     } finally {
       unlisten();
@@ -296,17 +274,17 @@ export function createImport(hooks: ImportHooks): { open(): void } {
     const skipped = count(plan, "skip");
     const trashed = plan.items.filter((i) => i.trashed === true).length;
     const parts = [
-      ...(added > 0 || updated === 0 ? [`${String(added)} new`] : []),
-      ...(trashed > 0 ? [`${String(trashed)} of them into the trash`] : []),
-      ...(updated > 0 ? [`${String(updated)} updated`] : []),
-      ...(skipped > 0 ? [`${String(skipped)} skipped`] : []),
+      ...(added > 0 || updated === 0 ? [t.import.added(added)] : []),
+      ...(trashed > 0 ? [t.import.intoTrash(trashed)] : []),
+      ...(updated > 0 ? [t.import.updated(updated)] : []),
+      ...(skipped > 0 ? [t.import.skipped(skipped)] : []),
     ].join(", ");
     if (done) {
-      summary.textContent = `Imported: ${parts}.`;
+      summary.textContent = t.import.imported(parts);
     } else if (added + updated === 0) {
-      summary.textContent = `Nothing to import: all ${String(plan.items.length)} notes are skipped.`;
+      summary.textContent = t.import.nothing(plan.items.length);
     } else {
-      summary.textContent = `${String(plan.items.length)} notes in ${plan.input}: ${parts}. Nothing is written until you choose Import.`;
+      summary.textContent = t.import.plan(plan.items.length, plan.input, parts);
     }
     notices.replaceChildren(...plan.notices.map(noticeItem));
     const sorted = plan.items
@@ -332,7 +310,7 @@ export function createImport(hooks: ImportHooks): { open(): void } {
     const tr = document.createElement("tr");
     tr.className = item.action;
     const title = document.createElement("td");
-    const name = item.title || "(untitled)";
+    const name = item.title || t.imports.untitled;
     const notePath = item.path;
     const trashed = item.trashed === true;
     if (done && item.action !== "skip" && !trashed && notePath !== null) {
@@ -340,7 +318,7 @@ export function createImport(hooks: ImportHooks): { open(): void } {
       button.type = "button";
       button.className = "link";
       button.textContent = name;
-      button.title = "Open this note";
+      button.title = t.imports.openNote;
       button.addEventListener("click", () => {
         dialog.close();
         hooks.openNote(notePath, name);
@@ -350,7 +328,7 @@ export function createImport(hooks: ImportHooks): { open(): void } {
       title.textContent = name;
     }
     const action = document.createElement("td");
-    action.textContent = trashed ? "New, into the trash" : ACTION_LABELS[item.action];
+    action.textContent = trashed ? t.import.newIntoTrash : ACTION_LABELS[item.action];
     const detail = document.createElement("td");
     if (item.action === "skip") {
       detail.textContent = item.reason === null ? "" : REASON_LABELS[item.reason];

@@ -10,9 +10,9 @@ import type { RetagOutcome, RetagPlan } from "../types";
 const params = new URLSearchParams(location.search);
 const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** An error as a command returns it, with its `kind`. */
-const failure = (kind: string, message: string): Error =>
-  Object.assign(new Error(message), { kind, currentHash: null });
+/** An error as a command returns it, with its `kind` and the name it is about. */
+const failure = (kind: string, message: string, value: string | null = null): Error =>
+  Object.assign(new Error(message), { kind, currentHash: null, value });
 
 const TITLES = ["Antenna tuner", "QRP kit", "Field day 2026", "Club history"];
 
@@ -41,8 +41,9 @@ async function answer(cmd: string, args?: Record<string, unknown>): Promise<unkn
       const name = String(args?.new);
       if (/\s/.test(name)) {
         throw failure(
-          "invalidTag",
+          "notATag",
           `#${name} is not a tag: use letters, digits, _, - and / between levels`,
+          name,
         );
       }
       return plan(String(args?.old), name);

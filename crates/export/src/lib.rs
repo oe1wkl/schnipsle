@@ -164,10 +164,88 @@ pub struct Report {
     /// Those of `files` that got a number, as their name was already taken: by
     /// something in the folder, which stays, or by another note of this export.
     pub numbered: Vec<String>,
-    /// What a converter said while it worked, such as a picture it could not convert.
-    pub warnings: Vec<String>,
+    /// What went wrong in a document that was still written, such as links
+    /// that could not be put back, or what a converter said while it worked.
+    pub warnings: Vec<Warning>,
     /// What did not make it into the export as it is in the vault.
     pub problems: Vec<Problem>,
+}
+
+/// A warning about a document of the export, by kind, so the UI can word it
+/// in its own language (ADR-0041 rule 5). Only [`Warning::Converter`] carries
+/// text, as the converter said it. `Display` gives the English text.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum Warning {
+    /// Links of a PDF that were not found on its printed pages (ADR-0037).
+    LinksMissed {
+        /// The document's title.
+        title: String,
+        /// How many links are missing.
+        count: usize,
+    },
+    /// The links of a PDF could not be added at all.
+    LinksFailed {
+        /// The document's title.
+        title: String,
+        /// Why, in the words of the PDF library.
+        error: String,
+    },
+    /// The page numbers or the table of contents could not be added (ADR-0029).
+    PageNumbersFailed {
+        /// The document's title.
+        title: String,
+        /// Why, in the words of the PDF library.
+        error: String,
+    },
+    /// An SVG drawing is in a DOCX as SVG only, as `rsvg-convert` is missing (ADR-0033).
+    SvgOnly {
+        /// The document's title.
+        title: String,
+        /// The picture's description, if it has one.
+        description: Option<String>,
+    },
+    /// What the converter (Pandoc) said, in its words.
+    Converter {
+        /// The document's title.
+        title: String,
+        /// What the converter said.
+        message: String,
+    },
+}
+
+impl std::fmt::Display for Warning {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::LinksMissed { title, count } => {
+                let links = if *count == 1 { "link" } else { "links" };
+                write!(f, "{title}: {count} {links} could not be put back")
+            }
+            Self::LinksFailed { title, error } => {
+                write!(f, "{title}: links could not be added: {error}")
+            }
+            Self::PageNumbersFailed { title, error } => {
+                write!(f, "{title}: page numbers could not be added: {error}")
+            }
+            Self::SvgOnly { title, description } => {
+                let picture = match description {
+                    None => "An SVG drawing".to_owned(),
+                    Some(d) => format!("The SVG drawing \u{201c}{d}\u{201d}"),
+                };
+                write!(
+                    f,
+                    "{title}: {picture} is in the document as SVG only, which Word before 2016 \
+                     and some other programs do not show. With rsvg-convert installed (on a \
+                     Mac: brew install librsvg), a PNG copy is added for them."
+                )
+            }
+            Self::Converter { title, message } => write!(f, "{title}: {message}"),
+        }
+    }
 }
 
 /// One thing an export could not carry over.

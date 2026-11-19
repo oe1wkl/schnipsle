@@ -29,6 +29,8 @@ import {
   WidgetType,
 } from "@codemirror/view";
 
+import { t } from "./strings";
+
 type Abcjs = typeof import("abcjs");
 type TuneObject = import("abcjs").TuneObject;
 type MidiBuffer = import("abcjs").MidiBuffer;
@@ -359,8 +361,8 @@ function parse(lib: Abcjs, source: string, transpose: number): Parsed {
     result = {
       abc,
       tunes: tunes.length,
-      warnings: tunes.flatMap((t) =>
-        (t.warnings ?? []).map((w) => moveWarning(readWarning(w), abc, source)),
+      warnings: tunes.flatMap((tune) =>
+        (tune.warnings ?? []).map((w) => moveWarning(readWarning(w), abc, source)),
       ),
     };
     if (parsed.size >= CACHED_SCORES) {
@@ -424,7 +426,7 @@ function voicesOf(tune: TuneObject): Voices {
   });
   const names = Array.from({ length: count }, (_, index) => {
     const text = (titles[index] ?? "").replaceAll(WORD_JOINER, "").trim();
-    return text !== "" ? text : `Voice ${String(index + 1)}`;
+    return text !== "" ? text : t.music.voice(index + 1);
   });
   return { names, chords: tracks.length > count };
 }
@@ -489,10 +491,10 @@ class ScoreWidget extends WidgetType {
     wrap.dataset["key"] = this.key;
     const bar = element("div", "cm-score-bar");
     bar.setAttribute("role", "toolbar");
-    bar.setAttribute("aria-label", "Score playback");
+    bar.setAttribute("aria-label", t.music.playback);
     const music = element("div", "cm-score-music");
     music.setAttribute("role", "img");
-    music.setAttribute("aria-label", "Music score; click to edit its ABC source");
+    music.setAttribute("aria-label", t.music.score);
     const targets = Array.from({ length: Math.max(this.tunes, 1) }, () =>
       element("div", "cm-score-tune"),
     );
@@ -512,6 +514,11 @@ class ScoreWidget extends WidgetType {
       },
     });
     shownTunes.set(wrap, { tunes, voices: tunes.map(voicesOf) });
+    // Named by its tunes, not read note by note (ADR-0041 rule 8).
+    const titles = tunes
+      .map((tune) => tune.metaText.title?.replaceAll(WORD_JOINER, "").trim() ?? "")
+      .filter((title) => title !== "");
+    music.setAttribute("aria-label", t.music.scoreNamed(titles.join(", ")));
     this.fillBar(bar, editor, wrap);
     // Without this the browser moves the cursor to the block's start, which
     // shows the source before the click says which note it was.
@@ -592,20 +599,20 @@ class ScoreWidget extends WidgetType {
     shown.tunes.forEach((tune, index) => {
       // Without the word joiners of the preparation, which a screen reader might spell out.
       const title =
-        tune.metaText.title?.replaceAll(WORD_JOINER, "").trim() || `Tune ${String(index + 1)}`;
+        tune.metaText.title?.replaceAll(WORD_JOINER, "").trim() || t.music.tune(index + 1);
       const playingThis = this.playing?.tune === index;
       const text = playingThis
         ? this.playing.loading
-          ? "Loading…"
-          : "■ Stop"
+          ? t.music.loading
+          : t.music.stop
         : several
-          ? `▶ ${title}`
-          : "▶ Play";
+          ? t.music.playTune(title)
+          : t.music.play;
       bar.append(
         button(
           `play-${String(index)}`,
           text,
-          playingThis ? `Stop ${title}` : `Play ${title}`,
+          playingThis ? t.music.stopTitle(title) : t.music.playTitle(title),
           () => {
             if (playingThis) {
               stopPlayback();
@@ -627,32 +634,32 @@ class ScoreWidget extends WidgetType {
     });
 
     const tempo = element("span", "cm-score-amount", `${String(view.tempo)} %`);
-    tempo.title = "Speed in percent of the tune's tempo";
+    tempo.title = t.music.speed;
     bar.append(
       group(
-        "Tempo",
-        element("span", "cm-score-label", "Tempo"),
-        button("slower", "−", "Slower", () => {
+        t.music.tempo,
+        element("span", "cm-score-label", t.music.tempo),
+        button("slower", "−", t.music.slower, () => {
           set({ tempo: Math.max(TEMPO_MIN, view.tempo - TEMPO_STEP) });
         }),
         tempo,
-        button("faster", "+", "Faster", () => {
+        button("faster", "+", t.music.faster, () => {
           set({ tempo: Math.min(TEMPO_MAX, view.tempo + TEMPO_STEP) });
         }),
       ),
     );
 
     const semitones = element("span", "cm-score-amount", signed(view.transpose));
-    semitones.title = "Semitones the viewer adds";
+    semitones.title = t.music.semitones;
     bar.append(
       group(
-        "Transpose",
-        element("span", "cm-score-label", "Transpose"),
-        button("down", "−", "Transpose down a semitone", () => {
+        t.music.transpose,
+        element("span", "cm-score-label", t.music.transpose),
+        button("down", "−", t.music.down, () => {
           set({ transpose: view.transpose - 1 });
         }),
         semitones,
-        button("up", "+", "Transpose up a semitone", () => {
+        button("up", "+", t.music.up, () => {
           set({ transpose: view.transpose + 1 });
         }),
       ),
@@ -670,8 +677,8 @@ class ScoreWidget extends WidgetType {
       bar.append(
         button(
           "chords",
-          "Chords",
-          "Play an accompaniment to the chord symbols",
+          t.music.chords,
+          t.music.chordsTitle,
           () => {
             set({ chordsOff: !view.chordsOff });
           },
@@ -694,7 +701,7 @@ class ScoreWidget extends WidgetType {
             button(
               `mute-${String(index)}`,
               "M",
-              `Mute ${name}`,
+              t.music.mute(name),
               () => {
                 set({ muted: toggle(view.muted) });
               },
@@ -703,7 +710,7 @@ class ScoreWidget extends WidgetType {
             button(
               `solo-${String(index)}`,
               "S",
-              `${name} alone`,
+              t.music.solo(name),
               () => {
                 set({ solo: toggle(view.solo) });
               },
@@ -743,26 +750,18 @@ class WarningsWidget extends WidgetType {
     const wrap = element("div", "cm-score-warnings");
     wrap.setAttribute("role", "status");
     if (this.loadFailure !== null) {
-      wrap.append(
-        element("div", "cm-score-warning-title", `Score not engraved: ${this.loadFailure}`),
-      );
+      wrap.append(element("div", "cm-score-warning-title", t.music.notEngraved(this.loadFailure)));
       return wrap;
     }
     const n = this.warnings.length;
-    wrap.append(
-      element(
-        "div",
-        "cm-score-warning-title",
-        `Score not engraved: ${String(n)} ${n === 1 ? "problem" : "problems"} in the ABC`,
-      ),
-    );
+    wrap.append(element("div", "cm-score-warning-title", t.music.problems(n)));
     const list = element("ul", "cm-score-warning-list");
     for (const warning of this.warnings) {
       const item = element("li", "");
       const link = element(
         "button",
         "cm-score-warning",
-        `Line ${String(warning.line)}, column ${String(warning.column)}: ${warning.message}`,
+        t.music.at(warning.line, warning.column, warning.message),
       );
       link.type = "button";
       link.addEventListener("click", () => {

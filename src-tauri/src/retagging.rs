@@ -19,10 +19,17 @@ pub struct LastRename(Mutex<Option<(PathBuf, RetagUndo)>>);
 
 impl From<InvalidRename> for CommandError {
     fn from(e: InvalidRename) -> Self {
+        let message = e.to_string();
+        let (kind, value) = match e {
+            InvalidRename::NotATag(name) if name.is_empty() => ("emptyTag", None),
+            InvalidRename::NotATag(name) => ("notATag", Some(name)),
+            InvalidRename::IntoItself => ("tagIntoItself", None),
+        };
         Self {
-            kind: "invalidTag",
-            message: e.to_string(),
+            kind,
+            message,
             current_hash: None,
+            value,
         }
     }
 }

@@ -37,6 +37,15 @@
 * {
   box-sizing: border-box;
 }
+/* Where the keyboard is (ADR-0041 rule 7); a click shows no ring. The editor's
+   caret shows where it is. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.cm-content:focus-visible {
+  outline: none;
+}
 html,
 body {
   height: 100%;

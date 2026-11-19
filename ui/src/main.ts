@@ -15,7 +15,9 @@ import { createImports } from "./imports";
 import { createSettings } from "./settings";
 import { createRetag } from "./retag";
 import { createSidebar, type ListFilter } from "./sidebar";
+import { roving } from "./keys";
 import { musicMenu } from "./snippets";
+import { t } from "./strings";
 import type { SongHost } from "./song";
 import type {
   VaultInfo,
@@ -88,7 +90,7 @@ const songs: SongHost = {
 
 const editor = createEditor(ui.editorHost, {
   onChange: () => {
-    setStatus("Editing…");
+    setStatus(t.editor.editing);
     scheduleSave();
     scheduleSnapshot();
     showPinned();
@@ -101,6 +103,9 @@ const editor = createEditor(ui.editorHost, {
   songs,
 });
 
+// The note list is one Tab stop, with the arrow keys inside (ADR-0041 rule 7).
+roving(ui.notes, { items: "li > button:first-child", row: "li" });
+
 /**
  * The version selected in the history, read-only and in the same mode as the
  * editor, so Preview renders it like the note (images resolve from the note).
@@ -110,7 +115,7 @@ const historyView = createEditor(ui.historyPreview, {
   onBlur: () => undefined,
   onFiles: () => undefined,
   loadImage: (url) => images.load(url),
-  placeholderText: "Select a version",
+  placeholderText: t.history.selectVersion,
   songs,
 });
 
@@ -127,7 +132,7 @@ const noteHistory = createHistory({
     if (!note) return;
     saving = saving.then(save).then(async () => {
       if (isDirty() || conflictHash !== undefined) {
-        setStatus("Not restored: the note has unsaved changes or a conflict.");
+        setStatus(t.history.notRestoredDirty);
         return;
       }
       try {
@@ -138,11 +143,9 @@ const noteHistory = createHistory({
         });
         const content = await invoke<NoteContent>("read_note", { path: note.path });
         load(content);
-        setStatus(
-          `Restored the version of ${versionLabel(version)}; the text before is in the history.`,
-        );
+        setStatus(t.history.restored(versionLabel(version)));
       } catch (e) {
-        setStatus(`Not restored: ${asError(e).message}`);
+        setStatus(t.history.notRestored(asError(e).message));
       }
     });
   },
@@ -155,11 +158,11 @@ const noteHistory = createHistory({
         const content = await invoke<NoteContent>("read_note", { path: created.path });
         if (listMode === "trash") setListMode("notes");
         load(content);
-        setStatus(`Copied the version of ${versionLabel(version)} as a new note.`);
+        setStatus(t.history.copied(versionLabel(version)));
         await refreshList();
       })
       .catch((e: unknown) => {
-        setStatus(`Not copied: ${asError(e).message}`);
+        setStatus(t.history.notCopied(asError(e).message));
       });
   },
 });
@@ -171,7 +174,7 @@ const noteHistory = createHistory({
 async function attachFiles(files: File[], pos: number | null): Promise<void> {
   const note = current;
   if (!note || readOnly !== null) {
-    setStatus(note ? "This vault is read-only." : "Open a note first.");
+    setStatus(note ? t.common.readOnly : t.note.openFirst);
     return;
   }
   const links: string[] = [];
@@ -184,7 +187,7 @@ async function attachFiles(files: File[], pos: number | null): Promise<void> {
       });
       links.push(added.markdown);
     } catch (e) {
-      setStatus(`Not attached: ${name}: ${asError(e).message}`);
+      setStatus(t.note.notAttached(name, asError(e).message));
     }
   }
   if (links.length > 0 && current === note) editor.insert(links.join("\n"), pos);
@@ -206,7 +209,7 @@ const sidebar = createSidebar(
     else void refreshList();
   },
   (message) => {
-    setStatus(`Smart folders not changed: ${message}`);
+    setStatus(t.smart.notChanged(message));
   },
   {
     can: () => vaultIsOpen && readOnly === null,
@@ -263,27 +266,17 @@ async function folderOpened(opened: Opened): Promise<void> {
 function showSetup(folder: FolderSetup): void {
   const moves = folder.items.length > 0;
   let text = moves
-    ? `“${folder.name}” is not a Schnipsle vault yet. To open it, Schnipsle moves everything ` +
-      `in it (${String(folder.notes)} notes in ${String(folder.items.length)} items) into a ` +
-      `new folder “notes” inside it. Nothing is changed or deleted, but other apps will find ` +
-      `these files in “notes” from now on.`
-    : `“${folder.name}” is not a Schnipsle vault yet. Make it one? Schnipsle adds the ` +
-      `folders “notes” and “.notesapp” to it.`;
-  if (folder.notDownloaded.length > 0) {
-    text +=
-      ` ${String(folder.notDownloaded.length)} items are still in iCloud only and are being ` +
-      `downloaded; try again when they are here.`;
-  }
+    ? t.setup.moves(folder.name, folder.notes, folder.items.length)
+    : t.setup.adds(folder.name);
+  if (folder.notDownloaded.length > 0) text += t.setup.downloading(folder.notDownloaded.length);
   ui.setupText.textContent = text;
-  ui.setupCreate.textContent = moves ? "Move into “notes” and open" : "Make it a vault";
+  ui.setupCreate.textContent = moves ? t.setup.createAndMove : t.setup.create;
   ui.setupItems.replaceChildren(
-    ...[...folder.items, ...folder.notDownloaded.map((n) => `${n} (in iCloud only)`)].map(
-      (name) => {
-        const item = document.createElement("li");
-        item.textContent = name;
-        return item;
-      },
-    ),
+    ...[...folder.items, ...folder.notDownloaded.map(t.common.inICloudOnly)].map((name) => {
+      const item = document.createElement("li");
+      item.textContent = name;
+      return item;
+    }),
   );
   ui.setupDetails.hidden = !moves && folder.notDownloaded.length === 0;
   ui.setup.hidden = false;
@@ -338,8 +331,7 @@ async function refreshList(): Promise<void> {
     entries = [];
     ui.notes.replaceChildren();
     ui.empty.hidden = false;
-    ui.empty.textContent =
-      err.kind === "noIndex" ? "The index is being built; try again in a moment." : err.message;
+    ui.empty.textContent = err.kind === "noIndex" ? t.list.indexing : err.message;
     return;
   }
   ui.notes.replaceChildren(
@@ -351,14 +343,14 @@ async function refreshList(): Promise<void> {
       if (note.pinned) button.classList.add("pinned");
       if (!note.available) {
         button.classList.add("cloud");
-        button.title = "Stored in iCloud only – tap to download";
+        button.title = t.list.inICloud;
       }
       if (note.path === current?.path) button.setAttribute("aria-current", "true");
       if (inTrash.has(note.path)) {
         button.classList.add("trashed");
-        button.title = "In the trash – restore it from the Trash view";
+        button.title = t.list.inTrash;
         button.addEventListener("click", () => {
-          setStatus(`“${note.title}” is in the trash. Restore it from the Trash view to open it.`);
+          setStatus(t.list.inTrashStatus(note.title));
         });
       } else {
         button.addEventListener("click", () => void openNote(note));
@@ -379,10 +371,10 @@ async function refreshList(): Promise<void> {
   if (entries.length === 0) {
     ui.empty.textContent =
       filter.kind === "search"
-        ? "Nothing found."
+        ? t.list.nothingFound
         : filter.kind === "all"
-          ? "No notes in this folder yet. Tap New."
-          : "No notes here.";
+          ? t.list.noNotesYet
+          : t.list.noNotesHere;
   }
   await checkStrays();
 }
@@ -401,9 +393,9 @@ function listLabel(filter: ListFilter): string {
     case "tag":
       return filter.label;
     case "untagged":
-      return "Untagged notes";
+      return t.list.untagged;
     case "search":
-      return `Search: ${filter.query}`;
+      return t.list.searchFor(filter.query);
     case "smart":
       return filter.folder.name;
     case "all":
@@ -450,20 +442,15 @@ async function checkStrays(): Promise<void> {
   } catch {
     return; // the list itself is shown; this is only a hint
   }
-  const all = [...strays.items, ...strays.notDownloaded.map((n) => `${n} (in iCloud only)`)];
+  const all = [...strays.items, ...strays.notDownloaded.map(t.common.inICloudOnly)];
   straysShown = all.join("\n");
   if (all.length === 0 || readOnly !== null || straysShown === straysDismissed) {
     ui.strays.hidden = true;
     return;
   }
   const count = strays.notes + strays.notDownloaded.length;
-  let text =
-    `${count === 1 ? "1 note is" : `${String(count)} notes are`} outside the “notes” folder ` +
-    `of this vault, so ${count === 1 ? "it is" : "they are"} not listed. An older version of ` +
-    `Schnipsle on another device may have saved them there.`;
-  if (strays.notDownloaded.length > 0) {
-    text += ` Some are still in iCloud only; they are moved once they are downloaded.`;
-  }
+  let text = t.strays.text(count);
+  if (strays.notDownloaded.length > 0) text += t.strays.someInICloud;
   ui.straysText.textContent = text;
   ui.straysItems.replaceChildren(
     ...all.map((name) => {
@@ -484,16 +471,16 @@ async function showTrashList(): Promise<void> {
       const title = document.createElement("button");
       title.type = "button";
       title.textContent = note.title;
-      title.title = "Read it; restore it to edit it";
+      title.title = t.trash.readIt;
       if (note.key === trashShown?.key) title.setAttribute("aria-current", "true");
       title.addEventListener("click", () => void showTrashed(note));
       const meta = document.createElement("small");
       const when = note.deleted === "" ? "" : new Date(note.deleted).toLocaleString();
-      meta.textContent = `Deleted ${when} · was ${note.originalPath || "?"}`;
+      meta.textContent = t.trash.deleted(when, note.originalPath || "?");
       const restore = document.createElement("button");
       restore.type = "button";
       restore.className = "small restore";
-      restore.textContent = "Restore";
+      restore.textContent = t.common.restore;
       restore.disabled = readOnly !== null;
       restore.addEventListener("click", () => void restoreNote(note));
       item.append(title, meta, restore);
@@ -501,7 +488,7 @@ async function showTrashList(): Promise<void> {
     }),
   );
   ui.empty.hidden = trashed.length > 0;
-  if (trashed.length === 0) ui.empty.textContent = "The trash is empty.";
+  if (trashed.length === 0) ui.empty.textContent = t.trash.empty;
 }
 
 /** Shows a note from the trash read-only in the editor, so it can be read before restoring it. */
@@ -511,13 +498,13 @@ async function showTrashed(note: TrashedNote): Promise<void> {
   try {
     text = await invoke<string>("read_trashed_note", { key: note.key });
   } catch (e) {
-    setStatus(`“${note.title}” cannot be read: ${asError(e).message}`);
+    setStatus(t.trash.cannotRead(note.title, asError(e).message));
     return;
   }
   closeEditor();
   trashShown = { key: note.key, path: note.originalPath.replace(/^notes\//, "") };
   editor.load(text);
-  setStatus(`“${note.title}” is in the trash. Restore it to edit it.`);
+  setStatus(t.trash.shown(note.title));
   showView("editor");
   void refreshList();
 }
@@ -525,7 +512,7 @@ async function showTrashed(note: TrashedNote): Promise<void> {
 async function restoreNote(note: TrashedNote): Promise<void> {
   try {
     const path = await invoke<string>("restore_note", { key: note.key });
-    setStatus(`Restored “${note.title}” to ${path}.`);
+    setStatus(t.trash.restored(note.title, path));
     if (trashShown?.key === note.key) {
       // The note being read is back: open it for editing.
       await openNote({ path, title: note.title, modifiedMs: 0, available: true, pinned: false });
@@ -536,7 +523,7 @@ async function restoreNote(note: TrashedNote): Promise<void> {
     }
     await refreshList();
   } catch (e) {
-    setStatus(`Not restored: ${asError(e).message}`);
+    setStatus(t.trash.notRestored(asError(e).message));
   }
 }
 
@@ -544,7 +531,7 @@ async function restoreNote(note: TrashedNote): Promise<void> {
 function setListMode(mode: "notes" | "trash"): void {
   listMode = mode;
   if (mode === "notes" && trashShown !== null) closeEditor();
-  ui.showTrash.textContent = mode === "trash" ? "Notes" : "Trash";
+  ui.showTrash.textContent = mode === "trash" ? t.list.notes : t.list.trash;
   ui.showTrash.setAttribute("aria-pressed", String(mode === "trash"));
   const kind = sidebar.filter().kind;
   ui.sort.hidden = mode === "trash" || kind === "search" || kind === "smart";
@@ -566,10 +553,10 @@ function leaveNote(): Promise<void> {
       });
       if (path !== note.path) {
         note.path = path;
-        setStatus(`Renamed to ${path}`);
+        setStatus(t.note.renamed(path));
       }
     } catch (e) {
-      setStatus(`Not renamed: ${asError(e).message}`);
+      setStatus(t.note.notRenamed(asError(e).message));
     }
     await snapshotIfChanged();
   });
@@ -600,7 +587,7 @@ function closeEditor(): void {
 
 async function showTags(): Promise<void> {
   const tags = await invoke<Tag[]>("extract_tags", { markdown: editor.text() });
-  ui.tags.textContent = tags.map((t) => `#${t.name}`).join(" ");
+  ui.tags.textContent = tags.map((tag) => `#${tag.name}`).join(" ");
 }
 
 /** The open note's tags when the tag tree was last loaded. */
@@ -620,7 +607,7 @@ async function openNote(note: NoteEntry): Promise<void> {
   if (!note.available) {
     try {
       await invoke("download_note", { path: note.path });
-      setStatus(`Downloading “${note.title}” from iCloud…`);
+      setStatus(t.note.downloading(note.title));
     } catch (e) {
       setStatus(asError(e).message);
     }
@@ -637,9 +624,7 @@ async function openPath(path: string): Promise<void> {
     showView("editor");
   } catch (e) {
     const err = asError(e);
-    setStatus(
-      err.kind === "notDownloaded" ? "Not downloaded yet – try again shortly." : err.message,
-    );
+    setStatus(err.kind === "notDownloaded" ? t.common.notDownloaded : err.message);
   }
 }
 
@@ -660,10 +645,10 @@ async function openLink(link: string): Promise<void> {
     const err = asError(e);
     setStatus(
       err.kind === "invalidPath"
-        ? `This link cannot be opened: ${link}`
+        ? t.note.linkInvalid(link)
         : err.kind === "notDownloaded"
-          ? "Not downloaded yet – try again shortly."
-          : `Cannot open ${link}: ${err.message}`,
+          ? t.common.notDownloaded
+          : t.note.linkFailed(link, err.message),
     );
   }
 }
@@ -693,8 +678,8 @@ function load(content: NoteContent): void {
   showSyncConflicts(content.conflicts);
   setStatus(
     content.conflictsError === null
-      ? `Opened ${content.path}`
-      : `Opened ${content.path}, but could not check for sync conflicts: ${content.conflictsError}`,
+      ? t.note.opened(content.path)
+      : t.note.openedNoConflictCheck(content.path, content.conflictsError),
   );
   void showTags();
   void refreshList();
@@ -726,7 +711,7 @@ function applySaved(
 function showPinned(): void {
   const pinned = current !== null && isPinned(editor.text());
   ui.pin.setAttribute("aria-pressed", String(pinned));
-  ui.pin.textContent = pinned ? "Unpin" : "Pin";
+  ui.pin.textContent = pinned ? t.note.unpin : t.note.pin;
 }
 
 /**
@@ -745,14 +730,14 @@ async function togglePin(): Promise<void> {
       expectedHash: note.hash,
     });
     applySaved(note, sent, saved);
-    setStatus(pinned ? "Pinned – listed first." : "Unpinned.");
+    setStatus(pinned ? t.note.pinnedFirst : t.note.unpinned);
     void refreshList();
   } catch (e) {
     const err = asError(e);
     if (err.kind === "conflict") {
       showConflict(err.currentHash);
     } else {
-      setStatus(`Not ${pinned ? "pinned" : "unpinned"}: ${err.message}`);
+      setStatus((pinned ? t.note.notPinned : t.note.notUnpinned)(err.message));
     }
   }
 }
@@ -768,14 +753,14 @@ async function save(): Promise<void> {
       expectedHash: note.hash,
     });
     applySaved(note, text, saved);
-    setStatus(`Saved ${new Date().toLocaleTimeString()}`);
+    setStatus(t.note.saved(new Date().toLocaleTimeString()));
     refreshTagTreeIfNeeded();
   } catch (e) {
     const err = asError(e);
     if (err.kind === "conflict") {
       showConflict(err.currentHash);
     } else {
-      setStatus(`Not saved: ${err.message}`);
+      setStatus(t.note.notSaved(err.message));
     }
   }
 }
@@ -802,7 +787,7 @@ async function snapshot(text: string | null = null): Promise<void> {
   try {
     await invoke("snapshot_note", { path: note.path, text });
   } catch (e) {
-    setStatus(`Version not stored in the history: ${asError(e).message}`);
+    setStatus(t.note.snapshotFailed(asError(e).message));
   }
 }
 
@@ -821,13 +806,13 @@ async function applyTransposition(
   try {
     await flushSave();
     if (current !== note || isDirty() || conflictHash !== undefined) {
-      setStatus("The note is not saved, so its chords were not rewritten.");
+      setStatus(t.note.chordsUnsaved);
       return null;
     }
     await invoke("snapshot_note", { path: note.path, text: null });
     return await invoke<string>("apply_transposition", { source, semitones, notation });
   } catch (e) {
-    setStatus(`Chords not rewritten: ${asError(e).message}`);
+    setStatus(t.note.chordsFailed(asError(e).message));
     return null;
   }
 }
@@ -858,9 +843,7 @@ async function flushSave(): Promise<void> {
 function showConflict(hashOnDisk: string | null): void {
   conflictHash = hashOnDisk;
   ui.conflict.hidden = false;
-  setStatus(
-    hashOnDisk === null ? "The note was deleted elsewhere." : "Conflict – choose a version.",
-  );
+  setStatus(hashOnDisk === null ? t.conflict.deletedElsewhere : t.conflict.choose);
 }
 
 function hideConflict(): void {
@@ -874,11 +857,11 @@ function showSyncConflicts(conflicts: ConflictVersion[]): void {
   ui.syncConflict.hidden = syncConflict === undefined;
   if (!syncConflict) return;
   const when = new Date(syncConflict.modifiedMs).toLocaleString();
-  const more = conflicts.length > 1 ? ` (1 of ${String(conflicts.length)})` : "";
+  const more = conflicts.length > 1 ? t.syncConflict.oneOf(conflicts.length) : "";
   ui.syncConflictText.textContent =
     syncConflict.copyPath === null
-      ? `${syncConflict.device ?? "Another device"} saved a different version at ${when}${more}.`
-      : `“${syncConflict.copyPath}” is a copy of this note with different text (saved ${when})${more}.`;
+      ? t.syncConflict.savedOn(syncConflict.device ?? t.syncConflict.anotherDevice, when, more)
+      : t.syncConflict.copy(syncConflict.copyPath, when, more);
   ui.syncKeepBoth.hidden = syncConflict.copyPath === null;
   ui.syncOther.value = syncConflict.text;
 }
@@ -895,11 +878,11 @@ function resolveSyncConflict(pick: "mine" | "other"): void {
         expectedHash: current.hash,
       });
       load(content);
-      setStatus("Conflict resolved – the other version is kept in the note's history.");
+      setStatus(t.syncConflict.resolved);
       await refreshList();
     } catch (e) {
       const err = asError(e);
-      setStatus(`Not resolved: ${err.message}`);
+      setStatus(t.syncConflict.notResolved(err.message));
       if (err.kind === "conflict") queueCheck();
     }
   });
@@ -917,10 +900,10 @@ ui.syncKeepBoth.addEventListener("click", () => {
     if (!current || !copyPath) return;
     try {
       load(await invoke<NoteContent>("keep_both", { path: current.path, copyPath }));
-      setStatus(`Kept both: “${copyPath}” is now a separate note.`);
+      setStatus(t.syncConflict.keptBoth(copyPath));
       await refreshList();
     } catch (e) {
-      setStatus(`Not changed: ${asError(e).message}`);
+      setStatus(t.syncConflict.notChanged(asError(e).message));
     }
   });
 });
@@ -953,7 +936,7 @@ ui.keepMine.addEventListener("click", () => {
     .then((saved) => {
       applySaved(note, text, saved);
       hideConflict();
-      setStatus("Saved your version.");
+      setStatus(t.conflict.keptMine);
     })
     .catch((e: unknown) => {
       setStatus(asError(e).message);
@@ -979,7 +962,7 @@ async function checkForChanges(changes?: VaultChanges): Promise<void> {
     if (sidebar.filter().kind === "all") {
       // Only the full list tells whether the note is gone; a filtered one may just not show it.
       if (!onDisk) {
-        setStatus("This note was deleted or moved elsewhere.");
+        setStatus(t.note.deletedElsewhere);
         return;
       }
       if (!onDisk.available) return;
@@ -998,7 +981,7 @@ async function checkForChanges(changes?: VaultChanges): Promise<void> {
     } else {
       await snapshot(current.savedText); // the version being replaced (ADR-0011)
       load(content);
-      setStatus("Updated with changes from elsewhere.");
+      setStatus(t.note.updated);
     }
   } catch (e) {
     setStatus(asError(e).message);
@@ -1046,7 +1029,7 @@ ui.deleteNote.addEventListener("click", () => {
     const note = current;
     if (!note) return;
     if (conflictHash !== undefined || isDirty()) {
-      setStatus("Not deleted: resolve the conflict first, so no text is lost.");
+      setStatus(t.trash.notDeletedConflict);
       return;
     }
     try {
@@ -1054,11 +1037,11 @@ ui.deleteNote.addEventListener("click", () => {
       closeEditor();
       lastTrashed = trashed;
       ui.undoDelete.hidden = false;
-      setStatus(`Moved “${trashed.title}” to the trash.`);
+      setStatus(t.trash.moved(trashed.title));
       showView("list");
       await refreshList();
     } catch (e) {
-      setStatus(`Not deleted: ${asError(e).message}`);
+      setStatus(t.trash.notDeleted(asError(e).message));
     }
   });
 });
@@ -1104,7 +1087,7 @@ ui.setupCreate.addEventListener("click", () => {
       await folderOpened({ kind: "vault", ...info });
     })
     .catch((e: unknown) => {
-      setStatus(`Not opened: ${asError(e).message}`);
+      setStatus(t.setup.notOpened(asError(e).message));
     })
     .finally(() => {
       ui.setupCreate.disabled = false;
@@ -1116,18 +1099,14 @@ ui.straysMove.addEventListener("click", () => {
   invoke<MovedNotes>("move_stray_notes")
     .then(async (result) => {
       const n = result.moved.length;
-      let message = `Moved ${n === 1 ? "1 item" : `${String(n)} items`} into “notes”.`;
-      if (result.relinked.length > 0) {
-        message += ` Updated the links in ${String(result.relinked.length)} of them.`;
-      }
-      if (result.skipped.length > 0) {
-        message += ` Not moved: ${result.skipped.join(", ")} (name taken or not downloaded yet).`;
-      }
+      let message = t.strays.moved(n);
+      if (result.relinked.length > 0) message += t.strays.relinked(result.relinked.length);
+      if (result.skipped.length > 0) message += t.strays.skipped(result.skipped.join(", "));
       setStatus(message);
       await refreshList();
     })
     .catch((e: unknown) => {
-      setStatus(`Not moved: ${asError(e).message}`);
+      setStatus(t.strays.notMoved(asError(e).message));
       ui.straysMove.disabled = false;
     });
 });
@@ -1139,18 +1118,18 @@ ui.straysLater.addEventListener("click", () => {
 
 ui.setupCancel.addEventListener("click", () => {
   ui.setup.hidden = true;
-  setStatus("Folder not opened; nothing was changed.");
+  setStatus(t.setup.cancelled);
 });
 
 ui.newNote.addEventListener("click", () => {
-  const text = "# New note\n\n";
+  const text = `# ${t.editor.newNoteTitle}\n\n`;
   void leaveNote()
     .then(() => invoke<NewNote>("new_note", { text }))
     .then((created) => {
       if (listMode === "trash") setListMode("notes");
       load({
         path: created.path,
-        title: "New note",
+        title: t.editor.newNoteTitle,
         ...created.saved,
         conflicts: [],
         conflictsError: null,
@@ -1169,7 +1148,7 @@ const MODE_KEY = "schnipsle.editorMode";
 function setMode(mode: EditorMode): void {
   editor.setMode(mode);
   historyView.setMode(mode);
-  ui.mode.textContent = mode === "live" ? "Source" : "Preview";
+  ui.mode.textContent = mode === "live" ? t.note.source : t.note.preview;
   ui.mode.setAttribute("aria-pressed", String(mode === "source"));
   try {
     localStorage.setItem(MODE_KEY, mode);
@@ -1262,9 +1241,7 @@ const settingsView = createSettings({
       try {
         load(await invoke<NoteContent>("read_note", { path: note.path }));
       } catch (e) {
-        setStatus(
-          `Song sheets show the new names when the note is opened again: ${asError(e).message}`,
-        );
+        setStatus(t.note.chordNamesLater(asError(e).message));
       }
     });
   },

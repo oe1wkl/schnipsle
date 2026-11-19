@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 use schnipsle_core::vault::Vault;
 use schnipsle_export::{
     Anchor, AnchorKind, Exporter, Format, Input, Layout, Line, Options, Paper, PdfExporter, Place,
-    PrintJob, Printer, ProblemKind, Report, Score,
+    PrintJob, Printer, ProblemKind, Report, Score, Warning,
 };
 
 const NOTES: [&str; 6] = [
@@ -460,5 +460,15 @@ fn links_not_found_are_counted_in_the_report() {
     let report = PdfExporter::new(LinklessPrinter { missing: "club" })
         .export(&vault(), &input, &options(Layout::SingleFile), &to)
         .unwrap();
-    assert_eq!(report.warnings, ["Welcome: 1 link could not be put back"]);
+    assert_eq!(
+        report.warnings,
+        [Warning::LinksMissed {
+            title: "Welcome".to_owned(),
+            count: 1,
+        }]
+    );
+    assert_eq!(
+        report.warnings[0].to_string(),
+        "Welcome: 1 link could not be put back"
+    );
 }

@@ -4,7 +4,11 @@
   ],
   "numbered": [],
   "warnings": [
-    "Samples: A warning"
+    {
+      "kind": "converter",
+      "title": "Samples",
+      "message": "A warning"
+    }
   ],
   "problems": [
     {

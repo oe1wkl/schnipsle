@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 use schnipsle_core::vault::Vault;
 use schnipsle_export::{
     ConversionJob, Converted, Converter, Exporter, Format, Input, Layout, Options, Pandoc,
-    PandocExporter, Paper, ProblemKind, Report, Score,
+    PandocExporter, Paper, ProblemKind, Report, Score, Warning,
 };
 use zip::ZipArchive;
 use zip::write::{SimpleFileOptions, ZipWriter};
@@ -41,11 +41,11 @@ fn fixtures() -> PathBuf {
 /// (ADR-0033).
 /// The warnings of a report but that a DOCX holds the score of `scores` as SVG
 /// only, which it does where `rsvg-convert` is missing, as in CI (ADR-0033).
-fn other_warnings(report: &Report) -> Vec<&str> {
+fn other_warnings(report: &Report) -> Vec<String> {
     report
         .warnings
         .iter()
-        .map(String::as_str)
+        .map(ToString::to_string)
         .filter(|w| !w.contains("“Kanon” is in the document as SVG only"))
         .collect()
 }
@@ -385,7 +385,13 @@ fn what_the_converter_says_is_reported() {
             &dir.path().join("a.epub"),
         )
         .unwrap();
-    assert_eq!(report.warnings, ["Samples: A warning"]);
+    assert_eq!(
+        report.warnings,
+        [Warning::Converter {
+            title: "Samples".to_owned(),
+            message: "A warning".to_owned(),
+        }]
+    );
 }
 
 #[test]
@@ -463,7 +469,7 @@ fn pandoc_writes_docx() {
     let report = exporter
         .export(&vault, &tricky_notes(), &options(Layout::SingleFile), &to)
         .unwrap();
-    assert_eq!(other_warnings(&report), Vec::<&str>::new());
+    assert_eq!(other_warnings(&report), Vec::<String>::new());
     let xml = part(&to, "word/document.xml");
     for text in [
         "`a`",
@@ -525,7 +531,7 @@ fn pandoc_writes_docx() {
             &to,
         )
         .unwrap();
-    assert_eq!(other_warnings(&report), Vec::<&str>::new());
+    assert_eq!(other_warnings(&report), Vec::<String>::new());
     let core = part(&to, "docProps/core.xml");
     assert!(core.contains("<dc:title>Bread rolls</dc:title>"), "{core}");
     assert!(!core.contains("1970-"), "{core}");
@@ -543,7 +549,7 @@ fn pandoc_writes_docx() {
         .export(&samples, &all_notes(), &options(Layout::FilePerNote), &out)
         .unwrap();
     assert_eq!(report.files.len(), 6);
-    assert_eq!(other_warnings(&report), Vec::<&str>::new());
+    assert_eq!(other_warnings(&report), Vec::<String>::new());
     let tuner = out.join("Antenna tuner.docx");
     let links = part(&tuner, "word/_rels/document.xml.rels");
     assert!(links.contains("Welcome.docx"), "{links}");
@@ -563,7 +569,7 @@ fn pandoc_writes_epub() {
     let report = exporter
         .export(&vault, &tricky_notes(), &options(Layout::SingleFile), &to)
         .unwrap();
-    assert_eq!(other_warnings(&report), Vec::<&str>::new());
+    assert_eq!(other_warnings(&report), Vec::<String>::new());
     let opf = part(&to, "EPUB/content.opf");
     assert!(opf.contains(">Tricky</dc:title>"), "{opf}");
     assert!(names(&to)[0] == "mimetype", "{:?}", names(&to));
@@ -600,7 +606,7 @@ fn pandoc_writes_epub() {
     let report = exporter
         .export(&samples, &bread, &options(Layout::SingleFile), &to)
         .unwrap();
-    assert_eq!(other_warnings(&report), Vec::<&str>::new());
+    assert_eq!(other_warnings(&report), Vec::<String>::new());
     let opf = part(&to, "EPUB/content.opf");
     assert!(opf.contains(">Bread rolls</dc:title>"), "{opf}");
     assert!(opf.contains("<dc:date"), "{opf}");
@@ -615,7 +621,7 @@ fn pandoc_writes_epub() {
         .export(&samples, &all_notes(), &options(Layout::FilePerNote), &out)
         .unwrap();
     assert_eq!(report.files.len(), 6);
-    assert_eq!(other_warnings(&report), Vec::<&str>::new());
+    assert_eq!(other_warnings(&report), Vec::<String>::new());
     assert!(
         report
             .problems
@@ -654,7 +660,7 @@ fn an_svg_stays_in_the_docx_and_a_missing_converter_is_explained() {
     // Without rsvg-convert Pandoc adds no PNG copy, and the report says so plainly.
     for warning in &report.warnings {
         assert!(
-            warning.starts_with(
+            warning.to_string().starts_with(
                 "Plan: The SVG drawing \u{201c}The plan\u{201d} is in the document as SVG only"
             ),
             "{warning}"
@@ -677,7 +683,7 @@ fn pandoc_writes_contents_and_page_numbers() {
     let report = PandocExporter::new(Format::Docx, pandoc())
         .export(&vault(), &all_notes(), &with_contents, &to)
         .unwrap();
-    assert_eq!(other_warnings(&report), Vec::<&str>::new());
+    assert_eq!(other_warnings(&report), Vec::<String>::new());
     let xml = part(&to, "word/document.xml");
     assert_eq!(xml.matches(" PAGEREF _Schnipsle").count(), 6, "{xml}");
     for index in 1..=6 {
@@ -691,7 +697,7 @@ fn pandoc_writes_contents_and_page_numbers() {
     let report = PandocExporter::new(Format::Epub, pandoc())
         .export(&vault(), &all_notes(), &with_contents, &to)
         .unwrap();
-    assert_eq!(other_warnings(&report), Vec::<&str>::new());
+    assert_eq!(other_warnings(&report), Vec::<String>::new());
     let opf = part(&to, "EPUB/content.opf");
     assert!(opf.contains("<itemref idref=\"nav\""), "{opf}");
     assert!(part(&to, "EPUB/nav.xhtml").contains(">Contents<"));

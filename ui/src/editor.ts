@@ -37,6 +37,7 @@ import type { SyntaxNode } from "@lezer/common";
 import { tags as t } from "@lezer/highlight";
 import { scorePreview } from "./score";
 import { straightInCode } from "./code-typing";
+import { t as strings } from "./strings";
 import { forgetSongSheets, type SongHost, songHost, songPreview } from "./song";
 
 export type EditorMode = "live" | "source";
@@ -122,7 +123,10 @@ class CheckboxWidget extends WidgetType {
     box.type = "checkbox";
     box.checked = this.checked;
     box.className = "cm-task";
-    box.setAttribute("aria-label", this.checked ? "Done" : "Not done");
+    box.setAttribute(
+      "aria-label",
+      this.checked ? strings.editor.taskDone : strings.editor.taskNotDone,
+    );
     return box;
   }
   override ignoreEvent(): boolean {
@@ -163,7 +167,7 @@ class ImageWidget extends WidgetType {
       },
       () => {
         wrap.className = "cm-image-missing";
-        wrap.textContent = `Image not available: ${this.alt || this.url}`;
+        wrap.textContent = strings.editor.imageMissing(this.alt || this.url);
       },
     );
     return wrap;
@@ -179,7 +183,7 @@ const muted = Decoration.mark({ class: "cm-md-mark" });
 /** macOS and iOS open links with ⌘-click, other systems with Ctrl-click. */
 const isApple = /Mac|iPhone|iPad/.test(navigator.userAgent);
 const linkHint = Decoration.mark({
-  attributes: { title: `${isApple ? "⌘" : "Ctrl"}-click to open` },
+  attributes: { title: strings.editor.clickToOpen(isApple) },
 });
 
 /**
@@ -607,7 +611,7 @@ export function createEditor(
         events.songs ? songHost.of(events.songs) : [],
         mode.of(modes[currentMode]),
         enabled.of(enabledExtension(isEnabled)),
-        placeholder(events.placeholderText ?? "Select a note"),
+        placeholder(events.placeholderText ?? strings.editor.selectNote),
         theme,
         // The system corrects prose (smart quotes); code keeps what was typed.
         straightInCode(),
@@ -615,7 +619,7 @@ export function createEditor(
           spellcheck: "true",
           autocorrect: "on",
           autocapitalize: "sentences",
-          "aria-label": "Note text",
+          "aria-label": strings.editor.noteText,
         }),
         EditorView.updateListener.of((update) => {
           const byUser = update.transactions.some(

@@ -127,8 +127,11 @@ export interface NewNote {
 export type SortOrder = "modified" | "title";
 export interface CommandError {
   kind: string;
+  /** In the user's language once `asError` has read it (ADR-0041 rule 5). */
   message: string;
   currentHash: string | null;
+  /** The path or name the error is about, for the catalog's wording. */
+  value?: string | null;
 }
 
 /** A piece of a search snippet (schnipsle-core `SnippetPart`). */
@@ -270,10 +273,18 @@ export interface ExportReport {
   files: string[];
   /** Those of `files` that got a number, as their name was already taken. */
   numbered: string[];
-  /** What a converter said while it worked. */
-  warnings: string[];
+  /** What went wrong in documents that were still written. */
+  warnings: ExportWarning[];
   problems: ExportProblem[];
 }
+
+/** A warning about a document of an export (schnipsle-export `Warning`), by kind. */
+export type ExportWarning =
+  | { kind: "linksMissed"; title: string; count: number }
+  | { kind: "linksFailed"; title: string; error: string }
+  | { kind: "pageNumbersFailed"; title: string; error: string }
+  | { kind: "svgOnly"; title: string; description: string | null }
+  | { kind: "converter"; title: string; message: string };
 
 /** The names of the notes in a song (schnipsle-core `chordpro::chord::Notation`). */
 export type Notation = "english" | "german";

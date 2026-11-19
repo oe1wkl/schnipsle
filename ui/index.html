@@ -1,4 +1,7 @@
 <!doctype html>
+<!-- The page holds no text of its own (ADR-0041): data-text, data-label,
+     data-title and data-placeholder name keys in ui/src/strings/en.ts, which
+     applyStrings() fills at start. scripts/check-strings.mjs checks both. -->
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -9,21 +12,24 @@
   </head>
   <body>
     <header class="bar">
-      <button id="back" class="icon" type="button" aria-label="Back to notes" hidden>‹</button>
+      <button id="back" class="icon" type="button" data-label="app.back" hidden>‹</button>
       <div class="vault">
         <strong id="vault-name">Schnipsle</strong>
-        <span id="vault-hint" class="muted">Spike: vault folder access</span>
+        <span id="vault-hint" class="muted"></span>
       </div>
-      <button id="new-note" type="button" disabled>New</button>
-      <button id="pick-vault" type="button" title="Open another vault, or make a folder a new one">
-        Open Vault…
-      </button>
+      <button id="new-note" type="button" data-text="app.newNote" disabled></button>
+      <button
+        id="pick-vault"
+        type="button"
+        data-text="app.openVault"
+        data-title="app.openVaultTitle"
+      ></button>
       <button
         id="show-settings"
         class="icon"
         type="button"
-        aria-label="Settings"
-        title="Settings"
+        data-label="app.settings"
+        data-title="app.settings"
         hidden
       >
         &#x2699;&#xFE0E;
@@ -32,10 +38,10 @@
 
     <div id="setup" class="banner" role="alertdialog" aria-labelledby="setup-text" hidden>
       <span id="setup-text"></span>
-      <button id="setup-create" type="button">Make it a vault</button>
-      <button id="setup-cancel" type="button">Cancel</button>
+      <button id="setup-create" type="button" data-text="setup.create"></button>
+      <button id="setup-cancel" type="button" data-text="common.cancel"></button>
       <details id="setup-details">
-        <summary>What will be moved</summary>
+        <summary data-text="setup.details"></summary>
         <ul id="setup-items"></ul>
       </details>
     </div>
@@ -46,39 +52,39 @@
 
     <div id="strays" class="banner" role="status" hidden>
       <span id="strays-text"></span>
-      <button id="strays-move" type="button">Move into “notes”</button>
-      <button id="strays-later" type="button">Not now</button>
+      <button id="strays-move" type="button" data-text="strays.move"></button>
+      <button id="strays-later" type="button" data-text="common.notNow"></button>
       <details>
-        <summary>Show them</summary>
+        <summary data-text="strays.show"></summary>
         <ul id="strays-items"></ul>
       </details>
     </div>
 
     <div id="conflict" class="banner" role="alert" hidden>
-      <span>This note was changed on another device while you were editing.</span>
-      <button id="use-theirs" type="button">Use other version</button>
-      <button id="keep-mine" type="button">Keep mine</button>
+      <span data-text="conflict.text"></span>
+      <button id="use-theirs" type="button" data-text="conflict.useOther"></button>
+      <button id="keep-mine" type="button" data-text="conflict.keepMine"></button>
     </div>
 
     <div id="sync-conflict" class="banner" role="alert" hidden>
       <span id="sync-conflict-text"></span>
-      <button id="sync-keep-mine" type="button">Keep this version</button>
-      <button id="sync-use-other" type="button">Use other version</button>
-      <button id="sync-keep-both" type="button" hidden>Keep both as separate notes</button>
+      <button id="sync-keep-mine" type="button" data-text="syncConflict.keepThis"></button>
+      <button id="sync-use-other" type="button" data-text="conflict.useOther"></button>
+      <button id="sync-keep-both" type="button" data-text="syncConflict.keepBoth" hidden></button>
       <details>
-        <summary>Show the other version</summary>
+        <summary data-text="syncConflict.show"></summary>
         <textarea id="sync-other" readonly rows="8"></textarea>
       </details>
     </div>
 
     <main class="layout" data-view="list">
-      <nav class="list" aria-label="Notes">
+      <nav class="list" data-label="list.label">
         <div class="search-row">
           <input
             id="search"
             type="search"
-            placeholder="Search"
-            aria-label="Search notes"
+            data-placeholder="list.search"
+            data-label="list.searchLabel"
             autocomplete="off"
             spellcheck="false"
             disabled
@@ -87,60 +93,102 @@
             id="save-search"
             type="button"
             class="small"
-            title="Keep this search as a smart folder"
+            data-text="common.save"
+            data-title="list.saveSearchTitle"
             hidden
-          >
-            Save
-          </button>
+          ></button>
         </div>
         <details id="smart-panel" class="tags-panel" open>
-          <summary>Smart folders</summary>
-          <ul id="smart-tree" class="tag-tree" role="tree" aria-label="Smart folders"></ul>
-          <button id="new-smart-folder" type="button" class="small add-folder" hidden>
-            New smart folder
-          </button>
+          <summary data-text="smart.title"></summary>
+          <ul id="smart-tree" class="tag-tree" role="tree" data-label="smart.title"></ul>
+          <button
+            id="new-smart-folder"
+            type="button"
+            class="small add-folder"
+            data-text="smart.new"
+            hidden
+          ></button>
         </details>
         <details id="tags-panel" class="tags-panel" open>
-          <summary>Tags</summary>
-          <ul id="tag-tree" class="tag-tree" role="tree" aria-label="Tags"></ul>
+          <summary data-text="tags.title"></summary>
+          <ul id="tag-tree" class="tag-tree" role="tree" data-label="tags.title"></ul>
         </details>
         <div class="list-tools">
-          <select id="sort" aria-label="Sort notes">
-            <option value="modified">Recently changed</option>
-            <option value="title">Title</option>
+          <select id="sort" data-label="list.sortLabel">
+            <option value="modified" data-text="list.sortModified"></option>
+            <option value="title" data-text="list.sortTitle"></option>
           </select>
-          <button id="show-tags" type="button" class="small phone-only">Tags</button>
-          <button id="show-trash" type="button" class="small" aria-pressed="false">Trash</button>
-          <button id="export-list" type="button" class="small" hidden>Export</button>
+          <button
+            id="show-tags"
+            type="button"
+            class="small phone-only"
+            data-text="tags.title"
+          ></button>
+          <button
+            id="show-trash"
+            type="button"
+            class="small"
+            aria-pressed="false"
+            data-text="list.trash"
+          ></button>
+          <button
+            id="export-list"
+            type="button"
+            class="small"
+            data-text="common.export"
+            hidden
+          ></button>
         </div>
         <p id="list-filter" class="list-filter" hidden>
           <span id="list-filter-text"></span>
-          <button id="clear-filter" type="button" class="small">Show all</button>
+          <button id="clear-filter" type="button" class="small" data-text="list.showAll"></button>
         </p>
-        <p id="empty" class="muted">
-          Open a vault to start: pick its folder, or an empty folder for a new vault. On iPhone,
-          pick a folder in iCloud Drive.
-        </p>
+        <p id="empty" class="muted" data-text="list.noVault"></p>
         <ul id="notes"></ul>
       </nav>
-      <section class="editor" aria-label="Editor">
+      <section class="editor" data-label="editor.label">
         <div id="editor-host" class="editor-host"></div>
         <div id="history" class="history" hidden>
           <div class="history-bar">
-            <strong>History</strong>
+            <strong data-text="history.title"></strong>
             <span id="history-hint" class="muted"></span>
-            <button id="history-compare" type="button" class="small" aria-pressed="false" disabled>
-              Compare
-            </button>
-            <select id="history-with" class="small" aria-label="Compare with" hidden></select>
-            <button id="history-restore" type="button" class="small" disabled>
-              Restore this version
-            </button>
-            <button id="history-copy" type="button" class="small" disabled>As new note</button>
-            <button id="history-close" type="button" class="small">Close</button>
+            <button
+              id="history-compare"
+              type="button"
+              class="small"
+              aria-pressed="false"
+              data-text="history.compare"
+              disabled
+            ></button>
+            <select
+              id="history-with"
+              class="small"
+              data-label="history.compareWith"
+              hidden
+            ></select>
+            <button
+              id="history-restore"
+              type="button"
+              class="small"
+              data-text="history.restore"
+              disabled
+            ></button>
+            <button
+              id="history-copy"
+              type="button"
+              class="small"
+              data-text="history.asNewNote"
+              disabled
+            ></button>
+            <button
+              id="history-close"
+              type="button"
+              class="small"
+              data-text="common.close"
+            ></button>
           </div>
           <div class="history-body">
-            <ul id="history-list" aria-label="Versions"></ul>
+            <ul id="history-list" data-label="history.versions"></ul>
             <div id="history-preview" class="editor-host history-preview"></div>
             <div id="history-diff" class="history-diff" hidden></div>
           </div>
@@ -148,65 +196,125 @@
         <footer class="status">
           <span id="status" aria-live="polite"></span>
           <span id="tags" class="tags"></span>
-          <button id="undo-delete" type="button" class="small" hidden>Undo</button>
-          <button id="pin" type="button" class="small" aria-pressed="false" disabled>Pin</button>
-          <button id="show-history" type="button" class="small" disabled>History</button>
-          <button id="export-note" type="button" class="small" hidden disabled>Export</button>
-          <button id="add-image" type="button" class="small" disabled>Image</button>
+          <button
+            id="undo-delete"
+            type="button"
+            class="small"
+            data-text="common.undo"
+            hidden
+          ></button>
+          <button
+            id="pin"
+            type="button"
+            class="small"
+            aria-pressed="false"
+            data-text="note.pin"
+            disabled
+          ></button>
+          <button
+            id="show-history"
+            type="button"
+            class="small"
+            data-text="history.title"
+            disabled
+          ></button>
+          <button
+            id="export-note"
+            type="button"
+            class="small"
+            data-text="common.export"
+            hidden
+            disabled
+          ></button>
+          <button
+            id="add-image"
+            type="button"
+            class="small"
+            data-text="note.image"
+            disabled
+          ></button>
           <input id="image-file" type="file" accept="image/*" multiple hidden />
-          <button id="add-music" type="button" class="small" disabled>Music</button>
-          <button id="delete-note" type="button" class="small" disabled>Delete</button>
-          <button id="mode" type="button" class="small" aria-pressed="false">Source</button>
+          <button
+            id="add-music"
+            type="button"
+            class="small"
+            data-text="note.music"
+            disabled
+          ></button>
+          <button
+            id="delete-note"
+            type="button"
+            class="small"
+            data-text="common.delete"
+            disabled
+          ></button>
+          <button
+            id="mode"
+            type="button"
+            class="small"
+            aria-pressed="false"
+            data-text="note.source"
+          ></button>
         </footer>
       </section>
     </main>
 
     <dialog id="folder-dialog" aria-labelledby="folder-dialog-title">
       <form id="folder-form" class="folder-form" novalidate>
-        <h2 id="folder-dialog-title">Smart folder</h2>
+        <h2 id="folder-dialog-title" data-text="folder.title"></h2>
         <label>
-          Name
+          <span data-text="folder.name"></span>
           <input id="folder-name" type="text" autocomplete="off" />
         </label>
         <label>
-          Search
+          <span data-text="folder.search"></span>
           <input
             id="folder-query"
             type="text"
             autocomplete="off"
             autocapitalize="off"
             spellcheck="false"
-            placeholder="#radio modified:30d"
+            data-placeholder="folder.searchExample"
           />
         </label>
         <label>
-          Inside
+          <span data-text="folder.inside"></span>
           <select id="folder-parent"></select>
         </label>
         <label>
-          Order
+          <span data-text="folder.order"></span>
           <select id="folder-sort"></select>
         </label>
         <p id="folder-error" class="folder-error" role="alert" hidden></p>
         <div id="folder-confirm" class="folder-confirm" role="alertdialog" hidden>
           <span id="folder-confirm-text"></span>
-          <button id="folder-delete-yes" type="button" class="danger">Delete</button>
-          <button id="folder-delete-no" type="button">Keep</button>
+          <button
+            id="folder-delete-yes"
+            type="button"
+            class="danger"
+            data-text="common.delete"
+          ></button>
+          <button id="folder-delete-no" type="button" data-text="common.keep"></button>
         </div>
         <div class="folder-buttons">
-          <button id="folder-delete" type="button" class="danger">Delete…</button>
+          <button
+            id="folder-delete"
+            type="button"
+            class="danger"
+            data-text="folder.delete"
+          ></button>
           <span class="spacer"></span>
-          <button id="folder-cancel" type="button">Cancel</button>
-          <button id="folder-save" type="submit">Save</button>
+          <button id="folder-cancel" type="button" data-text="common.cancel"></button>
+          <button id="folder-save" type="submit" data-text="common.save"></button>
         </div>
       </form>
     </dialog>
 
     <dialog id="retag-dialog" aria-labelledby="retag-title">
       <form id="retag-form" class="folder-form retag-form" novalidate>
-        <h2 id="retag-title">Rename tag</h2>
+        <h2 id="retag-title"></h2>
         <label>
-          New name
+          <span data-text="retag.newName"></span>
           <input
             id="retag-name"
             type="text"
@@ -215,94 +323,72 @@
             spellcheck="false"
           />
         </label>
-        <p id="retag-help" class="muted retag-help">
-          Its subtags move along. To merge it into another tag, enter that tag. Every note changed
-          keeps its earlier version in its history.
-        </p>
+        <p id="retag-help" class="muted retag-help" data-text="retag.help"></p>
         <section id="retag-report" class="retag-report" aria-live="polite" hidden>
           <p id="retag-summary"></p>
           <ul id="retag-notes" class="retag-notes"></ul>
         </section>
         <p id="retag-error" class="folder-error" role="alert" hidden></p>
         <div class="folder-buttons">
-          <button id="retag-undo" type="button" hidden>Undo</button>
+          <button id="retag-undo" type="button" data-text="common.undo" hidden></button>
           <span class="spacer"></span>
-          <button id="retag-cancel" type="button">Cancel</button>
-          <button id="retag-start" type="submit" disabled>Rename</button>
+          <button id="retag-cancel" type="button" data-text="common.cancel"></button>
+          <button id="retag-start" type="submit" data-text="retag.start" disabled></button>
         </div>
       </form>
     </dialog>
 
     <dialog id="import-dialog" class="import-dialog" aria-labelledby="import-title">
       <div class="import">
-        <h2 id="import-title">Import notes</h2>
+        <h2 id="import-title" data-text="import.title"></h2>
         <section id="import-choose" class="import-choose">
           <label>
-            From
+            <span data-text="import.from"></span>
             <select id="import-source">
-              <option value="apple-notes">Apple Notes</option>
-              <option value="simplenote">Simplenote</option>
-              <option value="html">HTML files</option>
-              <option value="markdown">Markdown files</option>
+              <option value="apple-notes" data-text="import.source.appleNotes"></option>
+              <option value="simplenote" data-text="import.source.simplenote"></option>
+              <option value="html" data-text="import.source.html"></option>
+              <option value="markdown" data-text="import.source.markdown"></option>
             </select>
           </label>
           <div id="import-help-apple-notes" class="import-help">
-            <p>Two steps, because the export from Notes leaves out dates and folders:</p>
+            <p data-text="import.help.appleNotes"></p>
             <ol>
-              <li>
-                In Notes, open a folder, select its notes (⌘A) and choose File › Export as ›
-                Markdown. Save them into a folder of their own inside one folder for the import,
-                e.g. “Schnipsle-Import”. Do this for each folder you want.
-              </li>
-              <li>
-                Choose that folder here. Schnipsle then reads the dates and folders of your notes
-                from Notes; macOS asks once whether it may. Nothing in Notes is changed.
-              </li>
+              <li data-text="import.help.appleNotesExport"></li>
+              <li data-text="import.help.appleNotesChoose"></li>
             </ol>
           </div>
           <div id="import-help-simplenote" class="import-help">
-            <p>
-              In Simplenote, choose File › Export Notes (in the web app: Settings › Tools › Export
-              Notes). It saves a zip file; choose it here as it is, there is no need to unpack it.
-            </p>
-            <p>
-              Tags become hashtags at the end of each note, unless the text has them already. Notes
-              in Simplenote’s trash go to the trash here.
-            </p>
+            <p data-text="import.help.simplenote"></p>
+            <p data-text="import.help.simplenoteTags"></p>
           </div>
           <div id="import-help-html" class="import-help">
-            <p>
-              Choose a folder of HTML files (.html, .htm), such as web pages saved from a browser,
-              or a single file. Each file becomes a note, and its subfolders become tags.
-            </p>
-            <p>
-              Pictures saved with a page and pictures embedded in it are copied into the vault, as
-              are files the page links to in the folder. Pictures and links on the web stay links.
-            </p>
+            <p data-text="import.help.html"></p>
+            <p data-text="import.help.htmlPictures"></p>
           </div>
           <div id="import-help-markdown" class="import-help">
-            <p>
-              Choose a folder of Markdown files (.md), such as notes from another editor, or a
-              single file. Each file becomes a note as it is, front matter included, and its
-              subfolders become tags. Hidden folders such as .obsidian are left out.
-            </p>
-            <p>
-              Pictures and files the notes link to in the folder are copied into the vault. Songs in
-              ChordPro (.cho, .crd, .chopro, .chordpro) become notes with their title and the song
-              as a chordpro block.
-            </p>
+            <p data-text="import.help.markdown"></p>
+            <p data-text="import.help.markdownPictures"></p>
           </div>
           <div class="import-pick">
-            <button id="import-pick" type="button">Choose folder…</button>
-            <button id="import-pick-file" type="button" hidden>Choose file…</button>
+            <button id="import-pick" type="button" data-text="import.chooseFolder"></button>
+            <button
+              id="import-pick-file"
+              type="button"
+              data-text="import.chooseFile"
+              hidden
+            ></button>
             <span id="import-path" class="muted"></span>
           </div>
         </section>
         <div id="import-metadata" class="import-box" hidden>
           <span id="import-metadata-text"></span>
-          <button id="import-read-metadata" type="button" class="small">
-            Read dates and folders from Notes
-          </button>
+          <button
+            id="import-read-metadata"
+            type="button"
+            class="small"
+            data-text="import.readMetadata"
+          ></button>
         </div>
         <section id="import-report" class="import-report" aria-live="polite" hidden>
           <p id="import-summary" class="import-summary"></p>
@@ -310,9 +396,9 @@
           <table class="import-items">
             <thead>
               <tr>
-                <th scope="col">Note</th>
-                <th scope="col">Import</th>
-                <th scope="col">Where, or why not</th>
+                <th scope="col" data-text="import.column.note"></th>
+                <th scope="col" data-text="import.column.import"></th>
+                <th scope="col" data-text="import.column.where"></th>
               </tr>
             </thead>
             <tbody id="import-items"></tbody>
@@ -325,17 +411,17 @@
         <p id="import-error" class="folder-error" role="alert" hidden></p>
         <div class="folder-buttons">
           <span class="spacer"></span>
-          <button id="import-cancel" type="button">Cancel</button>
-          <button id="import-start" type="button" disabled>Import</button>
+          <button id="import-cancel" type="button" data-text="common.cancel"></button>
+          <button id="import-start" type="button" data-text="import.start" disabled></button>
         </div>
       </div>
     </dialog>
     <dialog id="export-dialog" class="import-dialog export-dialog" aria-labelledby="export-title">
       <div class="import">
-        <h2 id="export-title">Export notes</h2>
+        <h2 id="export-title" data-text="export.title"></h2>
         <section id="export-choose" class="import-choose export-choose">
           <fieldset>
-            <legend>Notes</legend>
+            <legend data-text="export.notes"></legend>
             <label>
               <input id="export-what-note" type="radio" name="export-what" value="note" />
               <span id="export-note-label"></span>
@@ -346,14 +432,12 @@
             </label>
           </fieldset>
           <label>
-            Format
+            <span data-text="export.formatLabel"></span>
             <select id="export-format"></select>
           </label>
-          <p id="export-no-pandoc" class="muted" hidden>
-            Word and EPUB appear here once Pandoc is installed.
-          </p>
+          <p id="export-no-pandoc" class="muted" data-text="export.noPandoc" hidden></p>
           <fieldset id="export-files">
-            <legend>Files</legend>
+            <legend data-text="export.files"></legend>
             <label>
               <input id="export-layout-one" type="radio" name="export-layout" value="singleFile" />
               <span id="export-one-label"></span>
@@ -373,27 +457,27 @@
             </label>
           </fieldset>
           <label id="export-paper-row">
-            Page size
+            <span data-text="export.paper"></span>
             <select id="export-paper">
-              <option value="a4">A4</option>
-              <option value="letter">Letter</option>
+              <option value="a4" data-text="export.paperA4"></option>
+              <option value="letter" data-text="export.paperLetter"></option>
             </select>
           </label>
           <label id="export-contents-row">
             <input id="export-contents" type="checkbox" />
-            Start with a table of contents
+            <span data-text="export.contents"></span>
           </label>
           <label id="export-page-numbers-row">
             <input id="export-page-numbers" type="checkbox" />
-            Page numbers
+            <span data-text="export.pageNumbers"></span>
           </label>
           <label>
             <input id="export-keep-tags" type="checkbox" />
-            Keep the line of tags at the end of a note
+            <span data-text="export.keepTags"></span>
           </label>
           <label>
             <input id="export-abc-source" type="checkbox" />
-            Add the ABC source under each score
+            <span data-text="export.abcSource"></span>
           </label>
           <p id="export-unsaved" class="import-box warn" hidden></p>
         </section>
@@ -408,8 +492,8 @@
           <table id="export-problems-table" class="import-items">
             <thead>
               <tr>
-                <th>Note</th>
-                <th>What is different in the export</th>
+                <th data-text="import.column.note"></th>
+                <th data-text="export.differentColumn"></th>
               </tr>
             </thead>
             <tbody id="export-problems"></tbody>
@@ -418,25 +502,25 @@
         <p id="export-error" class="folder-error" role="alert" hidden></p>
         <div class="folder-buttons">
           <span class="spacer"></span>
-          <button id="export-share" type="button" hidden>Share…</button>
+          <button id="export-share" type="button" data-text="export.share" hidden></button>
           <button id="export-reveal" type="button" hidden></button>
-          <button id="export-cancel" type="button">Cancel</button>
-          <button id="export-start" type="button">Export…</button>
+          <button id="export-cancel" type="button" data-text="common.cancel"></button>
+          <button id="export-start" type="button" data-text="export.start"></button>
         </div>
       </div>
     </dialog>
     <dialog id="imports-dialog" class="import-dialog" aria-labelledby="imports-title">
       <div class="import">
-        <h2 id="imports-title">Imports</h2>
+        <h2 id="imports-title" data-text="imports.title"></h2>
         <section id="imports-list" class="import-report">
           <p id="imports-summary" class="import-summary"></p>
           <table class="import-items">
             <thead>
               <tr>
-                <th scope="col">When</th>
-                <th scope="col">From</th>
-                <th scope="col">Notes</th>
-                <th scope="col" aria-label="Undo"></th>
+                <th scope="col" data-text="imports.column.when"></th>
+                <th scope="col" data-text="import.from"></th>
+                <th scope="col" data-text="imports.column.notes"></th>
+                <th scope="col" data-label="common.undo"></th>
               </tr>
             </thead>
             <tbody id="imports-runs"></tbody>
@@ -447,9 +531,9 @@
           <table class="import-items">
             <thead>
               <tr>
-                <th scope="col">Note</th>
-                <th scope="col">Undo</th>
-                <th scope="col">Where, or why not</th>
+                <th scope="col" data-text="import.column.note"></th>
+                <th scope="col" data-text="common.undo"></th>
+                <th scope="col" data-text="import.column.where"></th>
               </tr>
             </thead>
             <tbody id="imports-items"></tbody>
@@ -457,10 +541,10 @@
         </section>
         <p id="imports-error" class="folder-error" role="alert" hidden></p>
         <div class="folder-buttons">
-          <button id="imports-back" type="button" hidden>All imports</button>
+          <button id="imports-back" type="button" data-text="imports.all" hidden></button>
           <span class="spacer"></span>
-          <button id="imports-close" type="button">Close</button>
-          <button id="imports-start" type="button" hidden>Undo import</button>
+          <button id="imports-close" type="button" data-text="common.close"></button>
+          <button id="imports-start" type="button" data-text="imports.undo" hidden></button>
         </div>
       </div>
     </dialog>
@@ -470,35 +554,40 @@
       aria-labelledby="settings-title"
     >
       <div class="import">
-        <h2 id="settings-title">Settings</h2>
+        <h2 id="settings-title" data-text="app.settings"></h2>
         <section class="settings-section" aria-labelledby="settings-vault-title">
-          <h3 id="settings-vault-title">This vault</h3>
+          <h3 id="settings-vault-title" data-text="settings.vault"></h3>
           <p id="settings-vault-hint" class="muted"></p>
           <div id="settings-vault-fields" class="settings-fields">
             <fieldset>
-              <legend>Earlier versions of a note</legend>
+              <legend data-text="settings.retention"></legend>
               <label>
-                Keep every version for
+                <span data-text="settings.keepAllBefore"></span>
                 <input id="settings-keep-all" type="text" inputmode="numeric" size="4" />
-                days,
+                <span data-text="settings.keepAllAfter"></span>
               </label>
               <label>
-                then one a day until
+                <span data-text="settings.keepDailyBefore"></span>
                 <input id="settings-keep-daily" type="text" inputmode="numeric" size="4" />
-                days, then one a week.
+                <span data-text="settings.keepDailyAfter"></span>
               </label>
               <p id="settings-retention-note" class="muted"></p>
             </fieldset>
             <div id="settings-confirm" class="folder-confirm" role="alertdialog" hidden>
               <span id="settings-confirm-text"></span>
-              <button id="settings-confirm-yes" type="button" class="danger">Remove them</button>
-              <button id="settings-confirm-no" type="button">Keep them</button>
+              <button
+                id="settings-confirm-yes"
+                type="button"
+                class="danger"
+                data-text="settings.removeThem"
+              ></button>
+              <button id="settings-confirm-no" type="button" data-text="settings.keepThem"></button>
             </div>
             <label>
-              Chord names in song sheets
+              <span data-text="settings.chords"></span>
               <select id="settings-chords">
-                <option value="english">English: B and B♭</option>
-                <option value="german">German: H and B</option>
+                <option value="english" data-text="settings.chordsEnglish"></option>
+                <option value="german" data-text="settings.chordsGerman"></option>
               </select>
             </label>
             <p id="settings-chords-note" class="muted" hidden></p>
@@ -511,32 +600,37 @@
           aria-labelledby="settings-device-title"
           hidden
         >
-          <h3 id="settings-device-title">This Mac</h3>
-          <p class="muted">Saved on this Mac only.</p>
+          <h3 id="settings-device-title" data-text="settings.device"></h3>
+          <p class="muted" data-text="settings.deviceHint"></p>
           <div class="settings-fields">
             <fieldset>
-              <legend>Pandoc, for Word and EPUB</legend>
+              <legend data-text="settings.pandoc"></legend>
               <p id="settings-pandoc-status"></p>
               <div class="folder-buttons">
-                <button id="settings-pandoc-pick" type="button">Choose Program…</button>
-                <button id="settings-pandoc-find" type="button" hidden>
-                  Find It Automatically
-                </button>
+                <button
+                  id="settings-pandoc-pick"
+                  type="button"
+                  data-text="settings.pandocPick"
+                ></button>
+                <button
+                  id="settings-pandoc-find"
+                  type="button"
+                  data-text="settings.pandocFind"
+                  hidden
+                ></button>
               </div>
             </fieldset>
             <label>
               <input id="settings-updates" type="checkbox" />
-              Check for updates once a day
+              <span data-text="settings.updates"></span>
             </label>
-            <p class="muted">
-              Schnipsle then asks GitHub whether a newer version exists. It sends nothing else.
-            </p>
+            <p class="muted" data-text="settings.updatesHint"></p>
           </div>
           <p id="settings-device-error" class="folder-error" role="alert" hidden></p>
         </section>
         <div class="folder-buttons">
           <span class="spacer"></span>
-          <button id="settings-close" type="button">Done</button>
+          <button id="settings-close" type="button" data-text="common.done"></button>
         </div>
       </div>
     </dialog>

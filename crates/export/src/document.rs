@@ -27,7 +27,7 @@ use crate::music::{self, Music, Output};
 use crate::output;
 use crate::raw_html;
 use crate::songs;
-use crate::{Input, Options, Problem, ProblemKind, Report};
+use crate::{Input, Options, Problem, ProblemKind, Report, Warning};
 
 /// A note to export.
 pub(crate) struct Source {
@@ -184,8 +184,8 @@ pub(crate) struct Collected {
     pub problems: Vec<Problem>,
     /// Files that got a number, as [`crate::Report::numbered`] says.
     pub numbered: Vec<String>,
-    /// What a converter said, as [`crate::Report::warnings`] says.
-    pub warnings: Vec<String>,
+    /// Warnings about the documents, as [`crate::Report::warnings`] says.
+    pub warnings: Vec<Warning>,
     /// Files to copy, by where they go: relative to the document's folder, the
     /// same as relative to the vault.
     pub copies: BTreeMap<String, Copy>,
