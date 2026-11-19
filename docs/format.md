@@ -1,7 +1,7 @@
 # Vault File Format Specification
 
 - Format version: **1** (draft)
-- Spec revision: 0.16, 2026-11-17 (§7 how `settings.yaml` is written; 0.15: §5.7 rule 6 names the vault default `chord_notation`; 0.14: §5.2 a first heading of any level gives the title; 0.13: §12.4 rule 4 notes an undo cannot change; 0.12: §12.1 rule 7 the source's title as a heading; 0.11: §12.1 rule 6 notes from the source's trash; 0.10: §12 imported notes, import log, re-import and undo; 0.9: §9 reading and writing smart folders; 0.8: §7 retention settings; 0.7: §5.5 relative links are kept working when a note moves; 0.6: §8 `original_path` is relative to the vault root; 0.5: §8 trash names for notes without `id` and for collisions; 0.4: §5.3 refined by the first implementation, §5.6 music notation, §5.7 lyrics with chords)
+- Spec revision: 0.17, 2026-11-19 (§12.1 rule 5 tags added to every note of an import, §12.2 `tags` in the import log; 0.16: §7 how `settings.yaml` is written; 0.15: §5.7 rule 6 names the vault default `chord_notation`; 0.14: §5.2 a first heading of any level gives the title; 0.13: §12.4 rule 4 notes an undo cannot change; 0.12: §12.1 rule 7 the source's title as a heading; 0.11: §12.1 rule 6 notes from the source's trash; 0.10: §12 imported notes, import log, re-import and undo; 0.9: §9 reading and writing smart folders; 0.8: §7 retention settings; 0.7: §5.5 relative links are kept working when a note moves; 0.6: §8 `original_path` is relative to the vault root; 0.5: §8 trash names for notes without `id` and for collisions; 0.4: §5.3 refined by the first implementation, §5.6 music notation, §5.7 lyrics with chords)
 - Status: Draft — becomes normative when M1 ships
 - Related: ADR-0004, ADR-0008, ADR-0009, ADR-0011, ADR-0013, ADR-0014, ADR-0012, ADR-0016, ADR-0017, ADR-0018, ADR-0019, ADR-0020, ADR-0026, ADR-0030, ADR-0039
 
@@ -289,9 +289,9 @@ How notes from other apps are written into the vault, and the log that makes an 
 
    Paths in `source_id` use `/` and are NFC-normalized.
 2. The note is written to `notes/<Folder>/` followed by the source's folders (for Apple Notes the note's folder in Notes), with a file name as in §3. Example: `notes/Apple Notes/Brot und Germgebäck/pizzateig.md`.
-3. The text of the note is the source's text converted to Markdown. Changes beyond the conversion are limited to: line endings to LF, NFC normalization, attachments stored under §6 with their links rewritten (§5.5), a heading with the title the source gives the note (rule 7), and a final tag line (rule 5).
+3. The text of the note is the source's text converted to Markdown. Changes beyond the conversion are limited to: line endings to LF, NFC normalization, attachments stored under §6 with their links rewritten (§5.5), a heading with the title the source gives the note (rule 7), and a final tag line (rule 5) with the tags the user added to the import.
 4. **Folder tags.** Each folder level of the source gives one tag level: its name, NFC-normalized, with every character that §5.3 does not allow in a tag name replaced by `-`, runs of `-` collapsed to one and `-` at either end removed. Levels that end up empty are left out. Nested folders give one tag with `/` between the levels: `Radio` › `QRP Kits` → `#Radio/QRP-Kits`. If the result is not recognized as a tag by §5.3 (e.g. `#2024` or `#a0b1c2`), the folder gives no tag.
-5. Tags the source keeps outside the text (Simplenote `tags`) and folder tags are written on one final line, separated by spaces, after an empty line: `#Radio/QRP-Kits #ÖVSV`. A tag the text already carries (§5.3, compared after normalization) is not repeated. A source tag is normalized like a folder level (rule 4) and left out if the result is not a tag. A note that gets no such tags gets no final line.
+5. Tags the user added to the whole import, folder tags and tags the source keeps outside the text (Simplenote `tags`) are written on one final line, in this order, separated by spaces, after an empty line: `#import/2026-11 #Radio/QRP-Kits #ÖVSV`. A tag the text already carries, or that comes earlier on the line (§5.3, compared after normalization), is not repeated. A source tag is normalized like a folder level (rule 4) and left out if the result is not a tag. Tags the user adds MUST each be a tag by §5.3 as a whole; an implementation refuses others before the dry run rather than changing them (ADR-0043). A note that gets no such tags gets no final line.
 6. **Notes in the source's trash** (Simplenote `trashedNotes`) are imported like the others and then moved to the trash (§8), with `original_path` where they were written. The log lists them as `added` with that path; a re-import finds them missing (§12.3 rule 3), and undo leaves them where they are (§12.4 rule 3). A note imported before that the source has since moved to its trash is treated as in §12.3 and is never moved to the trash by an import.
 7. **Title.** If the source names the note outside its text (an HTML page's `<title>`, a Markdown file's front-matter `title`, a ChordPro file's `{title}`, §5.7 rule 9) and the text does not start with a level-1 heading, `# <title>` is put at the top of the body, after the front matter, followed by an empty line, so the note shows that title (§5.2). A front-matter `title` stays in the front matter. A leading level-1 heading wins over the source's name (ADR-0020).
 
@@ -304,6 +304,8 @@ format: 1
 id: 01JB2C3D4E5F6G7H8J9K0K1M2N   # equals the file name
 source: apple-notes              # as in §12.1
 input: Schnipsle-Import          # name of the chosen file or folder, for display
+tags:                            # tags added to every note (§12.1 rule 5), without `#`; only if any
+  - import/2026-11
 started: 2026-10-29T10:15:00+01:00
 finished: 2026-10-29T10:15:42+01:00   # missing while the run is still writing
 undone: null                     # time of the undo, or null
@@ -323,7 +325,7 @@ notes:
     replaced: 20261029T091500Z   # the snapshot (§7) of the version this run replaced
 ```
 
-1. `format`, `id`, `source`, `started` and `notes` are REQUIRED; in each entry `source_id`, `id`, `path`, `action` and `hash` are. Timestamps are RFC 3339 with offset; `replaced` names a snapshot in `.notesapp/history/<id>/` without its extension.
+1. `format`, `id`, `source`, `started` and `notes` are REQUIRED; `tags` is OPTIONAL; in each entry `source_id`, `id`, `path`, `action` and `hash` are. Timestamps are RFC 3339 with offset; `replaced` names a snapshot in `.notesapp/history/<id>/` without its extension.
 2. `notes` lists every note the run wrote, in the order written. Notes the run skipped are not listed (the dry-run report shows them).
 3. A writer MUST create the log before writing the first note and MUST add each entry no later than the note is written; it MAY add entries in batches ahead of writing their notes. It sets `finished` when the run ends. A reader MUST therefore accept entries whose note does not exist or differs from `hash`, and MUST treat a log without `finished` like a finished one.
 4. `path` is where the note was written, relative to the vault root. Notes are found by `id` (§3); the path is only a hint.

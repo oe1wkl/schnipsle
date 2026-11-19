@@ -109,13 +109,25 @@ fn desktop_only() -> CommandError {
 }
 
 /// The dry run: reads the export at `path` and plans the import into the
-/// open vault. Writes nothing; the plan waits for [`apply_import`].
+/// open vault, with the tags typed in `tags` added to every note
+/// (format.md §12.1 rule 5). Writes nothing; the plan waits for
+/// [`apply_import`].
 #[tauri::command]
 pub async fn plan_import(
     state: State<'_, AppState>,
     source: Source,
     path: String,
+    tags: Option<String>,
 ) -> CmdResult<ImportPreview> {
+    let tags =
+        schnipsle_import::typed_tags(tags.as_deref().unwrap_or_default()).map_err(|name| {
+            CommandError {
+                kind: "notATag",
+                message: format!("#{name} is not a tag"),
+                current_hash: None,
+                value: Some(name),
+            }
+        })?;
     let input = PathBuf::from(&path);
     let batch = match source {
         Source::AppleNotes => apple_notes::read(&input)?,
@@ -127,7 +139,7 @@ pub async fn plan_import(
         source == Source::AppleNotes && input.join(apple_notes::METADATA_FILE).is_file();
     with_vault(&state, |v| {
         schnipsle_import::check_input(v, &input)?;
-        let plan = schnipsle_import::plan(v, &batch, &SystemEnv)?;
+        let plan = schnipsle_import::plan_tagged(v, &batch, &tags, &SystemEnv)?;
         *state.import.0.lock().map_err(CommandError::other)? =
             Some((v.root().to_owned(), plan.clone()));
         Ok(ImportPreview {

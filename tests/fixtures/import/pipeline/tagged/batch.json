@@ -1,0 +1,28 @@
+{
+  "source": "simplenote",
+  "input": "export.zip",
+  "notes": [
+    {
+      "sourceId": "n1",
+      "title": "Plain note",
+      "body": "Plain note\nNo tags of its own.\n",
+      "created": "2025-01-10T08:00:00Z",
+      "modified": "2025-01-10T08:00:00Z"
+    },
+    {
+      "sourceId": "n2",
+      "title": "Repeaters",
+      "body": "Repeaters\nOE1XUU on 145.6125 #Import/2026-11\n",
+      "tags": ["radio", "Inbox"],
+      "created": "2025-02-01T12:00:00Z",
+      "modified": "2025-02-02T12:00:00Z"
+    },
+    {
+      "sourceId": "n3",
+      "title": "",
+      "body": "",
+      "created": "2025-03-01T12:00:00Z",
+      "modified": "2025-03-01T12:00:00Z"
+    }
+  ]
+}

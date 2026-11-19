@@ -1,0 +1,29 @@
+format: 1
+id: 01M63HM9800000000000000004
+source: simplenote
+input: export.zip
+tags:
+  - import/2026-11
+  - inbox
+started: "2026-10-29T10:00:00Z"
+finished: "2026-10-29T10:00:00Z"
+undone: null
+notes:
+  - source_id: n1
+    id: 01M63HM9800000000000000001
+    path: notes/Simplenote/plain-note.md
+    action: added
+    source_modified: "2025-01-10T08:00:00Z"
+    hash: bad6b71e509efc1065b6ec96eae97e8de2b2689e9c273dd3100067924290a9c9
+  - source_id: n2
+    id: 01M63HM9800000000000000002
+    path: notes/Simplenote/repeaters.md
+    action: added
+    source_modified: "2025-02-02T12:00:00Z"
+    hash: be4d84aa6a876969f79455c660fa509696f2c52309629ed4c7fe585dd3188683
+  - source_id: n3
+    id: 01M63HM9800000000000000003
+    path: notes/Simplenote/note.md
+    action: added
+    source_modified: "2025-03-01T12:00:00Z"
+    hash: 32c4e09ac0fa999667b00c7542ae4c3712c95acaeb165f65980c8c4cb3844121

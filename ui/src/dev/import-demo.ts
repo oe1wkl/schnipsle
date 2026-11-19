@@ -198,6 +198,7 @@ const runs: ImportRun[] = [
     id: "01M697ZKZHKDGR5P5XAVDWEHQ4",
     source: "markdown",
     input: "Old notes",
+    tags: ["import/2026-10", "inbox"],
     started: "2026-10-31T14:55:26Z",
     undone: null,
     added: 6,
@@ -208,6 +209,7 @@ const runs: ImportRun[] = [
     id: "01M63HM980000000000000000B",
     source: "simplenote",
     input: "notes.zip",
+    tags: [],
     started: "2026-10-30T09:12:00Z",
     undone: null,
     added: 1,
@@ -218,6 +220,7 @@ const runs: ImportRun[] = [
     id: "01M5Z0000000000000000000AA",
     source: "apple-notes",
     input: "Schnipsle-Import",
+    tags: [],
     started: "2026-10-29T10:15:00Z",
     undone: "2026-10-29T11:02:00Z",
     added: 137,
@@ -228,6 +231,7 @@ const runs: ImportRun[] = [
     id: "01M5Y0000000000000000000ZZ",
     source: "",
     input: null,
+    tags: [],
     started: "",
     undone: null,
     added: 0,
@@ -334,6 +338,20 @@ async function answer(cmd: string, args: Record<string, unknown> = {}): Promise<
       return "/Users/me/Schnipsle-Import";
     case "plan_import": {
       await wait(300);
+      // Roughly the core's check (format.md §5.3): a tag needs a letter.
+      const tags = (typeof args.tags === "string" ? args.tags : "")
+        .split(/[\s,]+/)
+        .map((word) => word.replace(/^#/, ""))
+        .filter((word) => word !== "");
+      const bad = tags.find((tag) => !/\p{L}/u.test(tag));
+      if (bad !== undefined) {
+        // Like a CommandError from the app: asError reads `kind` and `value`.
+        throw Object.assign(new Error(`#${bad} is not a tag`), {
+          kind: "notATag",
+          currentHash: null,
+          value: bad,
+        });
+      }
       const simple = args.source === "simplenote";
       current = simple
         ? simplenotePlan
@@ -343,7 +361,7 @@ async function answer(cmd: string, args: Record<string, unknown> = {}): Promise<
             ? markdownPlan
             : plan;
       return {
-        plan: current,
+        plan: { ...current, tags },
         path: String(args.path),
         hasMetadata: !simple && hasMetadata,
       } satisfies ImportPreview;

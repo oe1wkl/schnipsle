@@ -35,6 +35,8 @@ pub struct ImportRun {
     pub source: String,
     /// The name of the file or folder imported.
     pub input: Option<String>,
+    /// The tags it added to every note, without `#`.
+    pub tags: Vec<String>,
     /// When it started, RFC 3339.
     pub started: String,
     /// When it was undone, if it was.
@@ -118,6 +120,7 @@ pub fn runs(vault: &Vault) -> Result<Vec<ImportRun>, ImportError> {
                     id,
                     source: String::new(),
                     input: None,
+                    tags: Vec::new(),
                     started: String::new(),
                     undone: None,
                     added: 0,
@@ -138,6 +141,7 @@ fn run_of(log: &ImportLog, id: String) -> ImportRun {
         id,
         source: log.source(),
         input: log.input(),
+        tags: log.tags(),
         started: log.started(),
         undone: log.undone(),
         added: count(LogAction::Added),
