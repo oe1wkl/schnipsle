@@ -45,6 +45,7 @@ pub fn may_close<R: Runtime>(app: &AppHandle<R>) -> bool {
     match asked.at {
         Some(at) if !asked.heard && at.elapsed() >= NO_ANSWER => {
             eprintln!("the page did not answer the request to quit; quitting without it");
+            asked.allowed = true;
             return true;
         }
         Some(_) if !asked.heard => {} // asked a moment ago: ask again
@@ -55,6 +56,7 @@ pub fn may_close<R: Runtime>(app: &AppHandle<R>) -> bool {
     }
     if let Err(e) = app.emit("quit-requested", ()) {
         eprintln!("the page cannot be asked to save before quitting: {e}");
+        asked.allowed = true;
         return true;
     }
     false

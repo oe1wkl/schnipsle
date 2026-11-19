@@ -2,7 +2,7 @@
 //! The text of the desktop menu (ADR-0041 rule 4), in one table per
 //! language; English only in 1.0. The menu is built before the web view, so
 //! it cannot use the UI's catalog (`ui/src/strings/en.ts`). The standard items
-//! (Undo, Copy, Quit, …) keep the texts the menu library gives them.
+//! (Undo, Copy, Hide, …) keep the texts the menu library gives them.
 
 /// The labels of the menu's own items and submenus.
 pub struct MenuText {
@@ -17,6 +17,8 @@ pub struct MenuText {
     pub imports: &'static str,
     pub export: &'static str,
     pub settings: &'static str,
+    /// "Quit", followed by the app's name on macOS.
+    pub quit: &'static str,
 }
 
 const EN: MenuText = MenuText {
@@ -30,6 +32,7 @@ const EN: MenuText = MenuText {
     imports: "Imports…",
     export: "Export…",
     settings: "Settings…",
+    quit: "Quit",
 };
 
 /// The menu's text in the user's language; a second table is picked here by
