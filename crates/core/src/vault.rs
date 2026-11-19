@@ -489,7 +489,12 @@ impl Vault {
     }
 
     /// The bytes of the note at `full`, if their hash is `expected_hash`.
-    fn read_expected(&self, path: &str, full: &Path, expected_hash: &str) -> Result<Vec<u8>> {
+    pub(crate) fn read_expected(
+        &self,
+        path: &str,
+        full: &Path,
+        expected_hash: &str,
+    ) -> Result<Vec<u8>> {
         let current = self.coordinated(Access::Read, full, |file| match fs::read(file) {
             Ok(bytes) => Ok(Some(bytes)),
             Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(None),
@@ -506,7 +511,7 @@ impl Vault {
 
     /// Replaces the note at `full` with `stamped` if its hash is still
     /// `expected_hash`.
-    fn replace_expected(
+    pub(crate) fn replace_expected(
         &self,
         path: &str,
         full: &Path,

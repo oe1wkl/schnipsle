@@ -5,6 +5,7 @@
 //! here (ADR-0003). Commands that may show system UI or wait for iOS are `async`,
 //! so they run off the main thread.
 
+mod closing;
 mod exporting;
 mod importing;
 mod indexing;
@@ -23,8 +24,8 @@ use std::sync::{Arc, Mutex};
 use schnipsle_core::layout::VAULT_FILE;
 use schnipsle_core::{
     AddedAttachment, Comparison, Coordinator, Folder, LinkTarget, MovedNotes, NewNote, NoteContent,
-    NoteEntry, SavedNote, SearchHit, SortOrder, StrayNotes, Tag, TagFolder, TrashedNote, Vault,
-    VaultError, Version,
+    NoteEntry, OtherUsed, SavedNote, SearchHit, SortOrder, StrayNotes, Tag, TagFolder, TrashedNote,
+    Vault, VaultError, Version,
 };
 use serde::Serialize;
 use tauri::State;
@@ -227,18 +228,32 @@ fn remember(app: &tauri::AppHandle, state: &AppState, vault: Vault) -> CmdResult
         .inspect_err(|e| eprintln!("vault changes will not be reported: {e}"))
         .ok();
     state.index.open_for(app, &vault);
-    thin_history_in_background(&vault);
+    tidy_in_background(&vault);
     *state.vault.lock().map_err(CommandError::other)? = Some(vault);
     Ok(info)
 }
 
-/// Applies the history retention (ADR-0011) without holding up the UI.
-fn thin_history_in_background(vault: &Vault) {
+/// Without holding up the UI: clears temporary files a crash left behind,
+/// keeping their text in the history (ADR-0042), then applies the history
+/// retention (ADR-0011).
+fn tidy_in_background(vault: &Vault) {
     let vault = vault.clone();
     let spawned = std::thread::Builder::new()
-        .name("history-retention".into())
+        .name("vault-tidy".into())
         .spawn(move || {
             let now = schnipsle_core::stamp::now_ms();
+            match vault.clear_leftovers(now) {
+                Err(VaultError::ReadOnly(_)) => {}
+                Ok(found) => {
+                    for note in &found.stored {
+                        eprintln!("text left by a crash stored in the history of {note}");
+                    }
+                    for (file, why) in &found.kept {
+                        eprintln!("temporary file {file} kept: {why}");
+                    }
+                }
+                Err(e) => eprintln!("temporary files not checked: {e}"),
+            }
             match vault.thin_history(vault.retention(), now) {
                 Ok(0) | Err(VaultError::ReadOnly(_)) => {}
                 Ok(n) => eprintln!("history: {n} old snapshots removed"),
@@ -246,7 +261,7 @@ fn thin_history_in_background(vault: &Vault) {
             }
         });
     if let Err(e) = spawned {
-        eprintln!("history not thinned: {e}");
+        eprintln!("vault not tidied: {e}");
     }
 }
 
@@ -665,6 +680,39 @@ async fn create_note(
     })
 }
 
+/// "Keep mine" in the conflict banner (ADR-0042): stores the version on disk,
+/// whose hash is `other_hash` (`None`: deleted elsewhere), in the note's
+/// history, then writes `text`. Returns what is now on disk.
+#[tauri::command]
+async fn keep_mine(
+    state: State<'_, AppState>,
+    path: String,
+    text: String,
+    other_hash: Option<String>,
+) -> CmdResult<SavedNote> {
+    with_vault(&state, |v| {
+        let saved = v.keep_mine(&path, &text, other_hash.as_deref())?;
+        reindex(&state, v, &[indexing::note_key(&path)]);
+        Ok(saved)
+    })
+}
+
+/// "Use other version" in the conflict banner (ADR-0042): stores `text`, the
+/// editor's version, in the note's history (or the trash, if the note was
+/// deleted elsewhere) and returns the note as it is on disk.
+#[tauri::command]
+async fn use_other(state: State<'_, AppState>, path: String, text: String) -> CmdResult<OtherUsed> {
+    with_vault(&state, |v| {
+        let used = v.use_other(&path, &text)?;
+        let mut keys = vec![indexing::note_key(&path)];
+        if let Some(trashed) = &used.trashed {
+            keys.push(indexing::trash_key(&trashed.key));
+        }
+        reindex(&state, v, &keys);
+        Ok(used)
+    })
+}
+
 /// Settles a sync conflict: `text` becomes the note, every other version goes
 /// into its history (ADR-0006, ADR-0011). Returns the note as now on disk.
 #[tauri::command]
@@ -863,13 +911,23 @@ fn app_menu(
 pub fn run() {
     let builder = tauri::Builder::default()
         .manage(AppState::default())
+        .manage(closing::Closing::default())
         .plugin(tauri_plugin_vault_access::init());
     #[cfg(desktop)]
     let builder = builder
         .plugin(tauri_plugin_dialog::init())
-        .setup(|app| Ok(install_menu(app)?));
+        .setup(|app| Ok(install_menu(app)?))
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event
+                && !closing::may_close(tauri::Manager::app_handle(window))
+            {
+                api.prevent_close();
+            }
+        });
     builder
         .invoke_handler(tauri::generate_handler![
+            closing::quit_heard,
+            closing::quit_app,
             pick_vault,
             restore_vault,
             create_vault,
@@ -908,6 +966,8 @@ pub fn run() {
             smart_folders::move_smart_folder,
             smart_folders::smart_folder_notes,
             create_note,
+            keep_mine,
+            use_other,
             resolve_conflict,
             keep_both,
             download_note,
@@ -937,6 +997,23 @@ pub fn run() {
             importing::undo_import,
             importing::read_apple_notes_metadata
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running Schnipsle");
+        .build(tauri::generate_context!())
+        .expect("error while building Schnipsle")
+        .run(on_run_event);
+}
+
+/// Quitting waits until the page has saved the open note (ADR-0042).
+#[allow(
+    clippy::needless_pass_by_value,
+    reason = "the signature `App::run` asks for"
+)]
+fn on_run_event(app: &tauri::AppHandle, event: tauri::RunEvent) {
+    #[cfg(desktop)]
+    if let tauri::RunEvent::ExitRequested { api, .. } = event
+        && !closing::may_close(app)
+    {
+        api.prevent_exit();
+    }
+    #[cfg(mobile)]
+    let _ = (app, event);
 }

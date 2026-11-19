@@ -12,6 +12,7 @@
 
 use std::fs;
 use std::io;
+use std::path::Path;
 
 use serde::Serialize;
 
@@ -60,6 +61,41 @@ impl Vault {
             eprintln!("no snapshot of {path} before deleting it: {e}");
         }
         let id = valid_id.map_or_else(new_ulid, |id| Ok(id.to_ascii_uppercase()))?;
+        self.file_in_trash(path, &text, &id, &mut |target| self.move_new(&full, target))
+    }
+
+    /// Puts `text` into the trash as a note deleted from `path` (relative to
+    /// `notes/`), under its `id` or a new one; nothing in `notes/` changes.
+    /// For text that has no file any more, such as the editor's text of a
+    /// note deleted elsewhere (ADR-0042). Returns its trash entry.
+    ///
+    /// # Errors
+    /// [`VaultError::ReadOnly`], [`VaultError::InvalidPath`], or I/O errors;
+    /// nothing is in the trash then.
+    pub fn trash_text(&self, path: &str, text: &str) -> Result<TrashedNote> {
+        self.check_writable()?;
+        self.resolve(path)?;
+        let id = front_matter::get(text, "id")
+            .filter(|id| is_ulid(id))
+            .map_or_else(new_ulid, |id| Ok(id.to_ascii_uppercase()))?;
+        self.file_in_trash(path, text, &id, &mut |target| {
+            let mut tmp = Some(TempFile::write(target, text.as_bytes())?);
+            self.coordinated(Access::Write, target, |file| {
+                Ok(tmp.take().ok_or_else(accessor_ran_twice)?.place_new(file)?)
+            })
+        })
+    }
+
+    /// Files a note deleted from `path` in the trash under the first free
+    /// key from `id`: writes its record, then calls `put` with where the
+    /// note goes, which fails with `AlreadyExists` if that is taken.
+    fn file_in_trash(
+        &self,
+        path: &str,
+        text: &str,
+        id: &str,
+        put: &mut dyn FnMut(&Path) -> Result<()>,
+    ) -> Result<TrashedNote> {
         let dir = self.root().join(TRASH_DIR);
         fs::create_dir_all(&dir)?;
         let deleted = rfc3339_utc(now_ms());
@@ -71,7 +107,7 @@ impl Vault {
 
         for n in 1..=MAX_SUFFIX {
             let key = if n == 1 {
-                id.clone()
+                id.to_owned()
             } else {
                 format!("{id}-{n}")
             };
@@ -86,9 +122,9 @@ impl Vault {
                 Err(VaultError::Io(e)) if e.kind() == io::ErrorKind::AlreadyExists => continue,
                 other => other?,
             }
-            return match self.move_new(&full, &dir.join(format!("{key}.md"))) {
+            return match put(&dir.join(format!("{key}.md"))) {
                 Ok(()) => Ok(TrashedNote {
-                    title: title_of(&text, file_stem(path)),
+                    title: title_of(text, file_stem(path)),
                     key,
                     original_path,
                     deleted,

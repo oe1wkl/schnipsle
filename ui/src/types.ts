@@ -120,6 +120,13 @@ export type DiffRow =
   | { kind: "removed"; before: number; parts: DiffPart[] }
   | { kind: "added"; after: number; parts: DiffPart[] }
   | { kind: "folded"; before: number; after: number; lines: string[] };
+/** What "Use other version" left (schnipsle-core `OtherUsed`, ADR-0042). */
+export interface OtherUsed {
+  /** The note as it is on disk; `null` if it was deleted elsewhere. */
+  note: NoteContent | null;
+  /** Where the editor's text went if the note was deleted elsewhere. */
+  trashed: TrashedNote | null;
+}
 export interface NewNote {
   path: string;
   saved: SavedNote;

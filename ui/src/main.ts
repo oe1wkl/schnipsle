@@ -34,6 +34,7 @@ import type {
   TrashedNote,
   AddedAttachment,
   NewNote,
+  OtherUsed,
   SearchHit,
   SnippetPart,
   SortOrder,
@@ -62,6 +63,8 @@ let hitsInTrash = new Set<string>();
 let sortOrder: SortOrder = "modified";
 let lastTrashed: TrashedNote | null = null;
 let conflictHash: string | null | undefined; // set while the conflict banner shows
+/** Why the last save failed, other than a conflict; `null` after a save that worked. */
+let saveProblem: string | null = null;
 let syncConflict: ConflictVersion | undefined; // shown in the sync conflict banner
 let entries: NoteEntry[] = [];
 let saveTimer: number | undefined;
@@ -153,8 +156,12 @@ const noteHistory = createHistory({
     const note = current;
     if (!note) return;
     void leaveNote()
-      .then(() => invoke<NewNote>("copy_version", { path: note.path, name: version.name }))
-      .then(async (created) => {
+      .then(async (left) => {
+        if (!left) return;
+        const created = await invoke<NewNote>("copy_version", {
+          path: note.path,
+          name: version.name,
+        });
         const content = await invoke<NoteContent>("read_note", { path: created.path });
         if (listMode === "trash") setListMode("notes");
         load(content);
@@ -493,7 +500,7 @@ async function showTrashList(): Promise<void> {
 
 /** Shows a note from the trash read-only in the editor, so it can be read before restoring it. */
 async function showTrashed(note: TrashedNote): Promise<void> {
-  await leaveNote();
+  if (!(await leaveNote())) return;
   let text: string;
   try {
     text = await invoke<string>("read_trashed_note", { key: note.key });
@@ -541,11 +548,18 @@ function setListMode(mode: "notes" | "trash"): void {
 /**
  * Saves, then renames the note's file if its title changed while it was open
  * (format.md §3). Runs whenever the user leaves a note, never while typing.
+ * Resolves to `false`, and says why, if the note still has text that is not
+ * saved (a failed save or a conflict): the caller stays on the note then, so
+ * the text is not dropped (ADR-0042).
  */
-function leaveNote(): Promise<void> {
-  saving = saving.then(save).then(async () => {
+function leaveNote(): Promise<boolean> {
+  const left = saving.then(save).then(async () => {
     const note = current;
-    if (!note || readOnly !== null || conflictHash !== undefined || isDirty()) return;
+    if (!note || readOnly !== null) return true;
+    if (conflictHash !== undefined || isDirty()) {
+      setStatus(t.note.staysOpen(unsavedWhy()));
+      return false;
+    }
     try {
       const path = await invoke<string>("rename_after_edit", {
         path: note.path,
@@ -559,8 +573,16 @@ function leaveNote(): Promise<void> {
       setStatus(t.note.notRenamed(asError(e).message));
     }
     await snapshotIfChanged();
+    return true;
   });
-  return saving;
+  saving = left.then(() => undefined);
+  return left;
+}
+
+/** Why the open note has text that is not saved, for a message. */
+function unsavedWhy(): string {
+  if (conflictHash !== undefined) return t.conflict.unresolved;
+  return saveProblem ?? t.note.notSavedYet;
 }
 
 /** Empties the editor: no note open. */
@@ -572,6 +594,7 @@ function closeEditor(): void {
   window.clearTimeout(snapshotTimer);
   changedSinceSnapshot = false;
   current = null;
+  saveProblem = null;
   images.forget();
   editor.load("");
   editor.setEnabled(false);
@@ -603,7 +626,7 @@ function refreshTagTreeIfNeeded(): void {
 }
 
 async function openNote(note: NoteEntry): Promise<void> {
-  await leaveNote();
+  if (!(await leaveNote())) return;
   if (!note.available) {
     try {
       await invoke("download_note", { path: note.path });
@@ -639,7 +662,7 @@ async function openLink(link: string): Promise<void> {
   try {
     const path = await invoke<string | null>("open_link", { notePath: note.path, link: written });
     if (path === null) return;
-    await leaveNote();
+    if (!(await leaveNote())) return;
     await openPath(path);
   } catch (e) {
     const err = asError(e);
@@ -667,6 +690,7 @@ function load(content: NoteContent): void {
     savedText: content.text,
     titleAtOpen: content.title,
   };
+  saveProblem = null;
   editor.load(content.text);
   editor.setEnabled(readOnly === null);
   ui.deleteNote.disabled = readOnly !== null;
@@ -753,6 +777,7 @@ async function save(): Promise<void> {
       expectedHash: note.hash,
     });
     applySaved(note, text, saved);
+    saveProblem = null;
     setStatus(t.note.saved(new Date().toLocaleTimeString()));
     refreshTagTreeIfNeeded();
   } catch (e) {
@@ -760,6 +785,7 @@ async function save(): Promise<void> {
     if (err.kind === "conflict") {
       showConflict(err.currentHash);
     } else {
+      saveProblem = err.message;
       setStatus(t.note.notSaved(err.message));
     }
   }
@@ -908,39 +934,60 @@ ui.syncKeepBoth.addEventListener("click", () => {
   });
 });
 
+// The conflict banner (ADR-0042): the version not chosen is stored first, in
+// the note's history or the trash; if it cannot be, nothing changes.
 ui.useTheirs.addEventListener("click", () => {
-  if (!current) return;
-  const path = current.path;
-  // The text in the editor goes into the history, never just away (ADR-0011).
-  snapshot(editor.text())
-    .then(() => invoke<NoteContent>("read_note", { path }))
-    .then(load)
-    .catch((e: unknown) => {
-      setStatus(asError(e).message);
-    });
+  saving = saving.then(async () => {
+    const note = current;
+    if (!note || conflictHash === undefined) return;
+    try {
+      const used = await invoke<OtherUsed>("use_other", { path: note.path, text: editor.text() });
+      if (used.note) {
+        load(used.note);
+        setStatus(t.conflict.usedOther);
+      } else {
+        closeEditor();
+        if (used.trashed) {
+          lastTrashed = used.trashed;
+          ui.undoDelete.hidden = false;
+          setStatus(t.conflict.mineInTrash(used.trashed.title));
+        }
+        showView("list");
+        await refreshList();
+      }
+    } catch (e) {
+      const err = asError(e);
+      if (err.kind === "conflict") showConflict(err.currentHash);
+      setStatus(t.conflict.notUsed(err.message));
+    }
+  });
 });
 
 ui.keepMine.addEventListener("click", () => {
-  if (!current) return;
-  const note = current;
-  const text = editor.text();
-  const expectedHash = conflictHash;
-  // The other version on disk goes into the history before it is replaced.
-  const write =
-    expectedHash === null || expectedHash === undefined
-      ? invoke<SavedNote>("create_note", { path: note.path, text })
-      : snapshot().then(() =>
-          invoke<SavedNote>("save_note", { path: note.path, text, expectedHash }),
-        );
-  write
-    .then((saved) => {
+  saving = saving.then(async () => {
+    const note = current;
+    if (!note || conflictHash === undefined) return;
+    const text = editor.text();
+    try {
+      const saved = await invoke<SavedNote>("keep_mine", {
+        path: note.path,
+        text,
+        otherHash: conflictHash,
+      });
       applySaved(note, text, saved);
       hideConflict();
+      saveProblem = null;
       setStatus(t.conflict.keptMine);
-    })
-    .catch((e: unknown) => {
-      setStatus(asError(e).message);
-    });
+      void refreshList();
+    } catch (e) {
+      const err = asError(e);
+      if (err.kind === "conflict") {
+        showConflict(err.currentHash);
+      } else {
+        setStatus(t.conflict.notKept(err.message));
+      }
+    }
+  });
 });
 
 /**
@@ -993,7 +1040,8 @@ ui.back.addEventListener("click", () => {
     showView("list");
     return;
   }
-  void leaveNote().then(async () => {
+  void leaveNote().then(async (left) => {
+    if (!left) return;
     showView("list");
     await refreshList();
   });
@@ -1070,8 +1118,9 @@ ui.undoDelete.addEventListener("click", () => {
 
 ui.pick.addEventListener("click", () => {
   void leaveNote()
-    .then(() => invoke<Opened | null>("pick_vault"))
-    .then(async (opened) => {
+    .then(async (left) => {
+      if (!left) return;
+      const opened = await invoke<Opened | null>("pick_vault");
       if (opened) await folderOpened(opened);
     })
     .catch((e: unknown) => {
@@ -1082,8 +1131,9 @@ ui.pick.addEventListener("click", () => {
 ui.setupCreate.addEventListener("click", () => {
   ui.setupCreate.disabled = true;
   void leaveNote()
-    .then(() => invoke<VaultInfo>("create_vault"))
-    .then(async (info) => {
+    .then(async (left) => {
+      if (!left) return;
+      const info = await invoke<VaultInfo>("create_vault");
       await folderOpened({ kind: "vault", ...info });
     })
     .catch((e: unknown) => {
@@ -1124,8 +1174,9 @@ ui.setupCancel.addEventListener("click", () => {
 ui.newNote.addEventListener("click", () => {
   const text = `# ${t.editor.newNoteTitle}\n\n`;
   void leaveNote()
-    .then(() => invoke<NewNote>("new_note", { text }))
-    .then((created) => {
+    .then(async (left) => {
+      if (!left) return;
+      const created = await invoke<NewNote>("new_note", { text });
       if (listMode === "trash") setListMode("notes");
       load({
         path: created.path,
@@ -1235,9 +1286,9 @@ const settingsView = createSettings({
   vaultState: () => (vaultIsOpen ? { open: true, readOnly } : { open: false }),
   chordNamesChanged: () => {
     // Read the open note again, so its song sheets show the new names.
-    void leaveNote().then(async () => {
+    void leaveNote().then(async (left) => {
       const note = current;
-      if (!note || isDirty() || conflictHash !== undefined) return;
+      if (!left || !note) return;
       try {
         load(await invoke<NoteContent>("read_note", { path: note.path }));
       } catch (e) {
@@ -1289,6 +1340,36 @@ ui.clearFilter.addEventListener("click", () => {
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") queueCheck();
   else void leaveNote();
+});
+
+// Quit and Close wait for the open note to be saved (ADR-0042, desktop only).
+let quitting = false;
+void listen("quit-requested", () => {
+  void invoke("quit_heard");
+  if (quitting) return;
+  if (ui.quitDialog.open) {
+    ui.quitCancel.focus();
+    return;
+  }
+  quitting = true;
+  window.clearTimeout(saveTimer);
+  void leaveNote().then(async (left) => {
+    quitting = false;
+    if (left) {
+      await invoke("quit_app");
+      return;
+    }
+    const note = current;
+    const title =
+      (note && entries.find((e) => e.path === note.path)?.title) ?? note?.titleAtOpen ?? "";
+    ui.quitText.textContent = t.quit.text(title, unsavedWhy());
+    ui.quitDialog.showModal();
+    ui.quitCancel.focus();
+  });
+});
+ui.quitAnyway.addEventListener("click", () => {
+  ui.quitDialog.close();
+  void invoke("quit_app");
 });
 
 invoke<Opened | null>("restore_vault")

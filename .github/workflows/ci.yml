@@ -49,6 +49,17 @@ jobs:
       # Release build: the timings in a debug build say nothing about the app.
       - run: cargo test -p schnipsle-core --release --locked --test perf -- --ignored --nocapture
 
+  data-safety:
+    name: Data safety, long random run (N-04)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Toolchain from rust-toolchain.toml
+        run: rustup toolchain install && rustup show active-toolchain
+      - uses: Swatinem/rust-cache@v2
+      # The short runs and the kill test are part of `cargo test` above.
+      - run: cargo test -p schnipsle-core --release --locked --test data_safety -- --ignored --nocapture
+
   odt:
     name: ODT in LibreOffice (ADR-0010)
     runs-on: ubuntu-latest
