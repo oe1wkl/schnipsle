@@ -259,6 +259,18 @@
       </section>
     </main>
 
+    <dialog id="quit-dialog" aria-labelledby="quit-title" aria-describedby="quit-text">
+      <form method="dialog" class="folder-form">
+        <h2 id="quit-title" data-text="quit.title"></h2>
+        <p id="quit-text"></p>
+        <div class="folder-buttons">
+          <span class="spacer"></span>
+          <button id="quit-anyway" type="button" class="danger" data-text="quit.anyway"></button>
+          <button id="quit-cancel" type="submit" data-text="common.cancel" autofocus></button>
+        </div>
+      </form>
+    </dialog>
+
     <dialog id="folder-dialog" aria-labelledby="folder-dialog-title">
       <form id="folder-form" class="folder-form" novalidate>
         <h2 id="folder-dialog-title" data-text="folder.title"></h2>

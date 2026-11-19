@@ -97,7 +97,21 @@ export const en = {
     keepMine: "Keep mine",
     deletedElsewhere: "The note was deleted elsewhere.",
     choose: "Conflict – choose a version.",
-    keptMine: "Saved your version.",
+    keptMine: "Saved your version. The other one is in the note's history.",
+    notKept: (message: string) =>
+      `Your version was not saved and the other one is unchanged: ${message}`,
+    usedOther: "Showing the other version. Your text is in the note's history.",
+    mineInTrash: (title: string) =>
+      `The note was deleted elsewhere. Your text is in the trash as ${q(title)}; restore it from there.`,
+    notUsed: (message: string) => `Nothing changed, your text is still here: ${message}`,
+    /** Why a note with a conflict cannot be left or quit. */
+    unresolved: "choose a version in the banner first",
+  },
+
+  quit: {
+    title: "Quit without saving?",
+    text: (title: string, why: string) => `Your changes to ${q(title)} could not be saved: ${why}.`,
+    anyway: "Quit Without Saving",
   },
 
   syncConflict: {
@@ -184,6 +198,9 @@ export const en = {
     notRenamed: (message: string) => `Not renamed: ${message}`,
     saved: (time: string) => `Saved ${time}`,
     notSaved: (message: string) => `Not saved: ${message}`,
+    /** Why a note with text not saved yet cannot be left. */
+    notSavedYet: "they are not saved yet",
+    staysOpen: (why: string) => `The note stays open, so your changes are not lost: ${why}.`,
     pinnedFirst: "Pinned – listed first.",
     unpinned: "Unpinned.",
     notPinned: (message: string) => `Not pinned: ${message}`,

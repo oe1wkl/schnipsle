@@ -98,6 +98,10 @@ export const ui = {
   straysItems: el("strays-items") as HTMLUListElement,
   readOnly: el("read-only"),
   readOnlyText: el("read-only-text"),
+  quitDialog: el("quit-dialog") as HTMLDialogElement,
+  quitText: el("quit-text"),
+  quitAnyway: el("quit-anyway") as HTMLButtonElement,
+  quitCancel: el("quit-cancel") as HTMLButtonElement,
 };
 
 /**
