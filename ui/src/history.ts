@@ -7,6 +7,8 @@
 import { invoke } from "@tauri-apps/api/core";
 
 import { asError, ui } from "./dom";
+import { roving } from "./keys";
+import { t } from "./strings";
 import type { Comparison, DiffPart, DiffRow, KeyChange, Version } from "./types";
 
 export interface HistoryHooks {
@@ -58,7 +60,6 @@ function pieces(parts: DiffPart[]): (Node | string)[] {
 /** A line of the comparison: its number, a sign that does not rely on colour, the text. */
 function line(kind: "same" | "removed" | "added", number: number, content: (Node | string)[]) {
   const sign = { same: " ", removed: "−", added: "+" }[kind];
-  const label = { same: "", removed: "Removed: ", added: "Added: " }[kind];
   const text =
     kind === "removed"
       ? node("del", "diff-text", ...content)
@@ -72,7 +73,15 @@ function line(kind: "same" | "removed" | "added", number: number, content: (Node
     node("span", "diff-sign", sign),
     text,
   );
-  row.setAttribute("aria-label", label + (text.textContent || "empty line"));
+  const said = text.textContent || t.history.emptyLine;
+  row.setAttribute(
+    "aria-label",
+    kind === "removed"
+      ? t.history.removedLine(said)
+      : kind === "added"
+        ? t.history.addedLine(said)
+        : said,
+  );
   return row;
 }
 
@@ -94,13 +103,9 @@ function rowElement(row: DiffRow): HTMLElement {
       return line("added", row.after, pieces(row.parts));
     case "folded": {
       const count = row.lines.length;
-      const fold = node(
-        "button",
-        "diff-fold",
-        `… ${String(count)} unchanged ${count === 1 ? "line" : "lines"}`,
-      );
+      const fold = node("button", "diff-fold", t.history.unchanged(count));
       fold.type = "button";
-      fold.title = "Show them";
+      fold.title = t.history.showThem;
       fold.addEventListener("click", () => {
         fold.replaceWith(...sameRows(row.lines, row.before, row.after));
       });
@@ -121,9 +126,9 @@ function keyChange(change: KeyChange): HTMLElement {
   if (change.before !== null && change.after !== null) {
     parts.push(value(change.before, "del"), block ? "" : " → ", value(change.after, "ins"));
   } else if (change.after !== null) {
-    parts.push(node("span", "muted", "(added) "), value(change.after, "ins"));
+    parts.push(node("span", "muted", t.history.added), value(change.after, "ins"));
   } else if (change.before !== null) {
-    parts.push(node("span", "muted", "(removed) "), value(change.before, "del"));
+    parts.push(node("span", "muted", t.history.removed), value(change.before, "del"));
   }
   return node("li", "", ...parts);
 }
@@ -132,14 +137,13 @@ function keyChange(change: KeyChange): HTMLElement {
 function summary(c: Comparison): string {
   const onlyModified = c.frontMatter.length === 1 && c.frontMatter[0]?.key === "modified";
   if (c.added === 0 && c.removed === 0) {
-    if (c.frontMatter.length === 0) return "The two versions are the same.";
-    if (onlyModified) return "The text is the same; only the time of the last change differs.";
-    return "The text is the same; the front matter differs.";
+    if (c.frontMatter.length === 0) return t.history.same;
+    if (onlyModified) return t.history.onlyModified;
+    return t.history.onlyFrontMatter;
   }
-  const lines = (n: number) => `${String(n)} ${n === 1 ? "line" : "lines"}`;
   const counts = [];
-  if (c.added > 0) counts.push(`${lines(c.added)} added`);
-  if (c.removed > 0) counts.push(`${lines(c.removed)} removed`);
+  if (c.added > 0) counts.push(t.history.linesAdded(c.added));
+  if (c.removed > 0) counts.push(t.history.linesRemoved(c.removed));
   return counts.join(", ");
 }
 
@@ -151,12 +155,12 @@ export function renderComparison(c: Comparison, heading: string): HTMLElement[] 
   ];
   if (c.frontMatter.length > 0) {
     const list = node("ul", "diff-front-matter", ...c.frontMatter.map(keyChange));
-    list.setAttribute("aria-label", "Front matter");
+    list.setAttribute("aria-label", t.history.frontMatter);
     out.push(list);
   }
   if (c.rows.length > 0) {
     const body = node("div", "diff-body", ...c.rows.map(rowElement));
-    body.setAttribute("aria-label", "Text");
+    body.setAttribute("aria-label", t.history.text);
     out.push(body);
   }
   return out;
@@ -166,6 +170,7 @@ export function createHistory(hooks: HistoryHooks): {
   open(): Promise<void>;
   close(): void;
 } {
+  roving(ui.historyList, { items: "li > button", row: "li" });
   let versions: Version[] = [];
   let selected: Version | null = null;
   let comparing = false;
@@ -197,7 +202,7 @@ export function createHistory(hooks: HistoryHooks): {
     try {
       listed = await invoke<Version[]>("list_versions", { path });
     } catch (e) {
-      hooks.status(`History not available: ${asError(e).message}`);
+      hooks.status(t.history.notAvailable(asError(e).message));
       return;
     }
     if (asked !== generation || hooks.note() !== path) return;
@@ -208,9 +213,7 @@ export function createHistory(hooks: HistoryHooks): {
     ui.history.hidden = false;
     ui.showHistory.setAttribute("aria-pressed", "true");
     ui.historyHint.textContent =
-      versions.length === 0
-        ? "No earlier versions yet. One is stored after a pause in typing and when you leave the note."
-        : `${String(versions.length)} earlier ${versions.length === 1 ? "version" : "versions"}`;
+      versions.length === 0 ? t.history.none : t.history.earlier(versions.length);
     ui.historyCompare.disabled = versions.length === 0;
     showMode();
     hooks.preview.load("");
@@ -239,10 +242,10 @@ export function createHistory(hooks: HistoryHooks): {
 
   /** The choice of what to compare with: the note now, or any other version. */
   function fillWith(): void {
-    const options = [new Option("with the note now", NOW)];
+    const options = [new Option(t.history.withNow, NOW)];
     for (const version of versions) {
       if (version !== selected) {
-        options.push(new Option(`with ${versionLabel(version)}`, version.name));
+        options.push(new Option(t.history.withVersion(versionLabel(version)), version.name));
       }
     }
     if (other === selected?.name) other = NOW;
@@ -275,7 +278,7 @@ export function createHistory(hooks: HistoryHooks): {
         hooks.preview.load(text);
         setActions(true);
       } catch (e) {
-        if (current()) hooks.preview.load(`This version cannot be read: ${asError(e).message}`);
+        if (current()) hooks.preview.load(t.history.cannotRead(asError(e).message));
       }
       return;
     }
@@ -288,10 +291,10 @@ export function createHistory(hooks: HistoryHooks): {
       : [other, version.name];
     const heading =
       otherVersion === undefined
-        ? `Changes from ${versionLabel(version)} to the note now`
+        ? t.history.changesToNow(versionLabel(version))
         : selectedIsOlder
-          ? `Changes from ${versionLabel(version)} to ${versionLabel(otherVersion)}`
-          : `Changes from ${versionLabel(otherVersion)} to ${versionLabel(version)}`;
+          ? t.history.changes(versionLabel(version), versionLabel(otherVersion))
+          : t.history.changes(versionLabel(otherVersion), versionLabel(version));
     try {
       if (otherVersion === undefined) await hooks.flush();
       const comparison = await invoke<Comparison>("compare_versions", { path, before, after });
@@ -302,7 +305,7 @@ export function createHistory(hooks: HistoryHooks): {
     } catch (e) {
       if (current()) {
         ui.historyDiff.replaceChildren(
-          node("p", "diff-summary", `Not compared: ${asError(e).message}`),
+          node("p", "diff-summary", t.history.notCompared(asError(e).message)),
         );
       }
     }

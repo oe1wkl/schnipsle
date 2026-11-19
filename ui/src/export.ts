@@ -12,6 +12,7 @@
 import { invoke } from "@tauri-apps/api/core";
 
 import { asError, el } from "./dom";
+import { t } from "./strings";
 import { engraveForExport, type ExportScore } from "./score";
 import type {
   ExportChoices,
@@ -20,16 +21,11 @@ import type {
   ExportPaper,
   ExportProblem,
   ExportProblemKind,
+  ExportWarning,
   ExportReport,
 } from "./types";
 
-const FORMAT_LABELS: Record<ExportFormat, string> = {
-  html: "HTML",
-  pdf: "PDF",
-  odt: "OpenDocument text (ODT)",
-  docx: "Word (DOCX)",
-  epub: "EPUB",
-};
+const FORMAT_LABELS: Record<ExportFormat, string> = t.export.formats;
 
 /** Only a folder export to HTML copies attachments (ADR-0021 rule 6). */
 const COPIES_ATTACHMENTS: ExportFormat = "html";
@@ -37,16 +33,7 @@ const COPIES_ATTACHMENTS: ExportFormat = "html";
 /** Formats whose documents have pages of a chosen size. */
 const WITH_PAGES: readonly ExportFormat[] = ["pdf", "odt", "docx"];
 
-const PROBLEM_LABELS: Record<ExportProblemKind, (target: string) => string> = {
-  noteNotRead: () => "Could not be read, perhaps not downloaded yet, so it is not in the export",
-  pictureMissing: (t) => `Picture not found, its description is shown instead: ${t}`,
-  webPictureAsLink: (t) => `Picture on the web, shown as a link: ${t}`,
-  pictureNotConverted: (t) => `Picture left as it is, which many programs cannot show: ${t}`,
-  attachmentNotIncluded: (t) => `Attachment not included, only the text of its link: ${t}`,
-  noteNotExported: (t) => `Link to a note not in this export; only its text stays: ${t}`,
-  noteInOtherFile: (t) => `Link to a note in another file; only its text stays: ${t}`,
-  scoreNotEngraved: (t) => `Score shown as its ABC source, as it could not be engraved: ${t}`,
-};
+const PROBLEM_LABELS: Record<ExportProblemKind, (target: string) => string> = t.export.problem;
 
 const SETTINGS_KEY = "schnipsle.export";
 
@@ -134,18 +121,26 @@ function loadSettings(): Settings {
   }
 }
 
-function plural(count: number, one: string, many: string): string {
-  return `${String(count)} ${count === 1 ? one : many}`;
+/** Says which files got a number, so nothing looks replaced or lost. */
+/** A warning of the report, in words (ADR-0041 rule 5). */
+function warningText(w: ExportWarning): string {
+  switch (w.kind) {
+    case "linksMissed":
+      return t.export.warning.linksMissed(w.title, w.count);
+    case "linksFailed":
+      return t.export.warning.linksFailed(w.title, w.error);
+    case "pageNumbersFailed":
+      return t.export.warning.pageNumbersFailed(w.title, w.error);
+    case "svgOnly":
+      return t.export.warning.svgOnly(w.title, w.description);
+    case "converter":
+      return t.export.warning.converter(w.title, w.message);
+  }
 }
 
-/** Says which files got a number, so nothing looks replaced or lost. */
 function numberedSentence(names: string[]): string {
   const shown = names.slice(0, NUMBERED_SHOWN).join(", ");
-  const more = names.length - NUMBERED_SHOWN;
-  const rest = more > 0 ? ` and ${String(more)} more` : "";
-  return names.length === 1
-    ? `1 file got a number, as its name was already taken: ${shown}.`
-    : `${String(names.length)} files got a number, as their names were already taken: ${shown}${rest}.`;
+  return t.export.numbered(names.length, shown, names.length - NUMBERED_SHOWN);
 }
 
 /** What the dialog starts with: the open note, or the notes in the list. */
@@ -213,15 +208,15 @@ export function createExport(hooks: ExportHooks): {
   function update(): void {
     const { note, list } = selection;
     whatNote.disabled = note === null;
-    noteLabel.textContent = note ? `This note: ${note.title}` : "This note (none is open)";
+    noteLabel.textContent = note ? t.export.thisNote(note.title) : t.export.noNote;
     whatList.disabled = list === null || list.notes.length === 0;
     if (list === null) {
-      listLabel.textContent = "The notes in the list (it shows the trash now)";
+      listLabel.textContent = t.export.listIsTrash;
     } else {
-      const shown = plural(list.notes.length, "note", "notes");
-      const left = list.inTrash > 0 ? `, without ${String(list.inTrash)} in the trash` : "";
       listLabel.textContent =
-        list.label === "" ? `All notes in the list (${shown})` : `${list.label} (${shown}${left})`;
+        list.label === ""
+          ? t.export.allNotes(list.notes.length)
+          : t.export.listNotes(list.label, list.notes.length, list.inTrash);
     }
     if (whatNote.disabled) whatList.checked = true;
     if (whatList.disabled) whatNote.checked = true;
@@ -229,17 +224,13 @@ export function createExport(hooks: ExportHooks): {
     const several = chosenNotes().length > 1;
     const copies = format() === COPIES_ATTACHMENTS;
     filesBox.hidden = !layoutMatters();
-    oneLabel.textContent = several ? "One document" : "One file";
+    oneLabel.textContent = several ? t.export.oneDocument : t.export.oneFile;
     if (several) {
-      manyLabel.textContent = copies
-        ? "One file per note, in a folder with copies of their attachments"
-        : "One file per note, in a folder";
-      zipLabel.textContent = copies
-        ? "One file per note, in a zip archive with copies of their attachments"
-        : "One file per note, in a zip archive";
+      manyLabel.textContent = copies ? t.export.perNoteFolderCopies : t.export.perNoteFolder;
+      zipLabel.textContent = copies ? t.export.perNoteZipCopies : t.export.perNoteZip;
     } else {
-      manyLabel.textContent = "In a folder, with copies of its attachments";
-      zipLabel.textContent = "In a zip archive, with copies of its attachments";
+      manyLabel.textContent = t.export.folderCopies;
+      zipLabel.textContent = t.export.zipCopies;
     }
     const pages = WITH_PAGES.includes(format());
     paperRow.hidden = !pages;
@@ -252,9 +243,7 @@ export function createExport(hooks: ExportHooks): {
     const chosen = chosenNotes();
     const unsaved = note?.unsaved === true && chosen.includes(note.path);
     unsavedText.hidden = !unsaved;
-    unsavedText.textContent = unsaved
-      ? `“${note.title}” has changes that are not saved. The export holds the version last saved.`
-      : "";
+    unsavedText.textContent = unsaved ? t.export.unsaved(note.title) : "";
     startButton.disabled = busy || chosen.length === 0;
     shareButton.disabled = busy || chosen.length === 0;
   }
@@ -283,7 +272,7 @@ export function createExport(hooks: ExportHooks): {
     revealButton.hidden = true;
     shareButton.hidden = true;
     startButton.hidden = false;
-    cancelButton.textContent = "Cancel";
+    cancelButton.textContent = t.common.cancel;
     showError(null);
   }
 
@@ -299,7 +288,7 @@ export function createExport(hooks: ExportHooks): {
     whatList.checked = start === "list";
     if (!hooks.vaultOpen()) {
       update();
-      showError("Open a vault first: the notes are exported from it.");
+      showError(t.export.noVault);
       dialog.showModal();
       return;
     }
@@ -313,7 +302,7 @@ export function createExport(hooks: ExportHooks): {
       shared = sharedHere;
       canShare = share;
       // Pandoc is for the desktop only (ADR-0025), so its absence is no news here.
-      startButton.textContent = shared ? "Export" : "Export…";
+      startButton.textContent = shared ? t.export.startHere : t.export.start;
       const settings = loadSettings();
       formatSelect.replaceChildren(
         ...formats.map((value) => {
@@ -321,15 +310,13 @@ export function createExport(hooks: ExportHooks): {
           option.value = value;
           const through = (value === "docx" || value === "epub") && pandoc !== null;
           option.textContent = through
-            ? `${FORMAT_LABELS[value]}, through Pandoc ${pandoc}`
+            ? t.export.throughPandoc(FORMAT_LABELS[value], pandoc)
             : FORMAT_LABELS[value];
           return option;
         }),
       );
       noPandoc.textContent =
-        pandocProblem === null
-          ? "Word and EPUB appear here once Pandoc is installed."
-          : `Word and EPUB need Pandoc. ${pandocProblem}. Choose another one in Settings.`;
+        pandocProblem === null ? t.export.pandocMissing : t.export.pandocFails(pandocProblem);
       noPandoc.hidden = pandoc !== null || shared;
       // On macOS Share… exports and shares in one go; on iOS Export does.
       shareButton.hidden = !canShare || shared;
@@ -386,7 +373,7 @@ export function createExport(hooks: ExportHooks): {
       selection = await hooks.selection();
       const notes = chosenNotes();
       if (notes.length === 0) {
-        showError("These notes are no longer there.");
+        showError(t.export.notesGone);
         return false;
       }
       const input = { notes, name: whatNote.checked ? null : (selection.list?.name ?? null) };
@@ -394,9 +381,9 @@ export function createExport(hooks: ExportHooks): {
       const blocks = await invoke<ExportScore[]>("export_scores", { input });
       progressBox.hidden = false;
       const scores = await engraveForExport(blocks, (done) => {
-        progressText.textContent = `Engraving scores: ${String(done)} of ${String(blocks.length)}…`;
+        progressText.textContent = t.export.engraving(done, blocks.length);
       });
-      progressText.textContent = `Exporting ${plural(notes.length, "note", "notes")}…`;
+      progressText.textContent = t.export.exporting(notes.length);
       const result = await invoke<ExportReport>("export_notes", {
         format: format(),
         input: { ...input, scores },
@@ -416,11 +403,7 @@ export function createExport(hooks: ExportHooks): {
     } catch (e) {
       const err = asError(e);
       // Refused before anything was written; the user can choose another place.
-      showError(
-        err.kind === "insideVault"
-          ? err.message
-          : `${err.message}. Files written up to then stay where they are.`,
-      );
+      showError(err.kind === "insideVault" ? err.message : t.export.failed(err.message));
       return false;
     } finally {
       progressBox.hidden = true;
@@ -431,34 +414,30 @@ export function createExport(hooks: ExportHooks): {
   function showResult(result: ExportReport, to: string, chosenLayout: ExportLayout): void {
     choose.hidden = true;
     startButton.hidden = true;
-    cancelButton.textContent = "Close";
+    cancelButton.textContent = t.common.close;
     report.hidden = false;
     const written = result.files.length;
     const name = to.split("/").pop() ?? to;
     if (written === 0) {
       target = null;
-      summary.textContent = "Nothing was exported.";
+      summary.textContent = t.export.nothing;
     } else if (shared) {
       // The place is the app's own; what counts is the name it is shared under.
-      if (chosenLayout === "singleFile") {
-        summary.textContent = `Exported “${name}”. Share it to save it in Files, send it or print it.`;
-      } else {
-        const into = chosenLayout === "zip" ? "the zip archive" : "the folder";
-        summary.textContent = `Exported ${plural(written, "file", "files")} into ${into} “${name}”. Share it to save it in Files or send it.`;
-      }
+      summary.textContent =
+        chosenLayout === "singleFile"
+          ? t.export.sharedOne(name)
+          : (chosenLayout === "zip" ? t.export.sharedZip : t.export.sharedFolder)(written, name);
     } else if (sharing) {
-      if (chosenLayout === "singleFile") {
-        summary.textContent = `Exported “${name}” to share.`;
-      } else {
-        const into = chosenLayout === "zip" ? "the zip archive" : "the folder";
-        summary.textContent = `Exported ${plural(written, "file", "files")} into ${into} “${name}” to share.`;
-      }
+      summary.textContent =
+        chosenLayout === "singleFile"
+          ? t.export.toShareOne(name)
+          : (chosenLayout === "zip" ? t.export.toShareZip : t.export.toShareFolder)(written, name);
     } else if (chosenLayout === "zip") {
-      summary.textContent = `Exported ${plural(written, "file", "files")} into ${to}.`;
+      summary.textContent = t.export.intoZip(written, to);
     } else if (chosenLayout === "singleFile") {
-      summary.textContent = `Exported to ${to}.`;
+      summary.textContent = t.export.toOne(to);
     } else {
-      summary.textContent = `Exported ${plural(written, "file", "files")} to ${to}.`;
+      summary.textContent = t.export.toFolder(written, to);
     }
     numberedText.hidden = result.numbered.length === 0;
     numberedText.textContent = numberedSentence(result.numbered);
@@ -466,13 +445,13 @@ export function createExport(hooks: ExportHooks): {
     warningsList.replaceChildren(
       ...result.warnings.map((warning) => {
         const item = document.createElement("li");
-        item.textContent = warning;
+        item.textContent = warningText(warning);
         return item;
       }),
     );
     const count = result.problems.length;
     if (count > 0 && written > 0) {
-      summary.textContent += ` ${plural(count, "thing is", "things are")} different from the notes:`;
+      summary.textContent += t.export.different(count);
     }
     problemsTable.hidden = count === 0;
     problems.replaceChildren(...result.problems.map(problemRow));
@@ -480,8 +459,8 @@ export function createExport(hooks: ExportHooks): {
     // A place of the app's own is not one to show.
     revealButton.hidden = target === null || sharing;
     revealButton.textContent = /Mac/.test(navigator.userAgent)
-      ? "Show in Finder"
-      : "Show in folder";
+      ? t.export.showInFinder
+      : t.export.showInFolder;
   }
 
   function problemRow(problem: ExportProblem): HTMLTableRowElement {
@@ -491,7 +470,7 @@ export function createExport(hooks: ExportHooks): {
     button.type = "button";
     button.className = "link";
     button.textContent = problem.title;
-    button.title = "Open this note";
+    button.title = t.imports.openNote;
     button.addEventListener("click", () => {
       dialog.close();
       hooks.openNote(problem.path, problem.title);

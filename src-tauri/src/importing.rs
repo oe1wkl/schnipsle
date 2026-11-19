@@ -35,6 +35,7 @@ impl From<ImportError> for CommandError {
             kind,
             message,
             current_hash: None,
+            value: None,
         }
     }
 }
@@ -250,6 +251,7 @@ fn run_metadata_script(export: &Path) -> CmdResult<String> {
         kind: "metadataScript",
         message,
         current_hash: None,
+        value: None,
     })
 }
 

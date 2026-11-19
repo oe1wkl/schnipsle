@@ -11,6 +11,7 @@ import { syntaxTree } from "@codemirror/language";
 import type { EditorState, TransactionSpec } from "@codemirror/state";
 import { frontMatterLength } from "./editor";
 import { scoreBlockAt } from "./score";
+import { t } from "./strings";
 
 /** The ABC standard the format follows (format.md §5.6). */
 export const ABC_STANDARD = "https://abcnotation.com/wiki/abc:standard:v2.1";
@@ -154,7 +155,7 @@ export function musicPlace(state: EditorState): MusicPlace {
   if (!found) return { block: null, inBody: false };
   const lines = blockLines(state, found.textFrom, found.textTo);
   const tunes = readTunes(lines);
-  const started = tunes.filter((t) => (t.lines[0]?.from ?? Infinity) <= pos);
+  const started = tunes.filter((tune) => (tune.lines[0]?.from ?? Infinity) <= pos);
   const tune = started.at(-1) ?? tunes[0] ?? null;
   // On a line of the tune, below its header; not on a fence or between tunes.
   const at = tune?.lines.findIndex((l) => l.from <= pos && pos <= l.to) ?? -1;
@@ -183,22 +184,22 @@ export function keyOf(value: string): string | null {
 
 export const KEYS: { label: string; keys: { value: string; label: string }[] }[] = [
   {
-    label: "Major keys",
+    label: t.music.majorKeys,
     keys: ["C", "G", "D", "A", "E", "F", "Bb", "Eb", "Ab"].map((k) => ({ value: k, label: k })),
   },
   {
-    label: "Minor keys",
+    label: t.music.minorKeys,
     keys: ["Am", "Em", "Bm", "F#m", "Dm", "Gm", "Cm"].map((k) => ({ value: k, label: k })),
   },
   {
-    label: "Modes",
+    label: t.music.modes,
     keys: [
-      { value: "Ddor", label: "D Dorian" },
-      { value: "Edor", label: "E Dorian" },
-      { value: "Ador", label: "A Dorian" },
-      { value: "Gmix", label: "G Mixolydian" },
-      { value: "Dmix", label: "D Mixolydian" },
-      { value: "Amix", label: "A Mixolydian" },
+      { value: "Ddor", label: t.music.dorian("D") },
+      { value: "Edor", label: t.music.dorian("E") },
+      { value: "Ador", label: t.music.dorian("A") },
+      { value: "Gmix", label: t.music.mixolydian("G") },
+      { value: "Dmix", label: t.music.mixolydian("D") },
+      { value: "Amix", label: t.music.mixolydian("A") },
     ],
   },
 ];
@@ -206,10 +207,10 @@ export const KEYS: { label: string; keys: { value: string; label: string }[] }[]
 export const METRES = ["4/4", "3/4", "2/4", "2/2", "3/8", "6/8", "9/8", "12/8", "5/4", "C", "C|"];
 
 export const CLEFS: { value: string; label: string }[] = [
-  { value: "treble", label: "Treble" },
-  { value: "treble-8", label: "Tenor (treble 8vb)" },
-  { value: "alto", label: "Alto" },
-  { value: "bass", label: "Bass" },
+  { value: "treble", label: t.music.clef.treble },
+  { value: "treble-8", label: t.music.clef.tenor },
+  { value: "alto", label: t.music.clef.alto },
+  { value: "bass", label: t.music.clef.bass },
 ];
 
 /** Shown with ♯ and ♭, written with `#` and `b` as ABC wants them. */
@@ -335,7 +336,7 @@ export function addChord(state: EditorState): Snippet {
 export const TEMPLATES: { id: string; label: string; abc: string }[] = [
   {
     id: "melody",
-    label: "Melody with chords",
+    label: t.music.template.melody,
     abc: `X:1
 T:Title
 M:4/4
@@ -346,7 +347,7 @@ K:C
   },
   {
     id: "two-voices",
-    label: "Two voices",
+    label: t.music.template.twoVoices,
     abc: `X:1
 T:Title
 M:4/4
@@ -362,7 +363,7 @@ C, D, E,2 | E, G, C,2 |]`,
   },
   {
     id: "choir",
-    label: "Choir (SATB)",
+    label: t.music.template.choir,
     abc: `X:1
 T:Title
 M:4/4
@@ -436,7 +437,7 @@ export function newScore(state: EditorState, abc: string): Snippet {
 export function newTune(place: NonNullable<MusicPlace["block"]>): Snippet | null {
   const last = place.lines.at(-1);
   if (!last) return null;
-  const numbers = place.tunes.map((t) => t.number ?? 0);
+  const numbers = place.tunes.map((tune) => tune.number ?? 0);
   const number = Math.max(place.tunes.length, ...numbers) + 1;
   const abc = (TEMPLATES[0] as { abc: string }).abc.replace("X:1", `X:${String(number)}`);
   const insert = `\n\n${abc}`;
@@ -517,16 +518,16 @@ export function musicMenu(opener: HTMLButtonElement, host: MusicMenuHost): void 
     const el = document.createElement("div");
     el.className = "music-menu";
     el.setAttribute("role", "dialog");
-    el.setAttribute("aria-label", "Music");
+    el.setAttribute("aria-label", t.music.menu);
     const tune = place.block?.tune ?? null;
     if (!place.block) {
       group(
         el,
-        "New score",
-        TEMPLATES.map((t) =>
+        t.music.newScore,
+        TEMPLATES.map((template) =>
           button(
-            t.label,
-            choose(() => newScore(host.state(), t.abc)),
+            template.label,
+            choose(() => newScore(host.state(), template.abc)),
           ),
         ),
       );
@@ -548,7 +549,7 @@ export function musicMenu(opener: HTMLButtonElement, host: MusicMenuHost): void 
       const metre = tune.metre?.value ?? null;
       group(
         el,
-        "Metre",
+        t.music.metre,
         METRES.map((m) =>
           button(
             m,
@@ -559,7 +560,7 @@ export function musicMenu(opener: HTMLButtonElement, host: MusicMenuHost): void 
       );
       group(
         el,
-        "Add a voice",
+        t.music.addVoice,
         CLEFS.map((c) =>
           button(
             c.label,
@@ -568,25 +569,25 @@ export function musicMenu(opener: HTMLButtonElement, host: MusicMenuHost): void 
         ),
       );
       const lyrics = button(
-        "Lyrics line",
+        t.music.lyricsLine,
         choose(() => addLyrics(host.state())),
       );
       const chord = button(
-        "Chord symbol",
+        t.music.chordSymbol,
         choose(() => addChord(host.state())),
       );
       if (!place.inBody) {
         for (const b of [lyrics, chord]) {
           b.disabled = true;
-          b.title = "Put the cursor in the notes first";
+          b.title = t.music.cursorInNotes;
         }
       }
       const block = place.block;
-      group(el, "Insert", [
+      group(el, t.music.insert, [
         lyrics,
         chord,
         button(
-          "Another tune",
+          t.music.anotherTune,
           choose(() => newTune(block)),
         ),
       ]);
@@ -595,14 +596,14 @@ export function musicMenu(opener: HTMLButtonElement, host: MusicMenuHost): void 
       const at = place.block.textFrom;
       group(
         el,
-        "New score",
-        TEMPLATES.map((t) =>
+        t.music.newScore,
+        TEMPLATES.map((template) =>
           button(
-            t.label,
+            template.label,
             choose(() => ({
               spec: {
-                changes: { from: at, insert: `${t.abc}\n` },
-                selection: titleSelection(at, t.abc),
+                changes: { from: at, insert: `${template.abc}\n` },
+                selection: titleSelection(at, template.abc),
               },
               focus: true,
             })),
@@ -613,7 +614,7 @@ export function musicMenu(opener: HTMLButtonElement, host: MusicMenuHost): void 
     const help = document.createElement("a");
     help.href = ABC_STANDARD;
     help.className = "music-help";
-    help.textContent = "ABC notation 2.1 ↗";
+    help.textContent = t.music.abcStandard;
     help.addEventListener("click", (event) => {
       event.preventDefault();
       close();

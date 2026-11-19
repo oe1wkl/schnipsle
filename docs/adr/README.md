@@ -54,3 +54,4 @@ This folder records every significant architectural decision of the project, one
 | [0038](0038-comparing-versions.md) | Comparing versions in the history | Accepted | 2026-11-17 |
 | [0039](0039-settings-what-is-set-where.md) | Settings: what is set where | Accepted | 2026-11-17 |
 | [0040](0040-renaming-and-merging-tags.md) | Renaming and merging tags | Accepted | 2026-11-18 |
+| [0041](0041-ui-strings-and-access.md) | UI strings in one place, and access by keyboard and VoiceOver | Accepted | 2026-11-18 |

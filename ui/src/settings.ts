@@ -9,6 +9,7 @@
 import { invoke } from "@tauri-apps/api/core";
 
 import { asError, el } from "./dom";
+import { t } from "./strings";
 import type {
   ChordNotation,
   DeviceSettings,
@@ -46,10 +47,6 @@ const updates = el("settings-updates") as HTMLInputElement;
 const deviceError = el("settings-device-error");
 const closeButton = el("settings-close") as HTMLButtonElement;
 
-function plural(count: number, one: string, many: string): string {
-  return `${String(count)} ${count === 1 ? one : many}`;
-}
-
 function showError(target: HTMLElement, message: string | null): void {
   target.textContent = message ?? "";
   target.hidden = message === null;
@@ -58,7 +55,7 @@ function showError(target: HTMLElement, message: string | null): void {
 /** What to say about a setting whose file value does not apply as written. */
 function deviationText(name: string, setting: Setting<unknown>, valid: string): string | null {
   if (setting.deviation === "invalid") {
-    return `The vault's settings file has “${setting.written ?? ""}” for ${name}, which is not ${valid}; the default applies.`;
+    return t.settings.invalid(setting.written ?? "", name, valid);
   }
   return null;
 }
@@ -66,17 +63,13 @@ function deviationText(name: string, setting: Setting<unknown>, valid: string): 
 /** The text below the retention fields: the defaults, and what does not apply as written. */
 function retentionText(s: VaultSettings): string {
   const notes = [
-    deviationText("keeping every version", s.historyKeepAllDays, "a whole number of days"),
-    deviationText("keeping one a day", s.historyKeepDailyDays, "a whole number of days"),
+    deviationText(t.settings.keepingAll, s.historyKeepAllDays, t.settings.wholeDays),
+    deviationText(t.settings.keepingDaily, s.historyKeepDailyDays, t.settings.wholeDays),
   ];
   if (s.historyKeepDailyDays.deviation === "extended") {
-    notes.push(
-      `One a day is kept until ${String(s.historyKeepDailyDays.value)} days, as every version is kept that long.`,
-    );
+    notes.push(t.settings.extended(s.historyKeepDailyDays.value));
   }
-  notes.push(
-    `Defaults: every version for ${String(s.historyKeepAllDays.default)} days, one a day until ${String(s.historyKeepDailyDays.default)} days.`,
-  );
+  notes.push(t.settings.defaults(s.historyKeepAllDays.default, s.historyKeepDailyDays.default));
   return notes.filter((n) => n !== null).join(" ");
 }
 
@@ -114,7 +107,7 @@ export function createSettings(hooks: SettingsHooks): { open(): Promise<void> } 
         : String(daily.value);
     retentionNote.textContent = retentionText(s);
     chords.value = s.chordNotation.value;
-    const note = deviationText("the chord names", s.chordNotation, "“english” or “german”");
+    const note = deviationText(t.settings.chordNames, s.chordNotation, t.settings.chordValues);
     chordsNote.textContent = note ?? "";
     chordsNote.hidden = note === null;
   }
@@ -123,13 +116,12 @@ export function createSettings(hooks: SettingsHooks): { open(): Promise<void> } 
     device.hidden = d === null;
     if (d === null) return;
     if (d.pandocProblem !== null) {
-      pandocStatus.textContent = `${d.pandocChosen ?? ""} does not run: ${d.pandocProblem}. Word and EPUB are not offered.`;
+      pandocStatus.textContent = t.settings.pandocFails(d.pandocChosen ?? "", d.pandocProblem);
     } else if (d.pandoc === null) {
-      pandocStatus.textContent =
-        "Not found. Install Pandoc (for example with Homebrew) or choose the program.";
+      pandocStatus.textContent = t.settings.pandocMissing;
     } else {
-      const how = d.pandocChosen === null ? "found" : "chosen";
-      pandocStatus.textContent = `Pandoc ${d.pandoc.version}, ${how} at ${d.pandoc.path}`;
+      const found = d.pandocChosen === null ? t.settings.pandocFound : t.settings.pandocChosen;
+      pandocStatus.textContent = found(d.pandoc.version, d.pandoc.path);
     }
     pandocFind.hidden = d.pandocChosen === null;
     updates.checked = d.checkForUpdates;
@@ -144,11 +136,11 @@ export function createSettings(hooks: SettingsHooks): { open(): Promise<void> } 
     const state = hooks.vaultState();
     vaultFields.hidden = !state.open;
     if (!state.open) {
-      vaultHint.textContent = "Open a vault to see its settings.";
+      vaultHint.textContent = t.settings.noVault;
     } else if (state.readOnly !== null) {
-      vaultHint.textContent = `The vault is open read-only, so its settings cannot be changed. ${state.readOnly}`;
+      vaultHint.textContent = t.settings.readOnly(state.readOnly);
     } else {
-      vaultHint.textContent = "Saved in the vault, so they apply on every device that opens it.";
+      vaultHint.textContent = t.settings.inVault;
     }
     for (const control of [keepAll, keepDaily, chords]) {
       control.disabled = !state.open || state.readOnly !== null;
@@ -156,13 +148,13 @@ export function createSettings(hooks: SettingsHooks): { open(): Promise<void> } 
     const [vault, here] = await Promise.all([
       state.open
         ? invoke<VaultSettings>("read_settings").catch((e: unknown) => {
-            showError(vaultError, `The vault's settings cannot be read: ${asError(e).message}`);
+            showError(vaultError, t.settings.vaultUnreadable(asError(e).message));
             vaultFields.hidden = true;
             return null;
           })
         : Promise.resolve(null),
       invoke<DeviceSettings | null>("read_device_settings").catch((e: unknown) => {
-        showError(deviceError, `This Mac's settings cannot be read: ${asError(e).message}`);
+        showError(deviceError, t.settings.deviceUnreadable(asError(e).message));
         return null;
       }),
     ]);
@@ -181,7 +173,7 @@ export function createSettings(hooks: SettingsHooks): { open(): Promise<void> } 
       showVault(saved);
       if (saved.chordNotation.value !== notationBefore) hooks.chordNamesChanged();
     } catch (e) {
-      showError(vaultError, `Not saved: ${asError(e).message}`);
+      showError(vaultError, t.settings.notSaved(asError(e).message));
       showVault(settings);
     }
   }
@@ -193,7 +185,7 @@ export function createSettings(hooks: SettingsHooks): { open(): Promise<void> } 
     const all = days(keepAll);
     const daily = days(keepDaily);
     if (all === null || daily === null) {
-      showError(vaultError, "Enter a whole number of days.");
+      showError(vaultError, t.settings.needDays);
       return;
     }
     showError(vaultError, null);
@@ -205,7 +197,7 @@ export function createSettings(hooks: SettingsHooks): { open(): Promise<void> } 
     try {
       thinning = await invoke<Thinning>("history_to_thin", { allDays: all, dailyDays: daily });
     } catch (e) {
-      showError(vaultError, `Not saved: ${asError(e).message}`);
+      showError(vaultError, t.settings.notSaved(asError(e).message));
       return;
     }
     if (thinning.versions === 0) {
@@ -213,7 +205,7 @@ export function createSettings(hooks: SettingsHooks): { open(): Promise<void> } 
       return;
     }
     pending = changes;
-    confirmText.textContent = `This removes ${plural(thinning.versions, "earlier version", "earlier versions")} of ${plural(thinning.notes, "note", "notes")} for good, on every device.`;
+    confirmText.textContent = t.settings.removes(thinning.versions, thinning.notes);
     confirmBox.hidden = false;
     for (const control of [keepAll, keepDaily, chords, closeButton]) control.disabled = true;
     confirmNo.focus();

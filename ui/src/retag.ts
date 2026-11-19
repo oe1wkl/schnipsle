@@ -7,6 +7,7 @@
 import { invoke } from "@tauri-apps/api/core";
 
 import { asError, el } from "./dom";
+import { t } from "./strings";
 import type { RetagOutcome, RetagPlan } from "./types";
 
 const PLAN_DELAY_MS = 300;
@@ -25,9 +26,6 @@ const errorText = el("retag-error");
 const undoButton = el("retag-undo") as HTMLButtonElement;
 const cancelButton = el("retag-cancel") as HTMLButtonElement;
 const startButton = el("retag-start") as HTMLButtonElement;
-
-const count = (n: number, one: string, many: string): string =>
-  `${String(n)} ${n === 1 ? one : many}`;
 
 export function createRetag(options: {
   /** Saves the open note, as the rename reads the files. */
@@ -66,54 +64,38 @@ export function createRetag(options: {
     plan = p;
     const tags = p.notes.reduce((sum, n) => sum + n.occurrences, 0);
     const parts: string[] = [];
-    if (p.notes.length > 0) {
-      parts.push(
-        `${count(p.notes.length, "note changes", "notes change")} (${count(tags, "tag", "tags")}).`,
-      );
-    }
-    if (p.folders.length > 0) {
-      parts.push(`${count(p.folders.length, "smart folder changes", "smart folders change")}.`);
-    }
-    if (p.merge && parts.length > 0) {
-      parts.push(`#${p.old} is merged into #${p.new}, which exists already.`);
-    }
-    if (parts.length === 0)
-      parts.push("Nothing to change: no note has this tag spelled otherwise.");
+    if (p.notes.length > 0) parts.push(t.retag.summary(p.notes.length, tags));
+    if (p.folders.length > 0) parts.push(t.retag.folders(p.folders.length));
+    if (p.merge && parts.length > 0) parts.push(t.retag.merge(p.old, p.new));
+    if (parts.length === 0) parts.push(t.retag.nothing);
     summary.textContent = parts.join(" ");
     const items = p.notes.slice(0, LISTED).map((n) => item(n.title));
     if (p.notes.length > LISTED) {
-      items.push(item(`and ${String(p.notes.length - LISTED)} more`, true));
+      items.push(item(t.retag.more(p.notes.length - LISTED), true));
     }
     for (const f of p.folders) {
-      items.push(item(`Smart folder ${f.name}: ${f.query} → ${f.renamed}`));
+      items.push(item(t.retag.folder(f.name, f.query, f.renamed)));
     }
-    for (const s of p.skipped) items.push(item(`${s.title}: not read (${s.reason})`, true));
+    for (const s of p.skipped) items.push(item(t.retag.notRead(s.title, s.reason), true));
     list.replaceChildren(...items);
     report.hidden = false;
     startButton.disabled = p.notes.length === 0 && p.folders.length === 0;
   };
 
   const showOutcome = (done: RetagOutcome, undo: boolean): void => {
-    const what = undo ? "Undone" : "Renamed";
     const parts = [
       done.changed.length > 0
-        ? `${what} in ${count(done.changed.length, "note", "notes")}.`
-        : `No note was ${undo ? "changed back" : "renamed"}.`,
+        ? (undo ? t.retag.undoneIn : t.retag.renamedIn)(done.changed.length)
+        : undo
+          ? t.retag.noneUndone
+          : t.retag.noneRenamed,
     ];
-    if (done.folders > 0) {
-      parts.push(`${count(done.folders, "smart folder", "smart folders")} changed.`);
-    }
-    if (done.skipped.length > 0) {
-      parts.push(
-        done.skipped.length === 1
-          ? "1 note was left as it is:"
-          : `${String(done.skipped.length)} notes were left as they are:`,
-      );
-    }
+    if (done.folders > 0) parts.push(t.retag.foldersChanged(done.folders));
+    if (done.skipped.length > 0) parts.push(t.retag.leftAsIs(done.skipped.length));
     summary.textContent = parts.join(" ");
-    const items = done.skipped.map((s) => item(`${s.title}: ${s.reason}`));
+    const items = done.skipped.map((s) => item(t.retag.skipped(s.title, s.reason)));
     if (done.foldersError !== null) {
-      items.push(item(`Smart folders not changed: ${done.foldersError}`));
+      items.push(item(t.retag.foldersError(done.foldersError)));
     }
     list.replaceChildren(...items);
     report.hidden = false;
@@ -149,10 +131,9 @@ export function createRetag(options: {
     help.hidden = false;
     startButton.hidden = false;
     startButton.disabled = true;
-    cancelButton.textContent = "Cancel";
+    cancelButton.textContent = t.common.cancel;
     undoButton.hidden = last === null;
-    undoButton.textContent =
-      last === null ? "Undo" : `Undo the rename of #${last.old} to #${last.new}`;
+    undoButton.textContent = last === null ? t.common.undo : t.retag.undoLast(last.old, last.new);
     report.hidden = true;
     showError(null);
   };
@@ -162,9 +143,9 @@ export function createRetag(options: {
     nameInput.disabled = true;
     help.hidden = true;
     startButton.hidden = true;
-    cancelButton.textContent = "Done";
+    cancelButton.textContent = t.common.done;
     undoButton.hidden = last === null;
-    undoButton.textContent = "Undo";
+    undoButton.textContent = t.common.undo;
   };
 
   nameInput.addEventListener("input", () => {
@@ -192,7 +173,7 @@ export function createRetag(options: {
         showOutcome(done, false);
         showDone();
         options.changed(p.old, p.new);
-        options.status(`#${p.old} renamed to #${p.new}.`);
+        options.status(t.retag.renamed(p.old, p.new));
       } catch (e) {
         showError(asError(e).message);
         startButton.disabled = false;
@@ -215,7 +196,7 @@ export function createRetag(options: {
         showOutcome(done, true);
         showDone();
         options.changed(undoing.new, undoing.old);
-        options.status(`Rename of #${undoing.old} undone.`);
+        options.status(t.retag.undone(undoing.old));
       } catch (e) {
         showError(asError(e).message);
       } finally {
@@ -238,7 +219,7 @@ export function createRetag(options: {
     open(name) {
       old = name;
       plan = null;
-      title.textContent = `Rename #${name}`;
+      title.textContent = t.retag.title(name);
       nameInput.value = name;
       showForm();
       dialog.showModal();

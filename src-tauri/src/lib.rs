@@ -12,6 +12,8 @@ mod retagging;
 mod settings;
 mod smart_folders;
 mod songs;
+#[cfg(desktop)]
+mod strings;
 mod vault_location;
 mod watching;
 
@@ -51,6 +53,9 @@ struct CommandError {
     message: String,
     /// For conflicts: the hash now on disk, to overwrite deliberately.
     current_hash: Option<String>,
+    /// The path or name the error is about, so the UI can word it in its
+    /// own language (ADR-0041 rule 5); `message` is the English text.
+    value: Option<String>,
 }
 
 impl CommandError {
@@ -61,6 +66,7 @@ impl CommandError {
             kind: "other",
             message: message.to_string(),
             current_hash: None,
+            value: None,
         }
     }
 }
@@ -68,22 +74,24 @@ impl CommandError {
 impl From<VaultError> for CommandError {
     fn from(e: VaultError) -> Self {
         let message = e.to_string();
-        let (kind, current_hash) = match e {
-            VaultError::Conflict { current_hash, .. } => ("conflict", current_hash),
-            VaultError::NotDownloaded(_) => ("notDownloaded", None),
-            VaultError::AlreadyExists(_) => ("alreadyExists", None),
-            VaultError::InvalidPath(_) => ("invalidPath", None),
-            VaultError::NotADirectory(_) => ("notADirectory", None),
-            VaultError::NotAVault(_) => ("notAVault", None),
-            VaultError::InsideVault(_) => ("insideVault", None),
-            VaultError::ReadOnly(_) => ("readOnly", None),
-            VaultError::InvalidId(_) => ("invalidId", None),
-            VaultError::Io(_) => ("io", None),
+        let shown = |path: &Path| Some(path.display().to_string());
+        let (kind, current_hash, value) = match e {
+            VaultError::Conflict { current_hash, path } => ("conflict", current_hash, Some(path)),
+            VaultError::NotDownloaded(path) => ("notDownloaded", None, Some(path)),
+            VaultError::AlreadyExists(path) => ("alreadyExists", None, Some(path)),
+            VaultError::InvalidPath(path) => ("invalidPath", None, Some(path)),
+            VaultError::NotADirectory(path) => ("notADirectory", None, shown(&path)),
+            VaultError::NotAVault(path) => ("notAVault", None, shown(&path)),
+            VaultError::InsideVault(path) => ("insideVault", None, shown(&path)),
+            VaultError::ReadOnly(_) => ("readOnly", None, None),
+            VaultError::InvalidId(id) => ("invalidId", None, Some(id)),
+            VaultError::Io(_) => ("io", None, None),
         };
         Self {
             kind,
             message,
             current_hash,
+            value,
         }
     }
 }
@@ -260,6 +268,7 @@ fn with_vault<T>(state: &AppState, f: impl FnOnce(&Vault) -> CmdResult<T>) -> Cm
             kind: "noVault",
             message: "No vault folder is open".into(),
             current_hash: None,
+            value: None,
         })?;
     f(&vault)
 }
@@ -497,6 +506,7 @@ fn with_index<T>(
                 kind: "noIndex",
                 message: "The search index is not available".into(),
                 current_hash: None,
+                value: None,
             })?
             .map_err(CommandError::other)
     })
@@ -728,21 +738,28 @@ fn install_menu(app: &tauri::App) -> tauri::Result<()> {
         ..AboutMetadata::default()
     };
     let separator = || PredefinedMenuItem::separator(app);
+    let text = strings::menu();
 
     let file = Submenu::with_items(
         app,
-        "File",
+        text.file,
         true,
         &[
-            &MenuItem::with_id(app, "new-note", "New Note", true, Some("CmdOrCtrl+N"))?,
-            &MenuItem::with_id(app, "open-vault", "Open Vault…", true, Some("CmdOrCtrl+O"))?,
+            &MenuItem::with_id(app, "new-note", text.new_note, true, Some("CmdOrCtrl+N"))?,
+            &MenuItem::with_id(
+                app,
+                "open-vault",
+                text.open_vault,
+                true,
+                Some("CmdOrCtrl+O"),
+            )?,
             &separator()?,
-            &MenuItem::with_id(app, "import", "Import…", true, None::<&str>)?,
-            &MenuItem::with_id(app, "imports", "Imports…", true, None::<&str>)?,
-            &MenuItem::with_id(app, "export", "Export…", true, None::<&str>)?,
+            &MenuItem::with_id(app, "import", text.import, true, None::<&str>)?,
+            &MenuItem::with_id(app, "imports", text.imports, true, None::<&str>)?,
+            &MenuItem::with_id(app, "export", text.export, true, None::<&str>)?,
             &separator()?,
             #[cfg(not(target_os = "macos"))]
-            &MenuItem::with_id(app, "settings", "Settings…", true, Some("CmdOrCtrl+,"))?,
+            &MenuItem::with_id(app, "settings", text.settings, true, Some("CmdOrCtrl+,"))?,
             #[cfg(not(target_os = "macos"))]
             &separator()?,
             &PredefinedMenuItem::close_window(app, None)?,
@@ -752,7 +769,7 @@ fn install_menu(app: &tauri::App) -> tauri::Result<()> {
     )?;
     let edit = Submenu::with_items(
         app,
-        "Edit",
+        text.edit,
         true,
         &[
             &PredefinedMenuItem::undo(app, None)?,
@@ -766,7 +783,7 @@ fn install_menu(app: &tauri::App) -> tauri::Result<()> {
     )?;
     let window = Submenu::with_items(
         app,
-        "Window",
+        text.window,
         true,
         &[
             &PredefinedMenuItem::minimize(app, None)?,
@@ -782,7 +799,7 @@ fn install_menu(app: &tauri::App) -> tauri::Result<()> {
     let menu = {
         let help = Submenu::with_items(
             app,
-            "Help",
+            text.help,
             true,
             &[&PredefinedMenuItem::about(app, None, Some(about))?],
         )?;
@@ -819,7 +836,13 @@ fn app_menu(
         &[
             &PredefinedMenuItem::about(app, None, Some(about))?,
             &separator()?,
-            &MenuItem::with_id(app, "settings", "Settings…", true, Some("CmdOrCtrl+,"))?,
+            &MenuItem::with_id(
+                app,
+                "settings",
+                strings::menu().settings,
+                true,
+                Some("CmdOrCtrl+,"),
+            )?,
             &separator()?,
             &PredefinedMenuItem::services(app, None)?,
             &separator()?,

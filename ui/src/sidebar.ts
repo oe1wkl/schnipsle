@@ -12,6 +12,8 @@ import { invoke } from "@tauri-apps/api/core";
 
 import { asError, el } from "./dom";
 import { createSmartFolders, type SmartFolder } from "./smart-folders";
+import { roving } from "./keys";
+import { t } from "./strings";
 
 /** A tag folder (schnipsle-core `TagFolder`). */
 interface TagFolder {
@@ -36,6 +38,12 @@ const saveSearch = el("save-search") as HTMLButtonElement;
 const tree = el("tag-tree") as HTMLUListElement;
 const tagsPanel = el("tags-panel") as HTMLDetailsElement;
 const smartPanel = el("smart-panel") as HTMLDetailsElement;
+roving(tree, {
+  items: "button.tag-name",
+  row: ".tag-row",
+  tree: true,
+  skip: ".tag-toggle",
+});
 
 const pathKey = (keys: string[]): string => keys.join("\u0000");
 
@@ -130,7 +138,7 @@ export function createSidebar(
     name.dataset["path"] = pathKey(folder.keys);
     const label = labelOf(folder);
     name.textContent = label;
-    if (folder.kind === "combination") name.title = "Notes with all of these tags";
+    if (folder.kind === "combination") name.title = t.tags.combination;
     const count = document.createElement("span");
     count.className = "tag-count";
     count.textContent = String(folder.count);
@@ -140,8 +148,8 @@ export function createSidebar(
       edit.type = "button";
       edit.className = "row-action";
       edit.textContent = "✎";
-      edit.title = "Rename or merge";
-      edit.setAttribute("aria-label", `Rename #${folder.name}`);
+      edit.title = t.tags.rename;
+      edit.setAttribute("aria-label", t.tags.renameTag(folder.name));
       edit.addEventListener("click", () => {
         rename.open(folder.name);
       });
@@ -155,7 +163,7 @@ export function createSidebar(
     const key = pathKey(folder.keys);
     const setOpen = async (on: boolean): Promise<void> => {
       toggle.textContent = on ? "▾" : "▸";
-      toggle.setAttribute("aria-label", on ? `Close ${label}` : `Open ${label}`);
+      toggle.setAttribute("aria-label", on ? t.tags.close(label) : t.tags.open(label));
       item.setAttribute("aria-expanded", String(on));
       if (on) open.add(key);
       else open.delete(key);
@@ -180,8 +188,7 @@ export function createSidebar(
     const err = asError(e);
     const hint = document.createElement("li");
     hint.className = "muted tag-hint";
-    hint.textContent =
-      err.kind === "noIndex" ? "Tags appear once the index is built." : err.message;
+    hint.textContent = err.kind === "noIndex" ? t.tags.indexing : err.message;
     tree.replaceChildren(hint);
   };
 
@@ -201,7 +208,7 @@ export function createSidebar(
       if (items.length === 0) {
         const hint = document.createElement("li");
         hint.className = "muted tag-hint";
-        hint.textContent = "No tags yet. Write #tag anywhere in a note.";
+        hint.textContent = t.tags.none;
         items.push(hint);
       }
       tree.replaceChildren(...items);
@@ -213,6 +220,7 @@ export function createSidebar(
 
   const untaggedNode = (count: number): HTMLLIElement => {
     const item = document.createElement("li");
+    item.setAttribute("role", "treeitem");
     const row = document.createElement("div");
     row.className = "tag-row";
     const spacer = document.createElement("span");
@@ -221,7 +229,7 @@ export function createSidebar(
     name.type = "button";
     name.className = "tag-name untagged";
     name.dataset["path"] = "untagged";
-    name.textContent = "Untagged";
+    name.textContent = t.tags.untagged;
     name.addEventListener("click", () => {
       select({ kind: "untagged" });
     });

@@ -103,7 +103,13 @@ async function answer(cmd: string, args?: Record<string, unknown>): Promise<unkn
             numbered: params.has("numbered") ? ["one-2.pdf", "two-2.pdf"] : [],
             warnings: params.has("warnings")
               ? [
-                  "Bread rolls: Could not convert image picture-1.svg: check that rsvg-convert is in path.",
+                  { kind: "linksMissed", title: "Welcome", count: 2 },
+                  { kind: "svgOnly", title: "Bread rolls", description: "A plan" },
+                  {
+                    kind: "converter",
+                    title: "Bread rolls",
+                    message: "Could not convert image picture-1.png: unknown format",
+                  },
                 ]
               : [],
             problems: params.has("clean") ? [] : [...PROBLEMS, ...unengraved],

@@ -20,7 +20,7 @@ use crate::output::{self, Names};
 use crate::pdf_dates;
 use crate::pdf_links;
 use crate::pdf_pages::{self, Numbering};
-use crate::{Exporter, Format, Input, Layout, Options, Paper, Report};
+use crate::{Exporter, Format, Input, Layout, Options, Paper, Report, Warning};
 
 /// Points per millimetre.
 const MM: f64 = 72.0 / 25.4;
@@ -107,15 +107,16 @@ impl<P: Printer> PdfExporter<P> {
                 Ok((linked, missed)) => {
                     pdf = linked;
                     if missed > 0 {
-                        let links = if missed == 1 { "link" } else { "links" };
-                        collected
-                            .warnings
-                            .push(format!("{title}: {missed} {links} could not be put back"));
+                        collected.warnings.push(Warning::LinksMissed {
+                            title: title.to_owned(),
+                            count: missed,
+                        });
                     }
                 }
-                Err(error) => collected
-                    .warnings
-                    .push(format!("{title}: links could not be added: {error}")),
+                Err(error) => collected.warnings.push(Warning::LinksFailed {
+                    title: title.to_owned(),
+                    error: error.to_string(),
+                }),
             }
         }
         if !footer && !contents {
@@ -130,9 +131,10 @@ impl<P: Printer> PdfExporter<P> {
         match pdf_pages::number_pages(&pdf, numbering) {
             Ok(numbered) => Ok(numbered),
             Err(error) => {
-                collected
-                    .warnings
-                    .push(format!("{title}: page numbers could not be added: {error}"));
+                collected.warnings.push(Warning::PageNumbersFailed {
+                    title: title.to_owned(),
+                    error: error.to_string(),
+                });
                 Ok(pdf)
             }
         }

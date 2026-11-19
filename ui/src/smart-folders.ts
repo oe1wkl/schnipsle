@@ -11,6 +11,8 @@
 import { invoke } from "@tauri-apps/api/core";
 
 import { asError, el } from "./dom";
+import { roving } from "./keys";
+import { t } from "./strings";
 
 /** Order of a smart folder's notes (schnipsle-core `FolderSort`). */
 export type FolderSort = "modified-desc" | "modified-asc" | "created-desc" | "title-asc";
@@ -33,12 +35,7 @@ interface SmartFolderList {
   readOnly: string | null;
 }
 
-const SORT_LABELS: Record<FolderSort, string> = {
-  "modified-desc": "Recently changed",
-  "modified-asc": "Least recently changed",
-  "created-desc": "Recently created",
-  "title-asc": "Title",
-};
+const SORT_LABELS: Record<FolderSort, string> = t.smart.sort;
 
 /** Pointer movement before a press on the handle becomes a drag. */
 const DRAG_THRESHOLD_PX = 4;
@@ -61,6 +58,12 @@ const confirmBox = el("folder-confirm");
 const confirmText = el("folder-confirm-text");
 const confirmYes = el("folder-delete-yes") as HTMLButtonElement;
 const confirmNo = el("folder-delete-no") as HTMLButtonElement;
+roving(tree, {
+  items: "button.tag-name",
+  row: ".tag-row",
+  tree: true,
+  skip: ".tag-toggle",
+});
 
 /** Where a dragged folder would go. */
 interface Drop {
@@ -93,7 +96,7 @@ export function createSmartFolders(options: {
   markSelected: () => void;
 } {
   let folders: SmartFolder[] = [];
-  let readOnly: string | null = "No vault is open";
+  let readOnly: string | null = t.smart.noVault;
   const open = new Set<string>();
   /** The folder being edited; `null` while adding one. */
   let editing: SmartFolder | null = null;
@@ -152,7 +155,7 @@ export function createSmartFolders(options: {
       toggle.tabIndex = -1;
     } else {
       toggle.textContent = isOpen ? "▾" : "▸";
-      toggle.setAttribute("aria-label", `${isOpen ? "Close" : "Open"} ${folder.name}`);
+      toggle.setAttribute("aria-label", (isOpen ? t.tags.close : t.tags.open)(folder.name));
       item.setAttribute("aria-expanded", String(isOpen));
     }
     toggle.addEventListener("click", () => {
@@ -177,7 +180,7 @@ export function createSmartFolders(options: {
       edit.type = "button";
       edit.className = "row-action";
       edit.textContent = "✎";
-      edit.setAttribute("aria-label", `Edit ${folder.name}`);
+      edit.setAttribute("aria-label", t.smart.editFolder(folder.name));
       edit.addEventListener("click", () => {
         showForm(folder);
       });
@@ -185,10 +188,7 @@ export function createSmartFolders(options: {
       handle.type = "button";
       handle.className = "row-action drag-handle";
       handle.textContent = "≡";
-      handle.setAttribute(
-        "aria-label",
-        `Move ${folder.name}: drag, or use the arrow keys (left and right change the level)`,
-      );
+      handle.setAttribute("aria-label", t.smart.moveFolder(folder.name));
       handle.addEventListener("pointerdown", (event) => {
         startDrag(event, folder, row);
       });
@@ -213,10 +213,7 @@ export function createSmartFolders(options: {
     if (items.length === 0) {
       const hint = document.createElement("li");
       hint.className = "muted tag-hint";
-      hint.textContent =
-        readOnly === null
-          ? "No smart folders yet. Search, then Save, or tap New smart folder."
-          : "No smart folders.";
+      hint.textContent = readOnly === null ? t.smart.none : t.smart.noneReadOnly;
       items.push(hint);
     }
     tree.replaceChildren(...items);
@@ -370,7 +367,7 @@ export function createSmartFolders(options: {
 
   const showForm = (folder: SmartFolder | null, query = ""): void => {
     editing = folder;
-    dialogTitle.textContent = folder ? "Edit smart folder" : "New smart folder";
+    dialogTitle.textContent = folder ? t.smart.edit : t.smart.new;
     nameInput.value = folder?.name ?? "";
     queryInput.value = folder?.query ?? query;
     sortSelect.replaceChildren(
@@ -380,7 +377,7 @@ export function createSmartFolders(options: {
     // Not into itself or below it.
     const excluded = folder ? subtree(folder.id) : new Set<string>();
     parentSelect.replaceChildren(
-      new Option("Top level", ""),
+      new Option(t.smart.topLevel, ""),
       ...folders
         .filter((f) => !excluded.has(f.id))
         .map((f) => new Option(`${"  ".repeat(f.depth + 1)}${f.name}`, f.id)),
@@ -403,9 +400,7 @@ export function createSmartFolders(options: {
     const name = nameInput.value.trim();
     const query = queryInput.value.trim();
     if (name === "" || query === "") {
-      showFormError(
-        name === "" ? "Give the folder a name." : "Enter what the folder searches for.",
-      );
+      showFormError(name === "" ? t.smart.needName : t.smart.needQuery);
       return;
     }
     const args = {
@@ -440,9 +435,7 @@ export function createSmartFolders(options: {
   deleteButton.addEventListener("click", () => {
     if (!editing) return;
     const below = subtree(editing.id).size - 1;
-    confirmText.textContent =
-      `Delete “${editing.name}”? No notes are deleted.` +
-      (below > 0 ? ` Its ${below === 1 ? "subfolder moves" : "subfolders move"} up a level.` : "");
+    confirmText.textContent = t.smart.confirmDelete(editing.name, below);
     confirmBox.hidden = false;
     confirmNo.focus();
   });
@@ -464,7 +457,7 @@ export function createSmartFolders(options: {
     refresh,
     reset() {
       folders = [];
-      readOnly = "No vault is open";
+      readOnly = t.smart.noVault;
       open.clear();
       tree.replaceChildren();
       newFolder.hidden = true;

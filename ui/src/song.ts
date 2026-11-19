@@ -19,6 +19,7 @@ import {
   StateField,
 } from "@codemirror/state";
 import { Decoration, type DecorationSet, EditorView, WidgetType } from "@codemirror/view";
+import { t } from "./strings";
 import type { Notation, SongLine, SongSection, SongSheet } from "./types";
 
 /** How the viewer shows a block, besides what the note says. */
@@ -213,8 +214,8 @@ function songLine(line: SongLine): HTMLElement {
 const SECTION_NAMES: Record<SongSection["kind"], string | null> = {
   plain: null,
   verse: null,
-  chorus: "Chorus",
-  bridge: "Bridge",
+  chorus: t.song.chorus,
+  bridge: t.song.bridge,
   tab: null,
 };
 
@@ -241,12 +242,12 @@ function songDetails(meta: SongSheet["meta"]): HTMLElement[] {
     const v = value(name);
     return v === undefined ? undefined : `${label} ${v}`;
   };
-  line([value("artist"), labelled("Music:", "composer"), labelled("Words:", "lyricist")]);
+  line([value("artist"), labelled(t.song.music, "composer"), labelled(t.song.words, "lyricist")]);
   line([
-    labelled("Key", "key"),
-    labelled("Capo", "capo"),
-    labelled("Tempo", "tempo"),
-    labelled("Time", "time"),
+    labelled(t.song.key, "key"),
+    labelled(t.song.capo, "capo"),
+    labelled(t.song.tempo, "tempo"),
+    labelled(t.song.time, "time"),
   ]);
   return out;
 }
@@ -303,7 +304,7 @@ class SongWidget extends WidgetType {
       (sheet) => {
         const bar = element("div", "cm-song-bar");
         bar.setAttribute("role", "toolbar");
-        bar.setAttribute("aria-label", "Song sheet view");
+        bar.setAttribute("aria-label", t.song.view);
         this.fillBar(bar, sheet, editor, wrap);
         const body = element("div", "cm-song-body");
         body.append(...songDetails(sheet.meta), ...sheet.sections.map(songSection));
@@ -313,7 +314,7 @@ class SongWidget extends WidgetType {
         const message =
           e instanceof Error ? e.message : String((e as { message?: unknown }).message);
         show(
-          element("div", "cm-song-unknown", `Song sheet not shown: ${message}`),
+          element("div", "cm-song-unknown", t.song.notShown(message)),
           element("pre", "cm-song-tab", this.source),
         );
       },
@@ -342,24 +343,24 @@ class SongWidget extends WidgetType {
     };
 
     const amount = element("span", "cm-song-amount", signed(this.view.transpose));
-    amount.title = "Semitones the viewer adds";
+    amount.title = t.music.semitones;
     bar.append(
-      button("down", "−", "Transpose down a semitone", () => {
+      button("down", "−", t.music.down, () => {
         set({ transpose: this.view.transpose - 1 });
       }),
       amount,
-      button("up", "+", "Transpose up a semitone", () => {
+      button("up", "+", t.music.up, () => {
         set({ transpose: this.view.transpose + 1 });
       }),
     );
 
     const names = element("select", "cm-song-select");
     names.dataset["control"] = "names";
-    names.setAttribute("aria-label", "Chord names");
-    names.title = `Chord names (written in ${sheet.notation === "german" ? "German" : "English"})`;
+    names.setAttribute("aria-label", t.song.chordNames);
+    names.title = t.song.chordNamesWritten(sheet.notation === "german");
     for (const [value, text] of [
-      ["english", "B, B♭ (English)"],
-      ["german", "H, B (German)"],
+      ["english", t.song.english],
+      ["german", t.song.german],
     ] as const) {
       const option = element("option", "", text);
       option.value = value;
@@ -382,15 +383,15 @@ class SongWidget extends WidgetType {
     box.addEventListener("change", () => {
       set({ lyricsOnly: box.checked });
     });
-    lyrics.append(box, " Lyrics only");
+    lyrics.append(box, t.song.lyricsOnly);
     bar.append(lyrics);
 
     if (this.view.transpose % 12 !== 0 && !editor.state.readOnly) {
       bar.append(
         button(
           "apply",
-          "Apply transposition",
-          "Rewrite the chords in the note; the version before is kept in the history",
+          t.song.apply,
+          t.song.applyTitle,
           () => void applyTransposition(editor, editor.posAtDOM(wrap), sheet.notation),
         ),
       );
@@ -423,7 +424,7 @@ async function applyTransposition(
     (b) => b.from === pos && state.sliceDoc(b.textFrom, b.textTo) === source,
   );
   if (!now || state.readOnly) {
-    host.report("The song changed meanwhile, so its chords were not rewritten.");
+    host.report(t.song.changedMeanwhile);
     return;
   }
   editor.dispatch({

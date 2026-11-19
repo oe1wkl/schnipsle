@@ -7,22 +7,12 @@
 import { invoke } from "@tauri-apps/api/core";
 
 import { asError, el } from "./dom";
+import { t } from "./strings";
 import type { ImportRun, ImportSource, ImportUndo, UndoAction, UndoItem } from "./types";
 
-const SOURCE_LABELS: Record<ImportSource, string> = {
-  "apple-notes": "Apple Notes",
-  simplenote: "Simplenote",
-  html: "HTML",
-  markdown: "Markdown",
-};
+const SOURCE_LABELS: Record<ImportSource, string> = t.imports.source;
 
-const ACTION_LABELS: Record<UndoAction, string> = {
-  trash: "Into the trash",
-  restore: "Previous version back",
-  keep: "Stays",
-  missing: "Gone already",
-  inTrash: "In the trash already",
-};
+const ACTION_LABELS: Record<UndoAction, string> = t.imports.action;
 
 /** Notes that change first, then those that stay; otherwise in the order handled. */
 const ACTION_ORDER: Record<UndoAction, number> = {
@@ -64,10 +54,6 @@ function from(run: ImportRun): string {
   return run.input === null ? source : `${source}: ${run.input}`;
 }
 
-function plural(n: number, one: string, many: string): string {
-  return `${String(n)} ${n === 1 ? one : many}`;
-}
-
 export function createImports(hooks: ImportsHooks): { open(): void } {
   /** The run whose undo is shown, while it waits for Undo import. */
   let pending: ImportRun | null = null;
@@ -83,7 +69,7 @@ export function createImports(hooks: ImportsHooks): { open(): void } {
 
   function readOnly(): string | null {
     const state = hooks.vaultState();
-    return state.open ? state.readOnly : "Open a vault first.";
+    return state.open ? state.readOnly : t.imports.openFirst;
   }
 
   async function showRuns(): Promise<void> {
@@ -94,21 +80,18 @@ export function createImports(hooks: ImportsHooks): { open(): void } {
     undoBox.hidden = true;
     backButton.hidden = true;
     startButton.hidden = true;
-    closeButton.textContent = "Close";
+    closeButton.textContent = t.common.close;
     showError(null);
     runsBody.replaceChildren();
     if (!hooks.vaultState().open) {
-      summary.textContent = "Open a vault first: its imports are listed here.";
+      summary.textContent = t.imports.noVault;
       return;
     }
-    summary.textContent = "Reading the import logs…";
+    summary.textContent = t.imports.reading;
     try {
       const runs = await invoke<ImportRun[]>("list_imports");
       if (mine !== view) return;
-      summary.textContent =
-        runs.length === 0
-          ? "Nothing has been imported into this vault yet."
-          : "Undoing an import moves its notes to the trash, or gives notes it updated their previous version back. Notes changed here since stay as they are.";
+      summary.textContent = runs.length === 0 ? t.imports.none : t.imports.explain;
       runsBody.replaceChildren(...runs.map(runRow));
     } catch (e) {
       if (mine !== view) return;
@@ -127,8 +110,8 @@ export function createImports(hooks: ImportsHooks): { open(): void } {
     notes.textContent =
       run.problem === null
         ? [
-            ...(run.added > 0 || run.updated === 0 ? [`${String(run.added)} new`] : []),
-            ...(run.updated > 0 ? [`${String(run.updated)} updated`] : []),
+            ...(run.added > 0 || run.updated === 0 ? [t.imports.added(run.added)] : []),
+            ...(run.updated > 0 ? [t.imports.updated(run.updated)] : []),
           ].join(", ")
         : "";
     const status = document.createElement("td");
@@ -137,12 +120,12 @@ export function createImports(hooks: ImportsHooks): { open(): void } {
       status.textContent = run.problem;
     } else if (run.undone !== null) {
       tr.className = "skip";
-      status.textContent = `Undone ${when(run.undone)}`;
+      status.textContent = t.imports.undoneAt(when(run.undone));
     } else {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "small";
-      button.textContent = "Undo…";
+      button.textContent = t.imports.undoButton;
       button.addEventListener("click", () => void planUndo(run));
       status.append(button);
     }
@@ -159,7 +142,7 @@ export function createImports(hooks: ImportsHooks): { open(): void } {
     backButton.hidden = false;
     startButton.hidden = false;
     startButton.disabled = true;
-    undoSummary.textContent = "Looking at the notes of this import…";
+    undoSummary.textContent = t.imports.looking;
     items.replaceChildren();
     try {
       const planned = await invoke<ImportUndo>("plan_undo_import", { id: run.id });
@@ -188,23 +171,21 @@ export function createImports(hooks: ImportsHooks): { open(): void } {
     const missing = count("missing");
     const inTrash = count("inTrash");
     const parts = [
-      ...(trash > 0 ? [`${plural(trash, "note", "notes")} into the trash`] : []),
-      ...(restore > 0
-        ? [`${plural(restore, "note gets its", "notes get their")} previous version back`]
-        : []),
-      ...(keep > 0 ? [plural(keep, "note stays", "notes stay")] : []),
-      ...(inTrash > 0 ? [`${plural(inTrash, "note is", "notes are")} in the trash already`] : []),
-      ...(missing > 0 ? [`${plural(missing, "note is", "notes are")} gone already`] : []),
+      ...(trash > 0 ? [t.imports.intoTrash(trash)] : []),
+      ...(restore > 0 ? [t.imports.restored(restore)] : []),
+      ...(keep > 0 ? [t.imports.stay(keep)] : []),
+      ...(inTrash > 0 ? [t.imports.alreadyInTrash(inTrash)] : []),
+      ...(missing > 0 ? [t.imports.gone(missing)] : []),
     ].join(", ");
     const { run } = undo;
-    const source = run.source === "" ? "" : `${SOURCE_LABELS[run.source]}, `;
-    const what = `the import from ${run.input ?? "the source"} (${source}${when(run.started)})`;
+    const source = run.source === "" ? "" : SOURCE_LABELS[run.source];
+    const what = t.imports.what(run.input ?? t.imports.theSource, source, when(run.started));
     if (done) {
-      undoSummary.textContent = `Undone ${what}: ${parts}.`;
+      undoSummary.textContent = t.imports.undone(what, parts);
     } else if (trash + restore === 0) {
-      undoSummary.textContent = `Undoing ${what} would change nothing: ${parts}.`;
+      undoSummary.textContent = t.imports.nothing(what, parts);
     } else {
-      undoSummary.textContent = `Undo ${what}: ${parts}. Nothing changes until you choose Undo import.`;
+      undoSummary.textContent = t.imports.plan(what, parts);
     }
     const sorted = undo.items
       .map((item, index) => ({ item, index }))
@@ -220,7 +201,7 @@ export function createImports(hooks: ImportsHooks): { open(): void } {
       tr.className = "skip";
     }
     const title = document.createElement("td");
-    const name = item.title || "(untitled)";
+    const name = item.title || t.imports.untitled;
     const path = item.path;
     // A note that is still among the notes can be opened from the report.
     const openable =
@@ -230,7 +211,7 @@ export function createImports(hooks: ImportsHooks): { open(): void } {
       button.type = "button";
       button.className = "link";
       button.textContent = name;
-      button.title = "Open this note";
+      button.title = t.imports.openNote;
       button.addEventListener("click", () => {
         dialog.close();
         hooks.openNote(path, name);
@@ -264,7 +245,7 @@ export function createImports(hooks: ImportsHooks): { open(): void } {
     startButton.disabled = true;
     backButton.disabled = true;
     closeButton.disabled = true;
-    undoSummary.textContent = "Undoing the import…";
+    undoSummary.textContent = t.imports.undoing;
     try {
       const undone = await invoke<ImportUndo>("undo_import", { id: run.id });
       pending = null;

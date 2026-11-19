@@ -1,7 +1,33 @@
 // SPDX-License-Identifier: Apache-2.0
 // The page's elements and small helpers shared by the UI modules.
 
+import { applyStrings, t } from "./strings";
 import type { CommandError } from "./types";
+
+// The page names its text by key (ADR-0041); fill it before anything reads it.
+applyStrings();
+
+// A dialog that closes gives focus back to where it was before it opened
+// (ADR-0041 rule 7). `close` does not bubble, so it is caught on the way down.
+let focusedOutside: HTMLElement | null = null;
+document.addEventListener("focusin", (event) => {
+  const target = event.target;
+  if (target instanceof HTMLElement && target.closest("dialog") === null) {
+    focusedOutside = target;
+  }
+});
+document.addEventListener(
+  "close",
+  (event) => {
+    if (!(event.target instanceof HTMLDialogElement)) return;
+    const back = focusedOutside;
+    // Not if the dialog's own action already moved focus, e.g. by opening a note.
+    if (back?.isConnected && (document.activeElement ?? document.body) === document.body) {
+      back.focus();
+    }
+  },
+  true,
+);
 
 export function el(id: string): HTMLElement {
   const found = document.getElementById(id);
@@ -74,10 +100,21 @@ export const ui = {
   readOnlyText: el("read-only-text"),
 };
 
-/** A command's error, or any other failure, as a `CommandError`. */
+/**
+ * A command's error, or any other failure, as a `CommandError`. An error of a
+ * kind the catalog knows gets its message from there (ADR-0041 rule 5); the
+ * others keep the core's text, usually the system's own.
+ */
 export function asError(e: unknown): CommandError {
-  if (typeof e === "object" && e !== null && "kind" in e) return e as CommandError;
-  return { kind: "other", message: String(e), currentHash: null };
+  if (typeof e !== "object" || e === null || !("kind" in e)) {
+    return { kind: "other", message: String(e), currentHash: null };
+  }
+  const err = e as CommandError;
+  const words: Partial<Record<string, (value: string) => string>> = t.errors;
+  const word = words[err.kind];
+  // A text about a path or name needs the value; without one, the core's text stays.
+  if (!word || (word.length > 0 && (err.value ?? null) === null)) return err;
+  return { ...err, message: word(err.value ?? "") };
 }
 
 /** Shows a message in the status line under the editor. */
