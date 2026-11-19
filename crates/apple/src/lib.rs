@@ -8,7 +8,9 @@
 //! [`ICloudVersions`] lists and resolves iCloud conflict versions (ADR-0006).
 //! [`print_pdf`] turns an HTML page into a PDF with real pages (ADR-0022), and
 //! [`find_anchors`] finds the texts of the links that printing on iOS loses (ADR-0037).
-//! On macOS, [`share_files`] shows the share menu for an export.
+//! On macOS, [`share_files`] shows the share menu for an export, and
+//! [`ask_before_terminating`] holds back quitting until the open note is saved
+//! (ADR-0042).
 //! [`convert_picture`] turns a picture many programs cannot show into one they can
 //! (ADR-0027), and [`is_turned`] tells one that only its orientation turns upright
 //! (ADR-0028).
@@ -32,6 +34,8 @@ mod picture;
 mod presenter;
 #[cfg(target_os = "macos")]
 mod share;
+#[cfg(target_os = "macos")]
+mod terminate;
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 mod versions;
 
@@ -49,5 +53,7 @@ pub use picture::{ConvertedPicture, convert_picture, is_turned};
 pub use presenter::VaultPresenter;
 #[cfg(target_os = "macos")]
 pub use share::share_files;
+#[cfg(target_os = "macos")]
+pub use terminate::{ask_before_terminating, reply_to_terminate};
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 pub use versions::ICloudVersions;
