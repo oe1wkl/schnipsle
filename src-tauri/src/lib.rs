@@ -932,7 +932,12 @@ pub fn run() {
     #[cfg(desktop)]
     let builder = builder
         .plugin(tauri_plugin_dialog::init())
-        .setup(|app| Ok(install_menu(app)?))
+        .setup(|app| {
+            install_menu(app)?;
+            #[cfg(target_os = "macos")]
+            closing::hold_back_terminate(app.handle());
+            Ok(())
+        })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event
                 && !closing::may_close(tauri::Manager::app_handle(window))
@@ -944,6 +949,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             closing::quit_heard,
             closing::quit_app,
+            closing::quit_cancelled,
             pick_vault,
             restore_vault,
             create_vault,
