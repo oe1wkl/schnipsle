@@ -1,6 +1,6 @@
 # ADR-0043: Tags added to every note of an import
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-19
 - Deciders: Willi Kraml
 - Related: F-03, F-04, F-05, ADR-0012, ADR-0019, format.md §5.2, §5.3, §12.1 rules 3 and 5, §12.2, §12.3
