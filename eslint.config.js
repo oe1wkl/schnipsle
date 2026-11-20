@@ -4,7 +4,17 @@ import globals from "globals";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["dist/", "target/", "src-tauri/gen/", "src-tauri/target/", "node_modules/"] },
+  {
+    // .claude/: worktrees of other sessions, each checked on its own.
+    ignores: [
+      "dist/",
+      "target/",
+      "src-tauri/gen/",
+      "src-tauri/target/",
+      "node_modules/",
+      ".claude/",
+    ],
+  },
   js.configs.recommended,
   ...tseslint.configs.strictTypeChecked,
   {

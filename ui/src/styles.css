@@ -742,6 +742,20 @@ button.danger {
   background: var(--bg);
   color: var(--fg);
 }
+.import-choose input[type="text"] {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--fg);
+}
+.import-tags-help {
+  margin: 4px 0 0;
+  font-size: 13px;
+}
 .export-dialog {
   width: min(600px, calc(100vw - 32px));
 }

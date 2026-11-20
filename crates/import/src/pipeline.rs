@@ -180,6 +180,10 @@ pub struct Plan {
     pub items: Vec<PlanItem>,
     /// Notes about the import as a whole, from the adapter and the pipeline.
     pub notices: Vec<Notice>,
+    /// The tags added to every note, without `#` (§12.1 rule 5).
+    /// Serialized only when there are any.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub tags: Vec<String>,
     #[serde(skip)]
     prepared: Vec<Prepared>,
 }
@@ -284,28 +288,6 @@ fn with_attachments(
     (body, files)
 }
 
-/// The file a note becomes (§12.1): links to where its attachments will be
-/// stored relative to a note in `folder`, the final tag line and the front
-/// matter of `keys`; and the attachments to store.
-fn file_text(
-    note: &ImportedNote,
-    body: &str,
-    folder: &str,
-    keys: &Keys<'_>,
-    problems: &mut Vec<String>,
-) -> (String, Vec<(String, Vec<u8>)>) {
-    let (body, attachments) = with_attachments(note, body.to_owned(), folder, problems);
-    let tags = prepare::final_tags(&body, &note.folders, &note.tags);
-    let body = prepare::append_tags(&body, &tags);
-    if let Some(id) = front_matter::get(&body, "id").filter(|id| id != keys.id) {
-        problems.push(format!(
-            "Its front matter has the id {id}; it gets {} instead, like every imported note.",
-            keys.id
-        ));
-    }
-    (prepare::with_front_matter(&body, keys), attachments)
-}
-
 /// The note an earlier import wrote, as it may be updated (§12.3).
 struct Target {
     /// Its path relative to `notes/`.
@@ -387,12 +369,30 @@ pub fn check_input(vault: &Vault, input: &std::path::Path) -> Result<(), ImportE
 /// [`ImportError::Vault`] if the import logs cannot be listed, or no id can
 /// be generated.
 pub fn plan(vault: &Vault, batch: &Batch, env: &dyn Env) -> Result<Plan, ImportError> {
+    plan_tagged(vault, batch, &[], env)
+}
+
+/// [`plan`], with `tags` (without `#`, e.g. from [`typed_tags`]) added to
+/// the final tag line of every note (format.md §12.1 rule 5), unless its
+/// text has them already. The log of the run lists them.
+///
+/// [`typed_tags`]: crate::typed_tags
+///
+/// # Errors
+/// As [`plan`].
+pub fn plan_tagged(
+    vault: &Vault,
+    batch: &Batch,
+    tags: &[String],
+    env: &dyn Env,
+) -> Result<Plan, ImportError> {
     let (before, mut notices) = imported_before(vault, batch.source)?;
     notices.splice(0..0, batch.notices.iter().cloned());
     let mut planner = Planner {
         vault,
         env,
         source: batch.source,
+        tags,
         now: rfc3339_utc(env.now_ms()),
         before,
         seen: HashSet::new(),
@@ -413,6 +413,7 @@ pub fn plan(vault: &Vault, batch: &Batch, env: &dyn Env) -> Result<Plan, ImportE
         input: batch.input.clone(),
         items,
         notices,
+        tags: tags.to_vec(),
         prepared,
     })
 }
@@ -422,6 +423,8 @@ struct Planner<'a> {
     vault: &'a Vault,
     env: &'a dyn Env,
     source: Source,
+    /// The tags added to every note.
+    tags: &'a [String],
     /// The import time, for notes without dates.
     now: String,
     /// The latest log entry per `source_id`.
@@ -433,6 +436,30 @@ struct Planner<'a> {
 }
 
 impl Planner<'_> {
+    /// The file a note becomes (§12.1): links to where its attachments will
+    /// be stored relative to a note in `folder`, the final tag line (with
+    /// the tags the user added to the whole import) and the front matter of
+    /// `keys`; and the attachments to store.
+    fn file_text(
+        &self,
+        note: &ImportedNote,
+        body: &str,
+        folder: &str,
+        keys: &Keys<'_>,
+        problems: &mut Vec<String>,
+    ) -> (String, Vec<(String, Vec<u8>)>) {
+        let (body, attachments) = with_attachments(note, body.to_owned(), folder, problems);
+        let tags = prepare::final_tags(&body, self.tags, &note.folders, &note.tags);
+        let body = prepare::append_tags(&body, &tags);
+        if let Some(id) = front_matter::get(&body, "id").filter(|id| id != keys.id) {
+            problems.push(format!(
+                "Its front matter has the id {id}; it gets {} instead, like every imported note.",
+                keys.id
+            ));
+        }
+        (prepare::with_front_matter(&body, keys), attachments)
+    }
+
     /// A free path for a new note titled `title` in `folder`, not taken by
     /// a note planned before.
     fn reserve(&mut self, folder: &str, title: &str) -> Result<String, ImportError> {
@@ -521,7 +548,8 @@ impl Planner<'_> {
             source: self.source,
             source_id: &note.source_id,
         };
-        let (text, attachments) = file_text(note, &body, link_folder, &keys, &mut item.problems);
+        let (text, attachments) =
+            self.file_text(note, &body, link_folder, &keys, &mut item.problems);
         let entry = LogEntry {
             source_id: note.source_id.clone(),
             id,
@@ -616,6 +644,7 @@ pub fn apply_with_progress(
         &plan.input,
         &rfc3339_utc(env.now_ms()),
     );
+    log.set_tags(&plan.tags);
     vault.write_import_log(&mut log)?;
     let mut written = Vec::new();
     let mut trashed = Vec::new();

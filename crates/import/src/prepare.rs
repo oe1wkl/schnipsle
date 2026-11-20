@@ -79,13 +79,49 @@ pub fn tag_from(name: &str) -> Option<String> {
     recognized(&name).then_some(name)
 }
 
-/// The tags for the final line: the folder tag, then the source's tags,
-/// without those the text already carries and without repeats.
-pub(crate) fn final_tags(body: &str, folders: &[String], tags: &[String]) -> Vec<String> {
+/// The tags the user typed to add to every note of an import (§12.1 rule
+/// 5), without `#`: words separated by spaces or commas, each a tag by
+/// §5.3 as a whole, with or without its `#`, NFC-normalized; a repeat
+/// (after normalization) is left out.
+///
+/// # Errors
+/// The first word that is not a tag, without `#`.
+pub fn typed_tags(input: &str) -> Result<Vec<String>, String> {
+    let mut out: Vec<String> = Vec::new();
+    let mut seen = Vec::new();
+    for word in input.split(|c: char| c == ',' || c.is_whitespace()) {
+        let word = word.strip_prefix('#').unwrap_or(word);
+        if word.is_empty() {
+            continue;
+        }
+        let name: String = word.nfc().collect();
+        if !recognized(&name) {
+            return Err(name);
+        }
+        let key = normalize(&name);
+        if !seen.contains(&key) {
+            seen.push(key);
+            out.push(name);
+        }
+    }
+    Ok(out)
+}
+
+/// The tags for the final line: the tags the user added to the whole
+/// import, the folder tag, then the source's tags, without those the text
+/// already carries and without repeats.
+pub(crate) fn final_tags(
+    body: &str,
+    added: &[String],
+    folders: &[String],
+    tags: &[String],
+) -> Vec<String> {
     let mut seen: Vec<String> = extract_tags(body).into_iter().map(|t| t.key).collect();
     let mut out = Vec::new();
-    for tag in folder_tag(folders)
-        .into_iter()
+    for tag in added
+        .iter()
+        .cloned()
+        .chain(folder_tag(folders))
         .chain(tags.iter().filter_map(|t| tag_from(t)))
     {
         let key = normalize(&tag);
@@ -279,14 +315,39 @@ mod tests {
     fn final_tag_line() {
         let tags = final_tags(
             "Repeaters #radio\n",
+            &[],
             &strings(&["Funk"]),
             &strings(&["radio", "Ö Club", "", "funk"]),
         );
         assert_eq!(tags, ["Funk", "Ö-Club"]);
+        // Added tags come first; one the text or the folder has is not repeated.
+        let added = final_tags(
+            "Repeaters #radio\n",
+            &strings(&["import/2026", "Radio", "funk"]),
+            &strings(&["Funk"]),
+            &[],
+        );
+        assert_eq!(added, ["import/2026", "funk"]);
         assert_eq!(append_tags("Text  \n", &tags), "Text  \n\n#Funk #Ö-Club\n");
         assert_eq!(append_tags("Text", &tags), "Text\n\n#Funk #Ö-Club\n");
         assert_eq!(append_tags("", &tags), "#Funk #Ö-Club\n");
         assert_eq!(append_tags("Text\n", &[]), "Text\n");
+    }
+
+    #[test]
+    fn tags_typed_for_an_import() {
+        assert_eq!(typed_tags(""), Ok(vec![]));
+        assert_eq!(typed_tags(" , "), Ok(vec![]));
+        assert_eq!(
+            typed_tags("#inbox, import/2026-11  #Österreich #INBOX"),
+            Ok(strings(&["inbox", "import/2026-11", "Österreich"]))
+        );
+        // Composed to NFC: "O" + combining diaeresis.
+        assert_eq!(typed_tags("#O\u{308}VSV"), Ok(strings(&["ÖVSV"])));
+        for bad in ["#2024", "a0b1c2", "radio/", "two#tags", "##x", "a.b"] {
+            assert!(typed_tags(&format!("ok {bad}")).is_err(), "{bad}");
+        }
+        assert_eq!(typed_tags("ok #2024 #fff0"), Err("2024".to_owned()));
     }
 
     #[test]

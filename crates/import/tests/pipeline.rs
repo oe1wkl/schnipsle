@@ -13,6 +13,7 @@ use std::path::{Path, PathBuf};
 use schnipsle_core::{Vault, VaultError};
 use schnipsle_import::{
     AttachmentData, Batch, PlannedAction, SkipReason, apply, apply_with_progress, plan,
+    plan_tagged, typed_tags,
 };
 use support::{TestEnv, check, empty_vault, files, output};
 
@@ -55,6 +56,19 @@ fn basic() {
     .unwrap();
     assert_eq!(outcome.written.len(), 8);
     assert_eq!(steps, (1..=8).map(|done| (done, 8)).collect::<Vec<_>>());
+    check(&dir, &output(vault_dir.path(), &outcome));
+}
+
+#[test]
+fn tags_added_to_every_note() {
+    let dir = case("tagged");
+    let (vault_dir, vault) = empty_vault();
+    let env = TestEnv::new();
+    let tags = typed_tags("#import/2026-11 inbox").unwrap();
+    let planned = plan_tagged(&vault, &batch(&dir, "batch.json"), &tags, &env).unwrap();
+    assert_eq!(planned.tags, ["import/2026-11", "inbox"]);
+    let outcome = apply(&vault, planned, &env).unwrap();
+    assert_eq!(outcome.written.len(), 3);
     check(&dir, &output(vault_dir.path(), &outcome));
 }
 

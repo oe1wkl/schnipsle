@@ -37,6 +37,7 @@ const ACTION_ORDER: Record<PlannedAction, number> = { add: 0, update: 1, skip: 2
 
 const dialog = el("import-dialog") as HTMLDialogElement;
 const sourceSelect = el("import-source") as HTMLSelectElement;
+const tagsInput = el("import-tags") as HTMLInputElement;
 const choose = el("import-choose");
 const pickButton = el("import-pick") as HTMLButtonElement;
 const pickFileButton = el("import-pick-file") as HTMLButtonElement;
@@ -91,6 +92,7 @@ export function createImport(hooks: ImportHooks): { open(): void } {
     pickButton.disabled = value;
     pickFileButton.disabled = value;
     sourceSelect.disabled = value;
+    tagsInput.disabled = value;
     metadataButton.disabled = value;
     cancelButton.disabled = writing;
     if (value) startButton.disabled = true;
@@ -135,6 +137,8 @@ export function createImport(hooks: ImportHooks): { open(): void } {
 
   function open(): void {
     if (dialog.open) return;
+    // Tags from an earlier import are not carried over unseen.
+    tagsInput.value = "";
     restart();
     dialog.showModal();
   }
@@ -164,6 +168,7 @@ export function createImport(hooks: ImportHooks): { open(): void } {
   async function dryRun(folder: string): Promise<void> {
     path = folder;
     pathText.textContent = folder;
+    showError(null);
     showHelp(false);
     setBusy(true);
     summary.textContent = t.import.reading;
@@ -175,6 +180,7 @@ export function createImport(hooks: ImportHooks): { open(): void } {
       const preview = await invoke<ImportPreview>("plan_import", {
         source: source(),
         path: folder,
+        tags: tagsInput.value,
       });
       if (mine !== run) {
         // Cancelled meanwhile: forget the plan this result left in the app.
@@ -189,6 +195,8 @@ export function createImport(hooks: ImportHooks): { open(): void } {
       startButton.disabled = writes === 0;
     } catch (e) {
       if (mine !== run) return;
+      // An earlier dry run may still wait in the app; it is not what is shown now.
+      if (planned) void invoke("cancel_import").catch(() => undefined);
       planned = false;
       report.hidden = true;
       setBusy(false);
@@ -286,7 +294,18 @@ export function createImport(hooks: ImportHooks): { open(): void } {
     } else {
       summary.textContent = t.import.plan(plan.items.length, plan.input, parts);
     }
-    notices.replaceChildren(...plan.notices.map(noticeItem));
+    const tagged = plan.tags ?? [];
+    const tagNotice: ImportNotice[] =
+      tagged.length === 0
+        ? []
+        : [
+            {
+              sourceId: null,
+              title: null,
+              message: t.import.tagsAdded(tagged.map((tag) => `#${tag}`).join(" ")),
+            },
+          ];
+    notices.replaceChildren(...[...tagNotice, ...plan.notices].map(noticeItem));
     const sorted = plan.items
       .map((item, index) => ({ item, index }))
       .sort(
@@ -355,6 +374,10 @@ export function createImport(hooks: ImportHooks): { open(): void } {
   metadataButton.addEventListener("click", () => void readMetadata());
   startButton.addEventListener("click", () => void start());
   cancelButton.addEventListener("click", () => void close());
+  // Other tags: the report and the notes to write change, so read the export again.
+  tagsInput.addEventListener("change", () => {
+    if (path !== null && !writing) void dryRun(path);
+  });
   sourceSelect.addEventListener("change", () => {
     if (planned) void invoke("cancel_import").catch(() => undefined);
     restart();

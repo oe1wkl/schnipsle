@@ -33,7 +33,7 @@ mod undo;
 pub use note::{AttachmentData, Batch, ImportedAttachment, ImportedNote, Notice, Source};
 pub use pipeline::{
     Env, ImportError, Outcome, Plan, PlanItem, PlannedAction, SkipReason, SystemEnv, Written,
-    apply, apply_with_progress, check_input, plan,
+    apply, apply_with_progress, check_input, plan, plan_tagged,
 };
-pub use prepare::{folder_tag, tag_from};
+pub use prepare::{folder_tag, tag_from, typed_tags};
 pub use undo::{ImportRun, Undo, UndoAction, UndoItem, plan_undo, runs, undo};

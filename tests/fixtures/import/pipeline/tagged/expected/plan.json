@@ -1,0 +1,35 @@
+{
+  "source": "simplenote",
+  "input": "export.zip",
+  "items": [
+    {
+      "sourceId": "n1",
+      "title": "Plain note",
+      "action": "add",
+      "reason": null,
+      "path": "Simplenote/plain-note.md",
+      "problems": []
+    },
+    {
+      "sourceId": "n2",
+      "title": "Repeaters",
+      "action": "add",
+      "reason": null,
+      "path": "Simplenote/repeaters.md",
+      "problems": []
+    },
+    {
+      "sourceId": "n3",
+      "title": "note",
+      "action": "add",
+      "reason": null,
+      "path": "Simplenote/note.md",
+      "problems": []
+    }
+  ],
+  "notices": [],
+  "tags": [
+    "import/2026-11",
+    "inbox"
+  ]
+}

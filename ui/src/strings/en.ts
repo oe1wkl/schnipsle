@@ -454,6 +454,12 @@ export const en = {
         "ChordPro (.cho, .crd, .chopro, .chordpro) become notes with their title and the song as " +
         "a chordpro block.",
     },
+    tagsLabel: "Add tags",
+    tagsExample: "#import/2026-11",
+    tagsHelp:
+      "Optional: tags for every imported note, separated by spaces. They go on the tag line at " +
+      "the end of each note, unless the text has them already.",
+    tagsAdded: (tags: string) => `Every note gets ${tags}.`,
     chooseFolder: "Choose folder…",
     chooseFile: "Choose file…",
     readMetadata: "Read dates and folders from Notes",
@@ -555,6 +561,7 @@ export const en = {
     alreadyInTrash: (n: number) => `${count(n, "note is", "notes are")} in the trash already`,
     gone: (n: number) => `${count(n, "note is", "notes are")} gone already`,
     theSource: "the source",
+    withTags: (from: string, tags: string) => `${from}, with ${tags}`,
     what: (input: string, source: string, when: string) =>
       `the import from ${input} (${source === "" ? "" : `${source}, `}${when})`,
     undone: (what: string, parts: string) => `Undone ${what}: ${parts}.`,

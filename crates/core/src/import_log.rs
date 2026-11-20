@@ -277,6 +277,40 @@ impl ImportLog {
         self.text("input")
     }
 
+    /// The tags the user had added to every note of the run (§12.1 rule 5),
+    /// without `#`; empty if none.
+    #[must_use]
+    pub fn tags(&self) -> Vec<String> {
+        match self.doc.get(&key("tags")) {
+            Some(Yaml::Array(list)) => list.iter().filter_map(scalar).collect(),
+            _ => Vec::new(),
+        }
+    }
+
+    /// Sets `tags`, after `input` as in format.md §12.2; no `tags` if
+    /// `tags` is empty.
+    pub fn set_tags(&mut self, tags: &[String]) {
+        self.doc.remove(&key("tags"));
+        if tags.is_empty() {
+            return;
+        }
+        let value = Yaml::Array(tags.iter().map(|t| Yaml::String(t.clone())).collect());
+        let mut doc = Hash::new();
+        let mut placed = false;
+        for (k, v) in std::mem::take(&mut self.doc) {
+            let after = k == key("input");
+            doc.insert(k, v);
+            if after {
+                doc.insert(key("tags"), value.clone());
+                placed = true;
+            }
+        }
+        if !placed {
+            doc.insert(key("tags"), value); // no `input`
+        }
+        self.doc = doc;
+    }
+
     /// When the run started.
     #[must_use]
     pub fn started(&self) -> String {
@@ -617,6 +651,27 @@ mod tests {
             vault.write_import_log(&mut log),
             Err(ImportLogError::Vault(VaultError::Conflict { .. }))
         ));
+    }
+
+    #[test]
+    fn tags_go_after_input() {
+        let mut log = ImportLog::new(
+            "01JB2C3D4E5F6G7H8J9K0M1N2P",
+            "html",
+            "pages",
+            "2026-11-19T10:00:00Z",
+        );
+        assert!(log.tags().is_empty());
+        log.set_tags(&[]);
+        assert!(!log.to_yaml().contains("tags"));
+        log.set_tags(&["import/2026-11".to_owned(), "Österreich".to_owned()]);
+        let text = log.to_yaml();
+        assert!(
+            text.contains("input: pages\ntags:\n  - import/2026-11\n  - Österreich\nstarted:"),
+            "{text}"
+        );
+        let read = ImportLog::parse(&text).unwrap();
+        assert_eq!(read.tags(), ["import/2026-11", "Österreich"]);
     }
 
     #[test]

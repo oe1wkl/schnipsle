@@ -196,6 +196,8 @@ export interface ImportPlan {
   input: string;
   items: PlanItem[];
   notices: ImportNotice[];
+  /** Tags added to every note, without `#` (format.md §12.1 rule 5); left out when none. */
+  tags?: string[];
 }
 /** What `plan_import` returns. */
 export interface ImportPreview {
@@ -210,6 +212,8 @@ export interface ImportRun {
   /** As in format.md §12.1; empty for a log that cannot be read. */
   source: ImportSource | "";
   input: string | null;
+  /** Tags the run added to every note, without `#`. */
+  tags: string[];
   started: string;
   undone: string | null;
   added: number;

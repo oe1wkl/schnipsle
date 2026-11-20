@@ -51,7 +51,9 @@ function when(time: string): string {
 
 function from(run: ImportRun): string {
   const source = run.source === "" ? "" : SOURCE_LABELS[run.source];
-  return run.input === null ? source : `${source}: ${run.input}`;
+  const name = run.input === null ? source : `${source}: ${run.input}`;
+  if (run.tags.length === 0) return name;
+  return t.imports.withTags(name, run.tags.map((tag) => `#${tag}`).join(" "));
 }
 
 export function createImports(hooks: ImportsHooks): { open(): void } {
