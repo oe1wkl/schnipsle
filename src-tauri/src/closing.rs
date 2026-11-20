@@ -8,6 +8,11 @@
 //! answer within [`NO_ANSWER`] is taken to be stuck, and the next request
 //! quits without it, so the app can always be quit.
 //!
+//! On macOS, Quit in the Dock, the Apple Event "quit" and logging out go
+//! through `terminate:` instead, which tao lets through at once;
+//! [`hold_back_terminate`] asks [`may_close`] there too and keeps the request
+//! waiting, and [`quit_app`] or [`quit_cancelled`] answers it.
+//!
 //! The iPhone saves when the app goes to the background, so only the
 //! desktop holds anything back.
 #![cfg_attr(mobile, allow(dead_code))]
@@ -62,6 +67,40 @@ pub fn may_close<R: Runtime>(app: &AppHandle<R>) -> bool {
     false
 }
 
+/// Makes `terminate:` (Quit in the Dock, the Apple Event "quit", logging
+/// out) ask [`may_close`] first. While the page saves or asks the user, the
+/// request waits; [`quit_app`] lets it go ahead and [`quit_cancelled`]
+/// cancels it. If the page does not answer within [`NO_ANSWER`], it goes
+/// ahead without it. Call in `setup`.
+#[cfg(target_os = "macos")]
+pub fn hold_back_terminate<R: Runtime>(app: &AppHandle<R>) {
+    let handle = app.clone();
+    let held = schnipsle_apple::ask_before_terminating(move || {
+        if may_close(&handle) {
+            return true;
+        }
+        let handle = handle.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(NO_ANSWER);
+            let closing = handle.state::<Closing>();
+            let mut asked = closing.0.lock().unwrap_or_else(PoisonError::into_inner);
+            if asked.heard || asked.allowed {
+                return;
+            }
+            eprintln!("the page did not answer the request to quit; quitting without it");
+            asked.allowed = true;
+            drop(asked);
+            let _ = handle.run_on_main_thread(|| {
+                schnipsle_apple::reply_to_terminate(true);
+            });
+        });
+        false
+    });
+    if let Err(e) = held {
+        eprintln!("quitting from the Dock will not wait for the open note to be saved: {e}");
+    }
+}
+
 /// The page heard the request to quit and is saving.
 #[tauri::command]
 #[allow(
@@ -88,5 +127,36 @@ pub fn quit_app(app: AppHandle, closing: State<'_, Closing>) {
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
         .allowed = true;
+    // A request from the Dock or a logout is waiting: let it go ahead.
+    #[cfg(target_os = "macos")]
+    {
+        let handle = app.clone();
+        if app
+            .run_on_main_thread(move || {
+                if !schnipsle_apple::reply_to_terminate(true) {
+                    handle.exit(0);
+                }
+            })
+            .is_ok()
+        {
+            return;
+        }
+    }
     app.exit(0);
+}
+
+/// The user chose not to quit ("Cancel" in the dialog): a request from the
+/// Dock or a logout that is waiting is cancelled.
+#[tauri::command]
+#[allow(
+    clippy::needless_pass_by_value,
+    reason = "Tauri passes command arguments by value"
+)]
+pub fn quit_cancelled(app: AppHandle) {
+    #[cfg(target_os = "macos")]
+    let _ = app.run_on_main_thread(|| {
+        schnipsle_apple::reply_to_terminate(false);
+    });
+    #[cfg(not(target_os = "macos"))]
+    let _ = app;
 }

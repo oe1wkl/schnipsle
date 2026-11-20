@@ -1367,9 +1367,17 @@ void listen("quit-requested", () => {
     ui.quitCancel.focus();
   });
 });
+let quitChosen = false;
 ui.quitAnyway.addEventListener("click", () => {
+  quitChosen = true;
   ui.quitDialog.close();
   void invoke("quit_app");
+});
+// Cancel, Return or Esc: a request to quit from the Dock or a logout waits
+// for this answer (macOS).
+ui.quitDialog.addEventListener("close", () => {
+  if (quitChosen) return;
+  void invoke("quit_cancelled");
 });
 
 invoke<Opened | null>("restore_vault")
