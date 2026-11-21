@@ -57,3 +57,4 @@ This folder records every significant architectural decision of the project, one
 | [0041](0041-ui-strings-and-access.md) | UI strings in one place, and access by keyboard and VoiceOver | Accepted | 2026-11-18 |
 | [0042](0042-nothing-dropped-when-text-is-replaced.md) | Nothing dropped when a version is replaced or a note is left | Accepted | 2026-11-19 |
 | [0043](0043-tags-added-to-every-imported-note.md) | Tags added to every note of an import | Accepted | 2026-11-19 |
+| [0044](0044-a-note-keeps-its-id-when-another-program-drops-it.md) | A note keeps its `id` when another program drops it | Accepted | 2026-11-21 |
