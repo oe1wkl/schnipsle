@@ -583,6 +583,35 @@ impl Index {
         Ok(rows.collect::<rusqlite::Result<_>>()?)
     }
 
+    /// The `id` and `created` stored for the note at `path`, if it is in the
+    /// index (ADR-0044); either may be `None`.
+    ///
+    /// # Errors
+    /// SQLite errors.
+    pub fn identity(&self, path: &str) -> Result<Option<(Option<String>, Option<String>)>> {
+        Ok(self
+            .db
+            .query_row(
+                "SELECT id, created FROM notes WHERE path = ?1",
+                [path],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .optional()?)
+    }
+
+    /// Whether a note other than the one at `path`, in the trash too, has
+    /// `id` in its front matter.
+    ///
+    /// # Errors
+    /// SQLite errors.
+    pub fn id_used_elsewhere(&self, id: &str, path: &str) -> Result<bool> {
+        Ok(self.db.query_row(
+            "SELECT EXISTS (SELECT 1 FROM notes WHERE id = ?1 AND path <> ?2)",
+            params![id.to_ascii_uppercase(), path],
+            |row| row.get(0),
+        )?)
+    }
+
     /// The connection, for the queries of later modules in this crate.
     #[allow(dead_code)] // used by the tag and search queries (M2)
     pub(crate) fn db(&self) -> &Connection {

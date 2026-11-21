@@ -9,6 +9,10 @@
 //! [`Vault::index_file`] updates one path, after a change event or the app's
 //! own write. Notes that are only iCloud placeholders are not indexed until
 //! they are downloaded.
+//!
+//! Both give a note back its `id` and `created` when a change made
+//! elsewhere removed them (ADR-0044, format.md §4): the index still has them
+//! from the version before.
 
 use std::collections::HashSet;
 use std::fs;
@@ -18,6 +22,7 @@ use std::time::UNIX_EPOCH;
 
 use serde::Serialize;
 
+use crate::front_matter;
 use crate::index::{FileStamp, Index, IndexError, NoteState, analyze};
 use crate::layout::NOTES_DIR;
 use crate::trash::TRASH_DIR;
@@ -41,6 +46,16 @@ pub struct IndexSync {
     pub removed: usize,
     /// Notes left as they were in the index because they could not be read.
     pub failed: usize,
+    /// Notes whose `id` and `created` were written back (ADR-0044).
+    pub restored: usize,
+}
+
+/// A note whose file lost its `id` through a change made elsewhere, with the
+/// `id` and `created` its version before had (ADR-0044).
+struct Lost {
+    key: String,
+    id: String,
+    created: Option<String>,
 }
 
 /// A note file found on disk: its key (path below the vault root), state
@@ -69,6 +84,7 @@ impl Vault {
         let stamps = index.stamps()?;
         let mut report = IndexSync::default();
         let mut seen = HashSet::new();
+        let mut lost = Vec::new();
         for file in found {
             seen.insert(file.key.clone());
             if let Some(old) = stamps.get(&file.key)
@@ -97,6 +113,7 @@ impl Vault {
                 index.set_stamp(&file.key, &stamp)?;
                 report.touched += 1;
             } else {
+                lost.extend(lost_identity(index, &file.key, file.state, &bytes)?);
                 let facts = analyze(&file.key, &String::from_utf8_lossy(&bytes));
                 index.put(&file.key, file.state, &stamp, &facts)?;
                 report.indexed += 1;
@@ -106,12 +123,19 @@ impl Vault {
             index.remove(key)?;
             report.removed += 1;
         }
+        // Last, so that a note moved or copied elsewhere is in the index by now.
+        for lost in lost {
+            if self.restore_identity(index, &lost)? {
+                report.restored += 1;
+            }
+        }
         Ok(report)
     }
 
     /// Updates the index for one path below the vault root: a note in
     /// `notes/…` or a trashed note in `.notesapp/trash/…`. A path without a
-    /// file is removed from the index.
+    /// file is removed from the index. A note that lost its `id` gets it
+    /// back (ADR-0044).
     ///
     /// # Errors
     /// [`VaultError::InvalidPath`] for a path that is neither, I/O errors
@@ -133,9 +157,63 @@ impl Vault {
             size: meta.len(),
             hash: sha256_hex(&bytes),
         };
+        let lost = lost_identity(index, key, state, &bytes)?;
         let facts = analyze(key, &String::from_utf8_lossy(&bytes));
         index.put(key, state, &stamp, &facts)?;
+        if let Some(lost) = lost {
+            self.restore_identity(index, &lost)?;
+        }
         Ok(())
+    }
+
+    /// Writes the `id` and `created` of `lost` back into the front matter of
+    /// its note and indexes the result, unless another note (in the trash
+    /// too) has that `id` now, the vault is read-only, the note is not UTF-8
+    /// or changed again meanwhile, or a write fails; then the note is left as
+    /// it is and gets a new `id` at its next save. Returns whether it wrote.
+    fn restore_identity(&self, index: &mut Index, lost: &Lost) -> Result<bool> {
+        if self.check_writable().is_err() || index.id_used_elsewhere(&lost.id, &lost.key)? {
+            return Ok(false);
+        }
+        let Some(path) = lost
+            .key
+            .strip_prefix(NOTES_DIR)
+            .and_then(|k| k.strip_prefix('/'))
+        else {
+            return Ok(false);
+        };
+        let Ok(full) = self.resolve(path) else {
+            return Ok(false);
+        };
+        let Ok(bytes) = self.read_for_index(&lost.key) else {
+            return Ok(false);
+        };
+        let hash = sha256_hex(&bytes);
+        let Ok(text) = String::from_utf8(bytes) else {
+            return Ok(false);
+        };
+        if front_matter::get(&text, "id").is_some() {
+            return Ok(false); // changed again, and has an id now
+        }
+        let mut stamped = text;
+        if let Some(created) = lost
+            .created
+            .as_deref()
+            .filter(|_| front_matter::get(&stamped, "created").is_none())
+        {
+            stamped = front_matter::set(&stamped, "created", created);
+        }
+        stamped = front_matter::set(&stamped, "id", &lost.id);
+        match self.replace_expected(path, &full, &hash, stamped) {
+            Ok(_) => {}
+            Err(VaultError::Conflict { .. }) => return Ok(false),
+            Err(e) => {
+                eprintln!("id not written back: {}: {e}", lost.key);
+                return Ok(false);
+            }
+        }
+        self.index_file(index, &lost.key)?;
+        Ok(true)
     }
 
     fn read_for_index(&self, key: &str) -> Result<Vec<u8>> {
@@ -164,6 +242,25 @@ impl Vault {
         }
         Ok((self.root().join(TRASH_DIR).join(name), NoteState::Trash))
     }
+}
+
+/// The `id` and `created` to give back to the note at `key` if its new
+/// content `bytes` has no `id` but its version in the index had one; a note
+/// in the trash keeps what it has.
+fn lost_identity(index: &Index, key: &str, state: NoteState, bytes: &[u8]) -> Result<Option<Lost>> {
+    if state != NoteState::Active
+        || front_matter::get(&String::from_utf8_lossy(bytes), "id").is_some()
+    {
+        return Ok(None);
+    }
+    Ok(match index.identity(key)? {
+        Some((Some(id), created)) => Some(Lost {
+            key: key.to_owned(),
+            id,
+            created,
+        }),
+        _ => None,
+    })
 }
 
 /// Collects the `.md` files below `dir` (hidden files and folders skipped,
@@ -322,5 +419,102 @@ mod tests {
                 .is_empty()
         );
         assert_eq!(index.len().unwrap(), 1);
+    }
+
+    const ID: &str = "01JA7Q5Y0Z8H3K2M6N4P9R1S2T";
+
+    /// format.md §4, ADR-0044: the golden files in `tests/fixtures/format/4-keep-id/`.
+    fn keep_id_fixture(name: &str) -> String {
+        let dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/format/4-keep-id");
+        fs::read_to_string(dir.join(name)).unwrap()
+    }
+
+    #[test]
+    fn a_note_whose_id_was_removed_elsewhere_gets_it_back() {
+        let (dir, vault, mut index) = setup();
+        let file = dir.path().join("notes/tuner.md");
+        fs::write(&file, keep_id_fixture("before.md")).unwrap();
+        vault.sync_index(&mut index).unwrap();
+        // A version in the history, filed under the id (format.md §7).
+        vault.snapshot_note("tuner.md", None).unwrap();
+
+        fs::write(&file, keep_id_fixture("changed.md")).unwrap();
+        let report = vault.sync_index(&mut index).unwrap();
+        assert_eq!(report.restored, 1, "{report:?}");
+        assert_eq!(
+            fs::read_to_string(&file).unwrap(),
+            keep_id_fixture("after.md")
+        );
+        assert_eq!(index.paths_with_id(ID).unwrap(), ["notes/tuner.md"]);
+        assert_eq!(vault.versions("tuner.md").unwrap().len(), 1);
+        // Nothing more to do.
+        assert_eq!(vault.sync_index(&mut index).unwrap(), IndexSync::default());
+
+        // The same after a single change event.
+        fs::write(&file, keep_id_fixture("changed.md")).unwrap();
+        vault.index_file(&mut index, "notes/tuner.md").unwrap();
+        assert_eq!(
+            fs::read_to_string(&file).unwrap(),
+            keep_id_fixture("after.md")
+        );
+        assert_eq!(index.paths_with_id(ID).unwrap(), ["notes/tuner.md"]);
+    }
+
+    #[test]
+    fn an_id_carried_elsewhere_is_not_given_back() {
+        let (dir, vault, mut index) = setup();
+        let notes = dir.path().join("notes");
+        fs::write(notes.join("tuner.md"), keep_id_fixture("before.md")).unwrap();
+        vault.sync_index(&mut index).unwrap();
+
+        // Moved elsewhere, and a copy without front matter left behind.
+        fs::write(notes.join("moved.md"), keep_id_fixture("before.md")).unwrap();
+        fs::write(notes.join("tuner.md"), keep_id_fixture("changed.md")).unwrap();
+        let report = vault.sync_index(&mut index).unwrap();
+        assert_eq!(report.restored, 0);
+        assert_eq!(
+            fs::read_to_string(notes.join("tuner.md")).unwrap(),
+            keep_id_fixture("changed.md")
+        );
+
+        // In the trash, the id is taken as well.
+        fs::remove_file(notes.join("tuner.md")).unwrap();
+        vault.sync_index(&mut index).unwrap();
+        fs::write(notes.join("tuner.md"), keep_id_fixture("before.md")).unwrap();
+        fs::remove_file(notes.join("moved.md")).unwrap();
+        vault.sync_index(&mut index).unwrap();
+        fs::write(notes.join("copy.md"), keep_id_fixture("before.md")).unwrap();
+        vault.sync_index(&mut index).unwrap();
+        vault.trash_note("copy.md").unwrap();
+        vault.sync_index(&mut index).unwrap();
+        fs::write(notes.join("tuner.md"), keep_id_fixture("changed.md")).unwrap();
+        vault.index_file(&mut index, "notes/tuner.md").unwrap();
+        assert_eq!(
+            fs::read_to_string(notes.join("tuner.md")).unwrap(),
+            keep_id_fixture("changed.md")
+        );
+    }
+
+    #[test]
+    fn other_changes_keep_what_they_have() {
+        let (dir, vault, mut index) = setup();
+        let notes = dir.path().join("notes");
+        fs::write(notes.join("tuner.md"), keep_id_fixture("before.md")).unwrap();
+        fs::write(notes.join("plain.md"), "# Plain\n").unwrap();
+        vault.sync_index(&mut index).unwrap();
+
+        // Another id, even one that is not valid, is the other program's choice.
+        let other = "---\nid: not-a-ulid\n---\n# Antennentuner\n";
+        fs::write(notes.join("tuner.md"), other).unwrap();
+        // A note that never had an id gets one only at its next save.
+        fs::write(notes.join("plain.md"), "# Plain\n\nmore\n").unwrap();
+        let report = vault.sync_index(&mut index).unwrap();
+        assert_eq!(report.restored, 0);
+        assert_eq!(fs::read_to_string(notes.join("tuner.md")).unwrap(), other);
+        assert_eq!(
+            fs::read_to_string(notes.join("plain.md")).unwrap(),
+            "# Plain\n\nmore\n"
+        );
     }
 }

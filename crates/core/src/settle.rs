@@ -88,7 +88,8 @@ impl Vault {
     /// "Use other version": keeps the note at `path` as it is on disk and
     /// stores `text`, the editor's version, in its history. If the note has
     /// no valid `id`, its front matter gets one (the `id` of `text` if that
-    /// is valid, else a new one) and `created`; nothing else in it changes.
+    /// is valid, else a new one) and `created` (that of `text`, else the
+    /// file's time, ADR-0044); nothing else in it changes.
     /// If the note was deleted elsewhere, `text` goes into the trash as the
     /// note deleted from `path`, so it can be restored.
     ///
@@ -126,7 +127,9 @@ impl Vault {
             self.snapshot_if_new(&id, text.as_bytes())?;
             let mut stamped = current;
             if front_matter::get(&stamped, "created").is_none() {
-                stamped = front_matter::set(&stamped, "created", &rfc3339_utc(created_ms(&full)));
+                let created = front_matter::get(text, "created")
+                    .unwrap_or_else(|| rfc3339_utc(created_ms(&full)));
+                stamped = front_matter::set(&stamped, "created", &created);
             }
             stamped = front_matter::set(&stamped, "id", &id);
             self.replace_expected(path, &full, &hash, stamped)?;
@@ -263,7 +266,11 @@ mod tests {
         let used = vault.use_other("plain.md", &mine).unwrap();
         let note = used.note.unwrap();
         assert_eq!(front_matter::get(&note.text, "id").as_deref(), Some(ID));
-        assert!(front_matter::get(&note.text, "created").is_some());
+        // The creation time of the editor's text, not the file's (ADR-0044).
+        assert_eq!(
+            front_matter::get(&note.text, "created").as_deref(),
+            Some("2026-01-02T03:04:05Z")
+        );
         assert_eq!(
             front_matter::body(&note.text),
             "# Plain\n\nfront matter removed elsewhere\n"

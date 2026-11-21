@@ -1,9 +1,9 @@
 # Vault File Format Specification
 
 - Format version: **1** (draft)
-- Spec revision: 0.17, 2026-11-19 (§12.1 rule 5 tags added to every note of an import, §12.2 `tags` in the import log; 0.16: §7 how `settings.yaml` is written; 0.15: §5.7 rule 6 names the vault default `chord_notation`; 0.14: §5.2 a first heading of any level gives the title; 0.13: §12.4 rule 4 notes an undo cannot change; 0.12: §12.1 rule 7 the source's title as a heading; 0.11: §12.1 rule 6 notes from the source's trash; 0.10: §12 imported notes, import log, re-import and undo; 0.9: §9 reading and writing smart folders; 0.8: §7 retention settings; 0.7: §5.5 relative links are kept working when a note moves; 0.6: §8 `original_path` is relative to the vault root; 0.5: §8 trash names for notes without `id` and for collisions; 0.4: §5.3 refined by the first implementation, §5.6 music notation, §5.7 lyrics with chords)
+- Spec revision: 0.18, 2026-11-21 (§4 `id` and `created` written back when a change made elsewhere removes them; 0.17: §12.1 rule 5 tags added to every note of an import, §12.2 `tags` in the import log; 0.16: §7 how `settings.yaml` is written; 0.15: §5.7 rule 6 names the vault default `chord_notation`; 0.14: §5.2 a first heading of any level gives the title; 0.13: §12.4 rule 4 notes an undo cannot change; 0.12: §12.1 rule 7 the source's title as a heading; 0.11: §12.1 rule 6 notes from the source's trash; 0.10: §12 imported notes, import log, re-import and undo; 0.9: §9 reading and writing smart folders; 0.8: §7 retention settings; 0.7: §5.5 relative links are kept working when a note moves; 0.6: §8 `original_path` is relative to the vault root; 0.5: §8 trash names for notes without `id` and for collisions; 0.4: §5.3 refined by the first implementation, §5.6 music notation, §5.7 lyrics with chords)
 - Status: Draft — becomes normative when M1 ships
-- Related: ADR-0004, ADR-0008, ADR-0009, ADR-0011, ADR-0013, ADR-0014, ADR-0012, ADR-0016, ADR-0017, ADR-0018, ADR-0019, ADR-0020, ADR-0026, ADR-0030, ADR-0039
+- Related: ADR-0004, ADR-0008, ADR-0009, ADR-0011, ADR-0013, ADR-0014, ADR-0012, ADR-0016, ADR-0017, ADR-0018, ADR-0019, ADR-0020, ADR-0026, ADR-0030, ADR-0039, ADR-0044
 
 The key words MUST, MUST NOT, SHOULD, SHOULD NOT and MAY are used as described in RFC 2119.
 
@@ -65,6 +65,7 @@ YAML 1.2, between a first line `---` and the next line `---`.
 
 - Unknown keys MUST be preserved unchanged (other tools may add their own).
 - `tags` MUST NOT be interpreted by format version 1 (tags are inline only, ADR-0008); if present it is preserved as an unknown key.
+- If a change made elsewhere removes the `id` of a note (another editor drops the front matter), the app SHOULD write back the `id` and `created` the note had, changing only the front matter, unless another note or a note in the trash carries that `id` now. Otherwise the note gets a new `id` at its next write, and its history (§7) is no longer reachable from it.
 - If two files carry the same `id`, the reader MUST treat this as a conflict (e.g. a copied file), keep both, and assign a new `id` to the file with the later `created`, after asking or logging.
 
 ## 5. Body
