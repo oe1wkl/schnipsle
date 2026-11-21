@@ -338,6 +338,7 @@ export const en = {
 
   history: {
     title: "History",
+    closeHistory: "Close history",
     compare: "Compare",
     compareWith: "Compare with",
     restore: "Restore this version",

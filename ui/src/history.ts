@@ -191,6 +191,7 @@ export function createHistory(hooks: HistoryHooks): {
     ui.history.hidden = true;
     ui.editorHost.hidden = false;
     ui.showHistory.setAttribute("aria-pressed", "false");
+    ui.showHistory.textContent = t.history.title;
   }
 
   async function open(): Promise<void> {
@@ -212,6 +213,7 @@ export function createHistory(hooks: HistoryHooks): {
     ui.editorHost.hidden = true;
     ui.history.hidden = false;
     ui.showHistory.setAttribute("aria-pressed", "true");
+    ui.showHistory.textContent = t.history.closeHistory;
     ui.historyHint.textContent =
       versions.length === 0 ? t.history.none : t.history.earlier(versions.length);
     ui.historyCompare.disabled = versions.length === 0;
