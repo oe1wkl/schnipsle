@@ -193,6 +193,24 @@ function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** Roughly the core's `typed_tags` (format.md §5.3): each word needs a letter. */
+function typedTags(input: unknown): string[] {
+  const tags = (typeof input === "string" ? input : "")
+    .split(/[\s,]+/)
+    .map((word) => word.replace(/^#/, ""))
+    .filter((word) => word !== "");
+  const bad = tags.find((tag) => !/\p{L}/u.test(tag));
+  if (bad !== undefined) {
+    // Like a CommandError from the app: asError reads `kind` and `value`.
+    throw Object.assign(new Error(`#${bad} is not a tag`), {
+      kind: "notATag",
+      currentHash: null,
+      value: bad,
+    });
+  }
+  return tags;
+}
+
 const runs: ImportRun[] = [
   {
     id: "01M697ZKZHKDGR5P5XAVDWEHQ4",
@@ -336,22 +354,11 @@ async function answer(cmd: string, args: Record<string, unknown> = {}): Promise<
           : "/Users/me/Saved pages";
       }
       return "/Users/me/Schnipsle-Import";
+    case "check_import_tags":
+      return typedTags(args.tags);
     case "plan_import": {
       await wait(300);
-      // Roughly the core's check (format.md §5.3): a tag needs a letter.
-      const tags = (typeof args.tags === "string" ? args.tags : "")
-        .split(/[\s,]+/)
-        .map((word) => word.replace(/^#/, ""))
-        .filter((word) => word !== "");
-      const bad = tags.find((tag) => !/\p{L}/u.test(tag));
-      if (bad !== undefined) {
-        // Like a CommandError from the app: asError reads `kind` and `value`.
-        throw Object.assign(new Error(`#${bad} is not a tag`), {
-          kind: "notATag",
-          currentHash: null,
-          value: bad,
-        });
-      }
+      const tags = typedTags(args.tags);
       const simple = args.source === "simplenote";
       current = simple
         ? simplenotePlan
