@@ -108,6 +108,25 @@ fn desktop_only() -> CommandError {
     CommandError::other("Import is available in Schnipsle on the Mac")
 }
 
+/// The tags typed for an import, without `#` (format.md §12.1 rule 5), or
+/// the first word that is not a tag as a `notATag` error.
+fn typed_tags(tags: Option<&str>) -> CmdResult<Vec<String>> {
+    schnipsle_import::typed_tags(tags.unwrap_or_default()).map_err(|name| CommandError {
+        kind: "notATag",
+        message: format!("#{name} is not a tag"),
+        current_hash: None,
+        value: Some(name),
+    })
+}
+
+/// Checks the tags typed for an import as soon as the field is left, before
+/// any export is chosen (ADR-0043 rule 1); returns them without `#`.
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)] // Tauri passes command arguments by value
+pub fn check_import_tags(tags: String) -> CmdResult<Vec<String>> {
+    typed_tags(Some(&tags))
+}
+
 /// The dry run: reads the export at `path` and plans the import into the
 /// open vault, with the tags typed in `tags` added to every note
 /// (format.md §12.1 rule 5). Writes nothing; the plan waits for
@@ -119,15 +138,7 @@ pub async fn plan_import(
     path: String,
     tags: Option<String>,
 ) -> CmdResult<ImportPreview> {
-    let tags =
-        schnipsle_import::typed_tags(tags.as_deref().unwrap_or_default()).map_err(|name| {
-            CommandError {
-                kind: "notATag",
-                message: format!("#{name} is not a tag"),
-                current_hash: None,
-                value: Some(name),
-            }
-        })?;
+    let tags = typed_tags(tags.as_deref())?;
     let input = PathBuf::from(&path);
     let batch = match source {
         Source::AppleNotes => apple_notes::read(&input)?,

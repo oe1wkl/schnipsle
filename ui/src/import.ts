@@ -125,13 +125,19 @@ export function createImport(hooks: ImportHooks): { open(): void } {
     setBusy(false);
   }
 
+  /** Why the open vault takes no import, or null if it does. */
+  function vaultProblem(): string | null {
+    const state = hooks.vaultState();
+    if (!state.open) return t.import.noVault;
+    return state.readOnly;
+  }
+
   /** Starts over, as far as the open vault allows an import. */
   function restart(): void {
     reset();
-    const state = hooks.vaultState();
-    if (!state.open) showError(t.import.noVault);
-    else if (state.readOnly !== null) showError(state.readOnly);
-    pickButton.disabled = !state.open || state.readOnly !== null;
+    const problem = vaultProblem();
+    showError(problem);
+    pickButton.disabled = problem !== null;
     pickFileButton.disabled = pickButton.disabled;
   }
 
@@ -161,6 +167,20 @@ export function createImport(hooks: ImportHooks): { open(): void } {
       if (picked !== null) await dryRun(picked);
     } catch (e) {
       showError(asError(e).message);
+    }
+  }
+
+  /**
+   * Checks the typed tags before any export is chosen (ADR-0043 rule 1), so a
+   * word that is not a tag is said at once, not only after the dry run.
+   */
+  async function checkTags(): Promise<void> {
+    const mine = run;
+    try {
+      await invoke<string[]>("check_import_tags", { tags: tagsInput.value });
+      if (mine === run) showError(vaultProblem());
+    } catch (e) {
+      if (mine === run) showError(asError(e).message);
     }
   }
 
@@ -375,8 +395,11 @@ export function createImport(hooks: ImportHooks): { open(): void } {
   startButton.addEventListener("click", () => void start());
   cancelButton.addEventListener("click", () => void close());
   // Other tags: the report and the notes to write change, so read the export again.
+  // Before an export is chosen, only the tags are checked.
   tagsInput.addEventListener("change", () => {
-    if (path !== null && !writing) void dryRun(path);
+    if (writing) return;
+    if (path !== null) void dryRun(path);
+    else void checkTags();
   });
   sourceSelect.addEventListener("change", () => {
     if (planned) void invoke("cancel_import").catch(() => undefined);

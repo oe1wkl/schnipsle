@@ -1011,6 +1011,7 @@ pub fn run() {
             exporting::reveal_export,
             exporting::share_export,
             importing::pick_import,
+            importing::check_import_tags,
             importing::plan_import,
             importing::cancel_import,
             importing::apply_import,
