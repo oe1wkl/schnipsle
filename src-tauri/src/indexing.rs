@@ -10,6 +10,7 @@
 
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::time::Instant;
 
 use schnipsle_core::vault::sha256_hex;
 use schnipsle_core::watch::VaultChanges;
@@ -76,7 +77,21 @@ impl SharedIndex {
                     let Some(open) = open.as_mut().filter(|o| o.root == vault.root()) else {
                         return; // another vault was opened meanwhile
                     };
-                    vault.sync_index(&mut open.index)
+                    let start = Instant::now();
+                    let report = vault.sync_index(&mut open.index);
+                    if let Ok(r) = &report {
+                        let notes = open.index.len().unwrap_or_default();
+                        crate::measuring::record(
+                            "indexSync",
+                            start.elapsed(),
+                            crate::measuring::Detail {
+                                read: Some(r.indexed),
+                                removed: Some(r.removed),
+                                ..crate::measuring::notes(notes)
+                            },
+                        );
+                    }
+                    report
                 };
                 match report {
                     Ok(report) => {

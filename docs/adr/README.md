@@ -58,3 +58,4 @@ This folder records every significant architectural decision of the project, one
 | [0042](0042-nothing-dropped-when-text-is-replaced.md) | Nothing dropped when a version is replaced or a note is left | Accepted | 2026-11-19 |
 | [0043](0043-tags-added-to-every-imported-note.md) | Tags added to every note of an import | Accepted | 2026-11-19 |
 | [0044](0044-a-note-keeps-its-id-when-another-program-drops-it.md) | A note keeps its `id` when another program drops it | Accepted | 2026-11-21 |
+| [0045](0045-measuring-performance-on-devices.md) | Measuring performance on devices | Accepted | 2026-11-23 |

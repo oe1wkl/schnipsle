@@ -653,6 +653,27 @@
           </div>
           <p id="settings-device-error" class="folder-error" role="alert" hidden></p>
         </section>
+        <section class="settings-section" aria-labelledby="settings-diagnostics-title">
+          <h3 id="settings-diagnostics-title" data-text="diagnostics.title"></h3>
+          <p class="muted" data-text="diagnostics.hint"></p>
+          <p id="diagnostics-app"></p>
+          <p id="diagnostics-memory"></p>
+          <ul id="diagnostics-list" class="diagnostics-list"></ul>
+          <p id="diagnostics-nothing" class="muted" data-text="diagnostics.nothing" hidden></p>
+          <div class="folder-buttons">
+            <button id="diagnostics-refresh" type="button" data-text="diagnostics.refresh"></button>
+            <button id="diagnostics-copy" type="button" data-text="diagnostics.copy"></button>
+            <span id="diagnostics-status" class="muted" role="status"></span>
+          </div>
+          <textarea
+            id="diagnostics-text"
+            class="diagnostics-text"
+            readonly
+            rows="8"
+            data-label="diagnostics.title"
+            hidden
+          ></textarea>
+        </section>
         <div class="folder-buttons">
           <span class="spacer"></span>
           <button id="settings-close" type="button" data-text="common.done"></button>

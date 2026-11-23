@@ -8,6 +8,7 @@
 // many.
 import { invoke } from "@tauri-apps/api/core";
 
+import { refreshDiagnostics } from "./diagnostics";
 import { asError, el } from "./dom";
 import { t } from "./strings";
 import type {
@@ -161,6 +162,8 @@ export function createSettings(hooks: SettingsHooks): { open(): Promise<void> } 
     if (asked !== generation) return;
     showVault(vault);
     showDevice(here);
+    await refreshDiagnostics();
+    if (asked !== generation) return;
     if (!dialog.open) dialog.showModal();
   }
 

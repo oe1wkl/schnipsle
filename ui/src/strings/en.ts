@@ -729,6 +729,54 @@ export const en = {
       `This removes ${count(versions, "earlier version", "earlier versions")} of ` +
       `${count(notes, "note", "notes")} for good, on every device.`,
   },
+
+  diagnostics: {
+    title: "Diagnostics",
+    hint:
+      "How long this app's steps took since it started, and how much memory it uses. Kept in " +
+      "memory only: nothing is saved or sent.",
+    refresh: "Refresh",
+    copy: "Copy",
+    copied: "Copied.",
+    notCopied: "Not copied. Select the text below and copy it.",
+    nothing: "Nothing measured yet.",
+    unreadable: (message: string) => `The measurements cannot be read: ${message}`,
+    app: (version: string, device: string | null, system: string) =>
+      `Schnipsle ${version}${device === null ? "" : ` on ${device}`}, ${system}`,
+    memory: (now: string, peak: string | null) =>
+      peak === null ? `Memory: ${now}` : `Memory: ${now}, at most ${peak}`,
+    noMemory: (why: string) => `Memory not measured: ${why}`,
+    megabytes: (mb: string) => `${mb} MB`,
+    ms: (ms: string) => `${ms} ms`,
+    summary: (n: number, median: string, slowest: string) =>
+      `${count(n, "time", "times")}; median of the last ones ${median}, slowest ${slowest}`,
+    kind: {
+      start: "Start, until the note list shows",
+      openVault: "Opening the vault",
+      indexSync: "Index sync",
+      allNotes: "All notes",
+      allNotesUi: "All notes, until shown",
+      tagFolders: "Tag folders",
+      notesInTags: "Notes of a tag folder",
+      notesInTagsUi: "Notes of a tag folder, until shown",
+      smartFolder: "Notes of a smart folder",
+      smartFolderUi: "Notes of a smart folder, until shown",
+      search: "Search",
+      searchUi: "Search, until shown",
+      readNote: "Reading a note",
+      readNoteUi: "Opening a note, until shown",
+      export: "Export",
+    } as Record<string, string>,
+    detail: {
+      notes: (n: number) => count(n, "note", "notes"),
+      folders: (n: number) => count(n, "folder", "folders"),
+      query: (query: string) => `for ${q(query)}`,
+      kilobytes: (kb: number) => `${String(kb)} KB`,
+      read: (n: number) => `${String(n)} read`,
+      removed: (n: number) => `${String(n)} removed`,
+      format: (format: string) => format.toUpperCase(),
+    },
+  },
 };
 
 export type Strings = typeof en;

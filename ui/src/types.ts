@@ -409,3 +409,35 @@ export interface RetagOutcome {
   folders: number;
   foldersError: string | null;
 }
+/** What a measurement was about (src-tauri `measuring::Detail`); absent fields do not apply. */
+export interface MeasureDetail {
+  notes?: number;
+  folders?: number;
+  query?: string;
+  kilobytes?: number;
+  read?: number;
+  removed?: number;
+  format?: string;
+}
+/** One measurement (ADR-0045). */
+export interface Measurement {
+  ms: number;
+  detail: MeasureDetail;
+  atMs: number;
+}
+/** The measurements of one kind, the last ones newest first. */
+export interface MeasureSeries {
+  kind: string;
+  count: number;
+  recent: Measurement[];
+  slowest: Measurement | null;
+}
+/** What Settings › Diagnostics shows (src-tauri `measuring::Diagnostics`). */
+export interface Diagnostics {
+  version: string;
+  device: string | null;
+  system: string;
+  memory: { now: number; peak: number | null } | null;
+  memoryProblem: string | null;
+  series: MeasureSeries[];
+}

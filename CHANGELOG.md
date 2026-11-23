@@ -7,7 +7,7 @@ All notable changes to this project are documented here. The format follows [Kee
 ### Added
 
 - Repository foundation: Cargo workspace (`schnipsle-core`, `-import`, `-export`, Tauri 2 shell), TypeScript UI, CI, dependency licence checks, macOS bootstrap script.
-- Architecture decision records ADR-0001 to ADR-0044.
+- Architecture decision records ADR-0001 to ADR-0045.
 - Vault format specification, draft revision 0.17 (notes, front matter, tags, links, attachments, music in ABC, song sheets in ChordPro, history, trash, smart folders, imported notes and the import log).
 - Hashtag extraction in `schnipsle-core` following format.md §5.3, with the specification examples as tests.
 - Vault access in `schnipsle-core`: list notes (with iCloud placeholders), read, atomic write with conflict detection, create (spike, see docs/spikes/ios-vault.md).
@@ -74,6 +74,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - Keyboard and VoiceOver (N-06, ADR-0041): the note list, the tag tree, the smart folders and the history's versions are one Tab stop each, with the arrow keys, Home and End inside; → and ← open and close folders. A focus ring shows where the keyboard is, and a dialog gives focus back to where it was when it closes. Rendered scores are named by their tunes. Manual page `docs/manual/keyboard.md`, and a check list in `docs/design/accessibility.md`.
 - All UI text in one catalog, `ui/src/strings/en.ts` (ADR-0041), ready for a German translation: the page names its text by key, counts use the language's plural rules, and the Mac menu has its own table (`src-tauri/src/strings.rs`). `pnpm check` also checks the page against the catalog.
 - Test UI: open a vault folder, edit notes with autosave, reload external changes, resolve conflicts (spike).
+- Settings › Diagnostics (ADR-0045), on the Mac and the iPhone: how long the app's steps took since it started (the start until the note list shows, opening the vault, the index sync, note lists, searches, opening a note, exports; in the core and until shown), the last 20 of each and the slowest, and the app's memory now and at its peak. Kept in memory only, nothing is saved or sent; Copy gives them as text. `cargo run -p schnipsle-core --release --example make-vault -- <folder>` makes a test vault of 10,000 generated notes for measuring (it replaces the example `generate_notes`). How to measure and the results: `docs/design/performance.md`.
 
 ### Changed
 

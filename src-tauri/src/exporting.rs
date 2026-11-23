@@ -229,7 +229,8 @@ pub async fn export_notes(
             kind: "insideVault",
             ..crate::CommandError::other(e)
         })?;
-        Ok(match format {
+        let start = std::time::Instant::now();
+        let report = match format {
             Format::Html => export_to(&HtmlExporter, vault, &input, &options, to)?,
             Format::Odt => export_to(&OdtExporter, vault, &input, &options, to)?,
             Format::Pdf => export_pdf(&app, vault, &input, options, to)?,
@@ -240,7 +241,16 @@ pub async fn export_notes(
                 let exporter = PandocExporter::new(format, pandoc);
                 export_to(&exporter, vault, &input, &options, to)?
             }
-        })
+        };
+        crate::measuring::record(
+            "export",
+            start.elapsed(),
+            crate::measuring::Detail {
+                format: Some(format.extension().to_owned()),
+                ..crate::measuring::notes(input.notes.len())
+            },
+        );
+        Ok(report)
     })
 }
 
