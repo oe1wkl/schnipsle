@@ -5,6 +5,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
+import { measured, noStart, started } from "./diagnostics";
 import { asError, setStatus, ui } from "./dom";
 import { createEditor, type EditorMode, frontMatterLength, isPinned } from "./editor";
 import { createExport } from "./export";
@@ -302,6 +303,15 @@ async function refreshList(): Promise<void> {
   /** Search hits in the trash (`in:trash`): restored from the Trash view, not opened. */
   let inTrash = new Set<string>();
   hitsInTrash = inTrash;
+  // Timed until drawn (ADR-0045).
+  const since = performance.now();
+  const kinds = {
+    all: "allNotesUi",
+    tag: "notesInTagsUi",
+    untagged: "notesInTagsUi",
+    smart: "smartFolderUi",
+    search: "searchUi",
+  } as const;
   try {
     switch (filter.kind) {
       case "all":
@@ -383,6 +393,8 @@ async function refreshList(): Promise<void> {
           ? t.list.noNotesYet
           : t.list.noNotesHere;
   }
+  measured(kinds[filter.kind], since, { notes: entries.length });
+  started();
   await checkStrays();
 }
 
@@ -642,9 +654,11 @@ async function openNote(note: NoteEntry): Promise<void> {
 /** Opens the note at `path`, relative to notes/. */
 async function openPath(path: string): Promise<void> {
   try {
+    const since = performance.now();
     const content = await invoke<NoteContent>("read_note", { path });
     load(content);
     showView("editor");
+    measured("readNoteUi", since, { kilobytes: Math.ceil(content.text.length / 1024) });
   } catch (e) {
     const err = asError(e);
     setStatus(err.kind === "notDownloaded" ? t.common.notDownloaded : err.message);
@@ -1382,8 +1396,10 @@ ui.quitDialog.addEventListener("close", () => {
 
 invoke<Opened | null>("restore_vault")
   .then(async (opened) => {
+    if (opened?.kind !== "vault") noStart();
     if (opened) await folderOpened(opened);
   })
   .catch((e: unknown) => {
+    noStart();
     setStatus(asError(e).message);
   });

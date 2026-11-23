@@ -126,6 +126,10 @@ pub async fn smart_folder_notes(
     utc_offset_minutes: i32,
 ) -> CmdResult<Vec<SearchHit>> {
     with_index(&state, |i| {
-        i.search_sorted(&query, sort, utc_offset_minutes)
+        crate::measuring::timed(
+            "smartFolder",
+            || i.search_sorted(&query, sort, utc_offset_minutes),
+            |hits| crate::measuring::notes(hits.len()),
+        )
     })
 }

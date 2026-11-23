@@ -9,6 +9,7 @@ mod closing;
 mod exporting;
 mod importing;
 mod indexing;
+mod measuring;
 mod retagging;
 mod settings;
 mod smart_folders;
@@ -157,8 +158,13 @@ fn folder_name(path: &Path) -> String {
 /// Opens the folder at `path` if it is a vault (format.md §1), else tells the
 /// UI what making it one would move. Never changes anything.
 fn open_folder(app: &tauri::AppHandle, state: &AppState, path: &Path) -> CmdResult<Opened> {
+    let start = std::time::Instant::now();
     match Vault::open_with(path, coordinator()) {
-        Ok(vault) => return Ok(Opened::Vault(remember(app, state, vault)?)),
+        Ok(vault) => {
+            let info = remember(app, state, vault)?;
+            measuring::record("openVault", start.elapsed(), measuring::Detail::default());
+            return Ok(Opened::Vault(info));
+        }
         Err(VaultError::NotAVault(_)) => {}
         Err(e @ VaultError::NotDownloaded(_)) => {
             request_download(app, &path.join(VAULT_FILE));
@@ -339,7 +345,14 @@ async fn list_notes(
     state: State<'_, AppState>,
     sort: Option<SortOrder>,
 ) -> CmdResult<Vec<NoteEntry>> {
-    with_vault(&state, |v| Ok(v.list_notes_by(sort.unwrap_or_default())?))
+    with_vault(&state, |v| {
+        let sort = sort.unwrap_or_default();
+        Ok(measuring::timed(
+            "allNotes",
+            || v.list_notes_by(sort),
+            |n| measuring::notes(n.len()),
+        )?)
+    })
 }
 
 /// Notes outside `notes/`, e.g. written by an older build on another device.
@@ -531,7 +544,16 @@ fn with_index<T>(
 /// (ADR-0008).
 #[tauri::command]
 async fn tag_folders(state: State<'_, AppState>, keys: Vec<String>) -> CmdResult<Vec<TagFolder>> {
-    with_index(&state, |i| i.tag_folders(&keys))
+    with_index(&state, |i| {
+        measuring::timed(
+            "tagFolders",
+            || i.tag_folders(&keys),
+            |f| measuring::Detail {
+                folders: Some(f.len()),
+                ..measuring::Detail::default()
+            },
+        )
+    })
 }
 
 /// Full-text search (F-09) in the query language of
@@ -544,7 +566,13 @@ async fn search_notes(
     query: String,
     utc_offset_minutes: i32,
 ) -> CmdResult<Vec<SearchHit>> {
-    with_index(&state, |i| i.search(&query, utc_offset_minutes))
+    with_index(&state, |i| {
+        measuring::timed(
+            "search",
+            || i.search(&query, utc_offset_minutes),
+            |hits| measuring::search(hits.len(), &query),
+        )
+    })
 }
 
 /// Number of notes without any tag.
@@ -560,7 +588,14 @@ async fn notes_in_tags(
     keys: Vec<String>,
     sort: Option<SortOrder>,
 ) -> CmdResult<Vec<NoteEntry>> {
-    with_index(&state, |i| i.notes_in(&keys, sort.unwrap_or_default()))
+    let sort = sort.unwrap_or_default();
+    with_index(&state, |i| {
+        measuring::timed(
+            "notesInTags",
+            || i.notes_in(&keys, sort),
+            |n| measuring::notes(n.len()),
+        )
+    })
 }
 
 /// Creates a note named after its title (format.md §3).
@@ -632,7 +667,16 @@ async fn restore_note(state: State<'_, AppState>, key: String) -> CmdResult<Stri
 
 #[tauri::command]
 async fn read_note(state: State<'_, AppState>, path: String) -> CmdResult<NoteContent> {
-    with_vault(&state, |v| Ok(v.read_note(&path)?))
+    with_vault(&state, |v| {
+        Ok(measuring::timed(
+            "readNote",
+            || v.read_note(&path),
+            |n| measuring::Detail {
+                kilobytes: Some(n.text.len().div_ceil(1024)),
+                ..measuring::Detail::default()
+            },
+        )?)
+    })
 }
 
 /// Saves a note if it still has the content with `expected_hash`; returns the
@@ -924,7 +968,9 @@ fn app_menu(
 /// # Panics
 /// Panics if the Tauri runtime cannot start (e.g. no `WebView` available).
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
+#[allow(clippy::too_many_lines, reason = "most of it is the list of commands")]
 pub fn run() {
+    measuring::note_start();
     let builder = tauri::Builder::default()
         .manage(AppState::default())
         .manage(closing::Closing::default())
@@ -1018,7 +1064,10 @@ pub fn run() {
             importing::list_imports,
             importing::plan_undo_import,
             importing::undo_import,
-            importing::read_apple_notes_metadata
+            importing::read_apple_notes_metadata,
+            measuring::ui_started,
+            measuring::ui_measured,
+            measuring::diagnostics
         ])
         .build(tauri::generate_context!())
         .expect("error while building Schnipsle")

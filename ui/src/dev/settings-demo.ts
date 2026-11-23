@@ -6,12 +6,15 @@
 // apply, `?readonly` for a read-only vault, `?novault` with none open, `?ios`
 // as on the iPhone (no settings of the device), `?nopandoc` without Pandoc,
 // `?chosen` with a Pandoc picked, `?broken` with a picked one that does not
-// run, `?failed` for saving that fails. Shortening the retention below
+// run, `?failed` for saving that fails, `?unmeasured` with nothing measured
+// yet and no memory. Shortening the retention below
 // 7 / 90 days counts versions to remove. What would be written is shown in the
 // page title.
 import type {
   ChordNotation,
   DeviceSettings,
+  Diagnostics,
+  MeasureSeries,
   Setting,
   SettingChange,
   VaultSettings,
@@ -80,6 +83,35 @@ let device: DeviceSettings = {
   checkForUpdates: true,
 };
 
+/** Times like those of a vault of 10,000 notes (ADR-0045), invented. */
+function series(kind: string, times: number[], detail: MeasureSeries["recent"][0]["detail"]) {
+  const recent = times.map((ms, i) => ({ ms, detail, atMs: Date.now() - i * 60_000 }));
+  const slowest = recent.reduce((a, b) => (b.ms > a.ms ? b : a));
+  return { kind, count: times.length + 3, recent, slowest };
+}
+
+function diagnostics(): Diagnostics {
+  const unmeasured = params.has("unmeasured");
+  return {
+    version: "0.1.0",
+    device: params.has("ios") ? "iPhone18,1" : "Mac16,10",
+    system: params.has("ios") ? "ios 27.1" : "macos 27.2",
+    memory: unmeasured ? null : { now: 84_300_000, peak: 131_900_000 },
+    memoryProblem: unmeasured ? "task_info failed: 5" : null,
+    series: unmeasured
+      ? []
+      : [
+          series("search", [12.4, 3.1, 34.2, 8.7], { notes: 412, query: "kabel" }),
+          series("searchUi", [21.9, 9.5, 48.0, 15.2], { notes: 412 }),
+          series("start", [812], {}),
+          series("indexSync", [5400, 41], { notes: 10_000, read: 0, removed: 0 }),
+          series("readNoteUi", [18.3, 22.1], { kilobytes: 3 }),
+          series("export", [2310], { format: "pdf", notes: 25 }),
+          series("somethingNew", [1.2], {}),
+        ],
+  };
+}
+
 async function answer(cmd: string, args?: Record<string, unknown>): Promise<unknown> {
   switch (cmd) {
     case "exports_are_shared":
@@ -105,6 +137,8 @@ async function answer(cmd: string, args?: Record<string, unknown>): Promise<unkn
     }
     case "read_device_settings":
       return params.has("ios") ? null : device;
+    case "diagnostics":
+      return diagnostics();
     case "set_update_check":
       device = { ...device, checkForUpdates: args?.on === true };
       return device;

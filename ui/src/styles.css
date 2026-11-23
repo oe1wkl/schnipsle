@@ -799,6 +799,31 @@ button.danger {
 .settings-section p {
   margin: 0;
 }
+.diagnostics-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.diagnostics-list small {
+  display: block;
+  color: var(--muted);
+}
+.diagnostics-text {
+  font:
+    12px ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--fg);
+  resize: vertical;
+}
 .settings-fields {
   display: flex;
   flex-direction: column;

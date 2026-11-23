@@ -14,6 +14,8 @@
 //! [`convert_picture`] turns a picture many programs cannot show into one they can
 //! (ADR-0027), and [`is_turned`] tells one that only its orientation turns upright
 //! (ADR-0028).
+//! [`footprint`] reads the app's memory, and [`device_model`] and
+//! [`system_version`] tell what it runs on, for the measurements of ADR-0045.
 //!
 //! This is one of two crates allowed to use `unsafe`. Every `unsafe` block carries
 //! a `// SAFETY:` comment, and the public API is safe. On other platforms the
@@ -32,6 +34,8 @@ mod pdf_ios;
 mod picture;
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 mod presenter;
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+mod process;
 #[cfg(target_os = "macos")]
 mod share;
 #[cfg(target_os = "macos")]
@@ -51,6 +55,8 @@ pub use pdf_ios::{PdfPage, print_pdf};
 pub use picture::{ConvertedPicture, convert_picture, is_turned};
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 pub use presenter::VaultPresenter;
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+pub use process::{Footprint, device_model, footprint, system_version};
 #[cfg(target_os = "macos")]
 pub use share::share_files;
 #[cfg(target_os = "macos")]
