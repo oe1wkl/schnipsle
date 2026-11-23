@@ -7,7 +7,7 @@ All notable changes to this project are documented here. The format follows [Kee
 ### Added
 
 - Repository foundation: Cargo workspace (`schnipsle-core`, `-import`, `-export`, Tauri 2 shell), TypeScript UI, CI, dependency licence checks, macOS bootstrap script.
-- Architecture decision records ADR-0001 to ADR-0045.
+- Architecture decision records ADR-0001 to ADR-0046.
 - Vault format specification, draft revision 0.17 (notes, front matter, tags, links, attachments, music in ABC, song sheets in ChordPro, history, trash, smart folders, imported notes and the import log).
 - Hashtag extraction in `schnipsle-core` following format.md §5.3, with the specification examples as tests.
 - Vault access in `schnipsle-core`: list notes (with iCloud placeholders), read, atomic write with conflict detection, create (spike, see docs/spikes/ios-vault.md).
@@ -78,6 +78,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Changed
 
+- Large vaults open notes and list all notes faster (ADR-0046). Opening a note no longer reads every other note in its folder to look for copies, and the list of all notes no longer reads every file for its title: files unchanged since the search index saw them are taken from the index, and only new or changed files are read. Long lists show their first rows at once and the rest over the next moments. Measured on a Mac with 10,000 notes: opening a note 1.4 s before, 25 ms now; all notes up to 1.5 s before, 65 ms now (median); the start 1.7 s before, 0.4 s now.
 - A note keeps its `id`, and with it its history, when another program removes its front matter: the app writes back the `id` and `created` it had, unless another note carries that `id` now. "Use other version" on such a note keeps the creation time of your text instead of taking the file's date (format.md 0.18 §4, ADR-0044).
 - The History button says "Close history" while the history is open, as the Source button says "Preview" while the source is shown.
 - No text is dropped when a version is replaced or a note is left (ADR-0042, N-04). "Keep mine" and "Use other version" in the conflict banner store the version not chosen in the note's history first, also for a note without `id`, which gets one; if the note was deleted elsewhere, "Use other version" puts your text into the trash. If the version cannot be stored, nothing changes and the banner says why. A note whose text could not be saved, or that has a conflict, stays open instead of being replaced by another note, a new note or another vault. On the Mac, Quit and Close save first and ask before quitting without saving. Temporary files left by a crash are cleared when a vault opens, after their text is stored in the note's history.

@@ -68,6 +68,20 @@ let conflictHash: string | null | undefined; // set while the conflict banner sh
 let saveProblem: string | null = null;
 let syncConflict: ConflictVersion | undefined; // shown in the sync conflict banner
 let entries: NoteEntry[] = [];
+/** Counts list drawings; rows still to come of an older one are dropped. */
+let listDrawing = 0;
+/** Rows of a list drawn at once, and per frame after that (ADR-0046). */
+const FIRST_ROWS = 100;
+const ROWS_PER_FRAME = 500;
+/** The format of `toLocaleString()`, made once instead of for each row. */
+const dateTime = new Intl.DateTimeFormat(undefined, {
+  year: "numeric",
+  month: "numeric",
+  day: "numeric",
+  hour: "numeric",
+  minute: "numeric",
+  second: "numeric",
+});
 let saveTimer: number | undefined;
 let saving: Promise<void> = Promise.resolve();
 /** Why the open vault is read-only; `null` if it is writable or none is open. */
@@ -291,7 +305,27 @@ function showSetup(folder: FolderSetup): void {
   ui.setupCreate.focus();
 }
 
+/**
+ * Rows of the note list to draw at once: a first screenful, or, when the list
+ * is scrolled, all rows down to the bottom of the window, so that drawing it
+ * again keeps its scroll position.
+ */
+function rowsAtOnce(): number {
+  if (ui.notes.offsetParent === null) return FIRST_ROWS;
+  const rows = ui.notes.children;
+  const bottom = window.innerHeight;
+  let low = 0;
+  let high = rows.length;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if ((rows.item(middle)?.getBoundingClientRect().top ?? bottom) < bottom) low = middle + 1;
+    else high = middle;
+  }
+  return Math.max(FIRST_ROWS, low);
+}
+
 async function refreshList(): Promise<void> {
+  const drawing = ++listDrawing;
   if (listMode === "trash") {
     ui.listFilter.hidden = true;
     await showTrashList();
@@ -351,39 +385,51 @@ async function refreshList(): Promise<void> {
     ui.empty.textContent = err.kind === "noIndex" ? t.list.indexing : err.message;
     return;
   }
-  ui.notes.replaceChildren(
-    ...entries.map((note) => {
-      const item = document.createElement("li");
-      const button = document.createElement("button");
-      button.type = "button";
-      button.textContent = note.title;
-      if (note.pinned) button.classList.add("pinned");
-      if (!note.available) {
-        button.classList.add("cloud");
-        button.title = t.list.inICloud;
-      }
-      if (note.path === current?.path) button.setAttribute("aria-current", "true");
-      if (inTrash.has(note.path)) {
-        button.classList.add("trashed");
-        button.title = t.list.inTrash;
-        button.addEventListener("click", () => {
-          setStatus(t.list.inTrashStatus(note.title));
-        });
-      } else {
-        button.addEventListener("click", () => void openNote(note));
-      }
-      item.append(button);
-      const snippet = snippets.get(note.path);
-      if (snippet && snippet.length > 0) {
-        item.append(snippetElement(snippet));
-      } else {
-        const meta = document.createElement("small");
-        meta.textContent = `${note.path} · ${new Date(note.modifiedMs).toLocaleString()}`;
-        item.append(meta);
-      }
-      return item;
-    }),
-  );
+  const row = (note: NoteEntry): HTMLLIElement => {
+    const item = document.createElement("li");
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = note.title;
+    if (note.pinned) button.classList.add("pinned");
+    if (!note.available) {
+      button.classList.add("cloud");
+      button.title = t.list.inICloud;
+    }
+    if (note.path === current?.path) button.setAttribute("aria-current", "true");
+    if (inTrash.has(note.path)) {
+      button.classList.add("trashed");
+      button.title = t.list.inTrash;
+      button.addEventListener("click", () => {
+        setStatus(t.list.inTrashStatus(note.title));
+      });
+    } else {
+      button.addEventListener("click", () => void openNote(note));
+    }
+    item.append(button);
+    const snippet = snippets.get(note.path);
+    if (snippet && snippet.length > 0) {
+      item.append(snippetElement(snippet));
+    } else {
+      const meta = document.createElement("small");
+      meta.textContent = `${note.path} · ${dateTime.format(note.modifiedMs)}`;
+      item.append(meta);
+    }
+    return item;
+  };
+  // A long list shows its first rows at once and the rest frame by frame.
+  const shown = entries;
+  const first = rowsAtOnce();
+  ui.notes.replaceChildren(...shown.slice(0, first).map(row));
+  const more = (from: number): void => {
+    if (drawing !== listDrawing || from >= shown.length) return;
+    ui.notes.append(...shown.slice(from, from + ROWS_PER_FRAME).map(row));
+    requestAnimationFrame(() => {
+      more(from + ROWS_PER_FRAME);
+    });
+  };
+  requestAnimationFrame(() => {
+    more(first);
+  });
   ui.empty.hidden = entries.length > 0;
   if (entries.length === 0) {
     ui.empty.textContent =

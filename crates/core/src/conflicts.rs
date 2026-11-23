@@ -10,18 +10,20 @@
 //! goes into the note's version history first (ADR-0011), and only versions
 //! that are safely stored are marked resolved.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 use std::fmt;
 use std::fs;
 use std::io;
 use std::path::Path;
+use std::sync::Arc;
 
 use serde::Serialize;
 
 use crate::front_matter;
 use crate::stamp::{is_ulid, new_ulid, now_ms, rfc3339_utc};
 use crate::vault::{
-    Access, NoteContent, Result, Vault, VaultError, created_ms, modified_ms_of, sha256_hex,
+    Access, NoteContent, Result, Vault, VaultError, created_ms, modified_ms, modified_ms_of,
+    sha256_hex,
 };
 
 /// A conflict version as the sync service stores it.
@@ -80,7 +82,42 @@ pub trait NotesById: Send + Sync + fmt::Debug {
     /// Paths (relative to `notes/`) of the notes whose front matter had `id`
     /// when they were last seen; may be behind the files.
     fn paths_with_id(&self, id: &str) -> Vec<String>;
+
+    /// What was recorded about the notes when they were last indexed, by path
+    /// relative to `notes/`, if at hand (ADR-0046). It may be behind the
+    /// files: an entry is used only for a file whose modification time and
+    /// size still match ([`KnownNote::matches`]).
+    fn known_notes(&self) -> Option<Arc<KnownNotes>> {
+        None
+    }
 }
+
+/// What the search index recorded about a note file (ADR-0046).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KnownNote {
+    /// The file's modification time then, milliseconds since the Unix epoch.
+    pub mtime_ms: u64,
+    /// The file's size then, in bytes.
+    pub size: u64,
+    /// Its front matter `id` (format.md §4), upper case, if a valid ULID.
+    pub id: Option<String>,
+    /// Its title (format.md §5.2).
+    pub title: String,
+    /// Front matter `pinned: true`.
+    pub pinned: bool,
+}
+
+impl KnownNote {
+    /// `true` if the file with `meta` has the modification time and size
+    /// recorded, so it is taken as unchanged; the index sync uses the same test.
+    #[must_use]
+    pub fn matches(&self, meta: &fs::Metadata) -> bool {
+        self.mtime_ms == modified_ms(meta) && self.size == meta.len()
+    }
+}
+
+/// [`KnownNote`]s by path relative to `notes/`.
+pub type KnownNotes = HashMap<String, KnownNote>;
 
 /// No lookup: copies are only searched in the note's own folder.
 #[derive(Debug, Default, Clone, Copy)]
@@ -171,10 +208,22 @@ impl Vault {
     /// Other notes whose front matter has the same `id` as `text` (format.md
     /// §4): those in the same folder, where iCloud Drive puts its copies, and
     /// those [`NotesById`] knows anywhere in the vault. Each one is checked on
-    /// disk, since the lookup may be behind.
+    /// disk, since the lookup may be behind. A file in the folder that is
+    /// unchanged since it was indexed with another `id` is not read (ADR-0046).
     fn copies_of(&self, path: &str, text: &str) -> Result<Vec<Copy>> {
         let Some(id) = front_matter::get(text, "id") else {
             return Ok(Vec::new());
+        };
+        // The index records valid ids only; for any other id it cannot tell.
+        let known = is_ulid(&id).then(|| self.by_id().known_notes()).flatten();
+        let other_id = |rel: &str, entry: &fs::DirEntry| {
+            known
+                .as_ref()
+                .and_then(|known| known.get(rel))
+                .is_some_and(|k| {
+                    !k.id.as_deref().is_some_and(|k| k.eq_ignore_ascii_case(&id))
+                        && entry.metadata().is_ok_and(|m| k.matches(&m))
+                })
         };
         let folder = path.rsplit_once('/').map_or("", |(dir, _)| dir);
         let prefix = if folder.is_empty() {
@@ -194,7 +243,8 @@ impl Vault {
                 let is_note = entry.file_type().is_ok_and(|t| t.is_file())
                     && !name.starts_with('.')
                     && name.to_ascii_lowercase().ends_with(".md");
-                if is_note && format!("{prefix}{name}") != path {
+                let rel = format!("{prefix}{name}");
+                if is_note && rel != path && !other_id(&rel, &entry) {
                     names.push(name);
                 }
             }
@@ -796,5 +846,132 @@ mod tests {
             .filter_map(|c| c.copy_path.clone())
             .collect();
         assert_eq!(copies, ["Archiv/a.md"]);
+    }
+
+    /// A lookup that knows `entries` (path, id, title, pinned); each entry
+    /// matches its file as it is now, or not if `stale` holds its path.
+    #[derive(Debug)]
+    struct Snapshot(Arc<KnownNotes>);
+
+    impl Snapshot {
+        fn of(notes: &Path, entries: &[(&str, Option<&str>, &str, bool)], stale: &[&str]) -> Self {
+            let known = entries
+                .iter()
+                .map(|&(path, id, title, pinned)| {
+                    let meta = fs::metadata(notes.join(path)).unwrap();
+                    let size = meta.len() + u64::from(stale.contains(&path));
+                    let note = KnownNote {
+                        mtime_ms: modified_ms(&meta),
+                        size,
+                        id: id.map(str::to_owned),
+                        title: title.to_owned(),
+                        pinned,
+                    };
+                    (path.to_owned(), note)
+                })
+                .collect();
+            Self(Arc::new(known))
+        }
+    }
+
+    impl NotesById for Snapshot {
+        fn paths_with_id(&self, _id: &str) -> Vec<String> {
+            Vec::new()
+        }
+
+        fn known_notes(&self) -> Option<Arc<KnownNotes>> {
+            Some(self.0.clone())
+        }
+    }
+
+    fn copy_paths(vault: &Vault, path: &str) -> Vec<String> {
+        vault
+            .read_note(path)
+            .unwrap()
+            .conflicts
+            .iter()
+            .filter_map(|c| c.copy_path.clone())
+            .collect()
+    }
+
+    const OTHER: &str = "01JA7Q5Y0Z8H3K2M6N4P9R1S2T";
+
+    #[test]
+    fn files_unchanged_since_indexed_with_another_id_are_not_read() {
+        let dir = tempfile::tempdir().unwrap();
+        let notes = dir.path().join("notes");
+        fs::create_dir_all(&notes).unwrap();
+        fs::write(notes.join("a.md"), note_with(SAME, "mine")).unwrap();
+        for name in ["a 2.md", "a 3.md", "a 4.md", "a 5.md"] {
+            fs::write(notes.join(name), note_with(SAME, "copy")).unwrap();
+        }
+        let snapshot = Snapshot::of(
+            &notes,
+            &[
+                ("a.md", Some(SAME), "a", false),
+                // Trusted, as it matches: shows the file is not read.
+                ("a 2.md", Some(OTHER), "a", false),
+                // Changed since it was indexed: read.
+                ("a 3.md", Some(OTHER), "a", false),
+                // Indexed with the same id: read.
+                ("a 4.md", Some(SAME), "a", false),
+                // "a 5.md" is not in the index yet: read.
+            ],
+            &["a 3.md"],
+        );
+        let vault = Vault::create(dir.path())
+            .unwrap()
+            .with_notes_by_id(Arc::new(snapshot));
+        assert_eq!(copy_paths(&vault, "a.md"), ["a 3.md", "a 4.md", "a 5.md"]);
+    }
+
+    #[test]
+    fn with_an_id_the_index_cannot_record_every_file_is_read() {
+        let dir = tempfile::tempdir().unwrap();
+        let notes = dir.path().join("notes");
+        fs::create_dir_all(&notes).unwrap();
+        fs::write(notes.join("a.md"), note_with("no-ulid", "mine")).unwrap();
+        fs::write(notes.join("a 2.md"), note_with("no-ulid", "copy")).unwrap();
+        let snapshot = Snapshot::of(&notes, &[("a 2.md", None, "a", false)], &[]);
+        let vault = Vault::create(dir.path())
+            .unwrap()
+            .with_notes_by_id(Arc::new(snapshot));
+        assert_eq!(copy_paths(&vault, "a.md"), ["a 2.md"]);
+    }
+
+    #[test]
+    fn the_list_takes_title_and_pin_of_unchanged_files_from_the_index() {
+        let dir = tempfile::tempdir().unwrap();
+        let notes = dir.path().join("notes");
+        fs::create_dir_all(notes.join("sub")).unwrap();
+        fs::write(notes.join("a.md"), "# On disk A\n").unwrap();
+        fs::write(notes.join("sub/b.md"), "# On disk B\n").unwrap();
+        fs::write(notes.join("c.md"), "# On disk C\n").unwrap();
+        let snapshot = Snapshot::of(
+            &notes,
+            &[
+                ("a.md", None, "From the index", true),
+                ("sub/b.md", None, "Stale", true),
+            ],
+            &["sub/b.md"],
+        );
+        let vault = Vault::create(dir.path())
+            .unwrap()
+            .with_notes_by_id(Arc::new(snapshot));
+        let mut listed: Vec<_> = vault
+            .list_notes()
+            .unwrap()
+            .into_iter()
+            .map(|n| (n.path, n.title, n.pinned))
+            .collect();
+        listed.sort();
+        assert_eq!(
+            listed,
+            [
+                ("a.md".into(), "From the index".into(), true),
+                ("c.md".into(), "On disk C".into(), false),
+                ("sub/b.md".into(), "On disk B".into(), false),
+            ]
+        );
     }
 }

@@ -29,6 +29,7 @@ use rusqlite::{Connection, OptionalExtension as _, params};
 use crate::abc;
 use crate::attachments::percent_decode;
 use crate::chordpro::Song;
+use crate::conflicts::KnownNote;
 use crate::dates::parse_rfc3339;
 use crate::front_matter;
 use crate::links::resolve_from;
@@ -583,6 +584,30 @@ impl Index {
         Ok(rows.collect::<rusqlite::Result<_>>()?)
     }
 
+    /// What is recorded about each note not in the trash, by path below the
+    /// vault root (`notes/…`), for reading unchanged files from here (ADR-0046).
+    ///
+    /// # Errors
+    /// SQLite errors.
+    pub fn known_notes(&self) -> Result<HashMap<String, KnownNote>> {
+        let mut query = self.db.prepare(
+            "SELECT path, mtime_ms, size, id, title, pinned FROM notes WHERE state = 'active'",
+        )?;
+        let rows = query.query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                KnownNote {
+                    mtime_ms: u64::try_from(row.get::<_, i64>(1)?).unwrap_or(0),
+                    size: u64::try_from(row.get::<_, i64>(2)?).unwrap_or(0),
+                    id: row.get(3)?,
+                    title: row.get(4)?,
+                    pinned: row.get(5)?,
+                },
+            ))
+        })?;
+        Ok(rows.collect::<rusqlite::Result<_>>()?)
+    }
+
     /// The `id` and `created` stored for the note at `path`, if it is in the
     /// index (ADR-0044); either may be `None`.
     ///
@@ -856,6 +881,45 @@ mod tests {
             index.paths_with_id(&ID.to_lowercase()).unwrap(),
             ["notes/a.md", "notes/sub/a 2.md"]
         );
+    }
+
+    #[test]
+    fn knows_the_notes_not_in_the_trash() {
+        let mut index = Index::in_memory().unwrap();
+        let text = format!(
+            "---\nid: {}\npinned: true\n---\n# Titel\n",
+            ID.to_lowercase()
+        );
+        for (path, state) in [
+            ("notes/a.md", NoteState::Active),
+            (".notesapp/trash/X.md", NoteState::Trash),
+        ] {
+            index
+                .put(path, state, &stamp("h"), &analyze(path, &text))
+                .unwrap();
+        }
+        index
+            .put(
+                "notes/b.md",
+                NoteState::Active,
+                &stamp("h"),
+                &analyze("notes/b.md", "x"),
+            )
+            .unwrap();
+        let known = index.known_notes().unwrap();
+        assert_eq!(known.len(), 2);
+        assert_eq!(
+            known["notes/a.md"],
+            KnownNote {
+                mtime_ms: 1_000,
+                size: 10,
+                id: Some(ID.into()),
+                title: "Titel".into(),
+                pinned: true,
+            }
+        );
+        assert_eq!(known["notes/b.md"].id, None);
+        assert!(!known["notes/b.md"].pinned);
     }
 
     #[test]

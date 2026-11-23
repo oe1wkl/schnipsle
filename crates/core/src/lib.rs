@@ -37,7 +37,8 @@ pub mod watch;
 
 pub use attachments::{AddedAttachment, LinkTarget};
 pub use conflicts::{
-    ConflictVersion, NoIdLookup, NoSyncConflicts, NotesById, RawVersion, SyncConflicts,
+    ConflictVersion, KnownNote, KnownNotes, NoIdLookup, NoSyncConflicts, NotesById, RawVersion,
+    SyncConflicts,
 };
 pub use coordination::{Coordinator, Uncoordinated};
 pub use diff::{Comparison, KeyChange, Part, Row};
