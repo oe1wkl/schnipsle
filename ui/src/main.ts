@@ -70,6 +70,14 @@ let syncConflict: ConflictVersion | undefined; // shown in the sync conflict ban
 let entries: NoteEntry[] = [];
 /** Counts list drawings; rows still to come of an older one are dropped. */
 let listDrawing = 0;
+/**
+ * Where the note list was when the phone hid it for a note or the tags
+ * (`showView`). WebKit keeps no layout for hidden rows, so the place is not
+ * read from them while the list is hidden.
+ */
+let hiddenPlace: { rows: number; anchor: RowInView | null } | null = null;
+/** The list is to be shown once its new rows are in (`showList`). */
+let showWhenDrawn = false;
 /** Rows of a list drawn at once, and per frame after that (ADR-0046). */
 const FIRST_ROWS = 100;
 const ROWS_PER_FRAME = 500;
@@ -219,15 +227,43 @@ const isDirty = (): boolean => current !== null && editor.text() !== current.sav
 
 /** The view shown on the phone; on wider screens list and editor are side by side. */
 function showView(view: "list" | "editor" | "tags"): void {
+  // A view chosen since wins over a list still to be shown.
+  showWhenDrawn = false;
+  if (ui.layout.dataset["view"] === "list" && view !== "list" && ui.notes.offsetParent !== null) {
+    hiddenPlace = { rows: rowsAtOnce(), anchor: rowInView() };
+  }
   ui.layout.dataset["view"] = view;
   ui.back.hidden = view === "list";
+}
+
+/**
+ * Shows the note list, drawn again. A list the phone hid for a note or the
+ * tags is drawn while still hidden and shown once its new rows are in:
+ * showing it first would make WebKit lay out every old row only to replace
+ * them, about 100 ms for 10,000 rows on an iPhone 18 Pro.
+ */
+async function showList(): Promise<void> {
+  if (ui.layout.dataset["view"] !== "list") showWhenDrawn = true;
+  await refreshList();
+}
+
+/** Shows the list if `showList` asked for it. */
+function revealList(): void {
+  if (!showWhenDrawn) return;
+  hiddenPlace = null;
+  showView("list");
 }
 
 /** Search, smart folders and tags above the note list; picking one filters the list. */
 const sidebar = createSidebar(
   () => {
-    if (ui.layout.dataset["view"] === "tags") showView("list");
-    if (listMode === "trash") setListMode("notes");
+    // Another list: the place in the one before does not apply.
+    hiddenPlace = null;
+    const fromTags = ui.layout.dataset["view"] === "tags";
+    if (listMode === "trash") {
+      if (fromTags) showView("list");
+      setListMode("notes");
+    } else if (fromTags) void showList();
     else void refreshList();
   },
   (message) => {
@@ -266,6 +302,7 @@ function vaultOpened(info: VaultInfo): void {
   // The previous vault's notes go at once: listing a vault that is still
   // downloading can take a while, and their rows must not open in this one.
   listDrawing++;
+  hiddenPlace = null;
   entries = [];
   hitsInTrash = new Set();
   ui.notes.style.paddingBottom = "";
@@ -288,6 +325,7 @@ async function folderOpened(opened: Opened): Promise<void> {
   lastTrashed = null;
   ui.undoDelete.hidden = true;
   vaultOpened(opened);
+  // Shown at once with "reading": its rows are gone, a slow listing should not look stuck.
   showView("list");
   await refreshList();
 }
@@ -319,7 +357,7 @@ function showSetup(folder: FolderSetup): void {
  * again keeps its scroll position.
  */
 function rowsAtOnce(): number {
-  if (ui.notes.offsetParent === null) return FIRST_ROWS;
+  if (ui.notes.offsetParent === null) return Math.max(FIRST_ROWS, hiddenPlace?.rows ?? 0);
   const rows = ui.notes.children;
   const bottom = window.innerHeight;
   let low = 0;
@@ -343,8 +381,9 @@ interface RowInView {
  * which moves to the top when it is saved.
  */
 function rowInView(): RowInView | null {
+  if (ui.notes.offsetParent === null) return hiddenPlace?.anchor ?? null;
   const view = ui.notes.closest<HTMLElement>(".list");
-  if (view === null || view.scrollTop === 0 || ui.notes.offsetParent === null) return null;
+  if (view === null || view.scrollTop === 0) return null;
   const top = view.getBoundingClientRect().top;
   const rows = ui.notes.children;
   let low = 0;
@@ -367,7 +406,7 @@ function rowInView(): RowInView | null {
 /** Scrolls the note list so that `anchor` is where it was before drawing. */
 function keepInView(anchor: RowInView | null): void {
   const view = ui.notes.closest<HTMLElement>(".list");
-  if (anchor === null || view === null) return;
+  if (anchor === null || view === null || ui.notes.offsetParent === null) return;
   const row = [...ui.notes.querySelectorAll<HTMLElement>("li > button:first-child")]
     .find((button) => button.dataset["path"] === anchor.path)
     ?.closest("li");
@@ -380,7 +419,11 @@ async function refreshList(): Promise<void> {
   const drawing = ++listDrawing;
   if (listMode === "trash") {
     ui.listFilter.hidden = true;
-    await showTrashList();
+    try {
+      await showTrashList();
+    } finally {
+      revealList();
+    }
     return;
   }
   const filter = sidebar.filter();
@@ -437,6 +480,7 @@ async function refreshList(): Promise<void> {
     ui.notes.replaceChildren();
     ui.empty.hidden = false;
     ui.empty.textContent = err.kind === "noIndex" ? t.list.indexing : err.message;
+    revealList();
     return;
   }
   // Only the newest drawing is shown: an older one finishing later would
@@ -484,6 +528,8 @@ async function refreshList(): Promise<void> {
   const anchor = rowInView();
   ui.notes.style.paddingBottom = "";
   ui.notes.replaceChildren(...shown.slice(0, first).map(row));
+  // Only now, with the old rows gone, is a hidden list shown.
+  revealList();
   const drawn = Math.min(first, shown.length);
   const perRow = drawn === 0 ? 0 : ui.notes.getBoundingClientRect().height / drawn;
   const reserve = (from: number): void => {
@@ -669,6 +715,7 @@ async function restoreNote(note: TrashedNote): Promise<void> {
 /** Shows the notes or the trash in the list. */
 function setListMode(mode: "notes" | "trash"): void {
   listMode = mode;
+  hiddenPlace = null;
   if (mode === "notes" && trashShown !== null) closeEditor();
   ui.showTrash.textContent = mode === "trash" ? t.list.notes : t.list.trash;
   ui.showTrash.setAttribute("aria-pressed", String(mode === "trash"));
@@ -1086,8 +1133,7 @@ ui.useTheirs.addEventListener("click", () => {
           ui.undoDelete.hidden = false;
           setStatus(t.conflict.mineInTrash(used.trashed.title));
         }
-        showView("list");
-        await refreshList();
+        await showList();
       }
     } catch (e) {
       const err = asError(e);
@@ -1176,8 +1222,7 @@ ui.back.addEventListener("click", () => {
   }
   void leaveNote().then(async (left) => {
     if (!left) return;
-    showView("list");
-    await refreshList();
+    await showList();
   });
 });
 
@@ -1220,8 +1265,7 @@ ui.deleteNote.addEventListener("click", () => {
       lastTrashed = trashed;
       ui.undoDelete.hidden = false;
       setStatus(t.trash.moved(trashed.title));
-      showView("list");
-      await refreshList();
+      await showList();
     } catch (e) {
       setStatus(t.trash.notDeleted(asError(e).message));
     }
