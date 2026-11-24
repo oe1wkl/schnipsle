@@ -99,7 +99,7 @@ Core (Rust crates: core, import, export)
 Vault on disk (source of truth)      Index cache (SQLite FTS5, per device)
 ```
 
-The UI never touches files. Platform specifics (folder access, file coordination, export engines) sit behind Rust traits or app commands; file coordination, for example, is the core's `Coordinator` trait, implemented for Apple platforms in `schnipsle-apple`.
+The UI never touches files. Platform specifics (folder access, file coordination, export engines) sit behind Rust traits or app commands; file coordination, for example, is the core's `Coordinator` trait, implemented for Apple platforms in `schnipsle-apple`, and listing folders with their files' times and sizes is its `FolderLister` trait, which `schnipsle-apple` implements with `getattrlistbulk` (ADR-0047).
 
 ## 5. Technology
 

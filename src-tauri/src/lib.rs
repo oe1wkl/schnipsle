@@ -140,10 +140,13 @@ fn coordinator() -> Arc<dyn Coordinator> {
     return Arc::new(schnipsle_core::Uncoordinated);
 }
 
-/// Adds the platform's sync conflict versions (ADR-0006).
-fn with_sync_conflicts(vault: Vault) -> Vault {
+/// Adds the platform's sync conflict versions (ADR-0006) and its way of
+/// listing folders (ADR-0047).
+fn with_platform(vault: Vault) -> Vault {
     #[cfg(any(target_os = "macos", target_os = "ios"))]
-    return vault.with_sync_conflicts(Arc::new(schnipsle_apple::ICloudVersions));
+    return vault
+        .with_sync_conflicts(Arc::new(schnipsle_apple::ICloudVersions))
+        .with_folder_lister(Arc::new(schnipsle_apple::BulkLister));
     #[cfg(not(any(target_os = "macos", target_os = "ios")))]
     return vault;
 }
@@ -214,7 +217,7 @@ fn request_download(app: &tauri::AppHandle, file: &Path) {
 /// Makes `vault` the open vault and starts watching it.
 fn remember(app: &tauri::AppHandle, state: &AppState, vault: Vault) -> CmdResult<VaultInfo> {
     let ids = indexing::IndexIds::new(state.index.clone(), vault.root().to_owned());
-    let vault = with_sync_conflicts(vault).with_notes_by_id(Arc::new(ids));
+    let vault = with_platform(vault).with_notes_by_id(Arc::new(ids));
     let path = vault.root();
     let info = VaultInfo {
         name: vault

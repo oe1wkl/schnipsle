@@ -20,6 +20,7 @@ pub mod index_sync;
 pub mod layout;
 pub mod leftovers;
 pub mod links;
+pub mod listing;
 pub mod names;
 pub mod query;
 pub mod retag;
@@ -48,6 +49,7 @@ pub use index::{Index, IndexError};
 pub use index_sync::IndexSync;
 pub use layout::{Folder, VaultIdentity, inspect};
 pub use leftovers::Leftovers;
+pub use listing::{EntryKind, FileStat, FolderEntry, FolderLister, PlainLister};
 pub use names::{NewNote, slug};
 pub use retag::{
     InvalidRename, PlannedFolder, PlannedNote, RetagOutcome, RetagPlan, RetagUndo, SkippedNote,
