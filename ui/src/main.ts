@@ -68,6 +68,20 @@ let conflictHash: string | null | undefined; // set while the conflict banner sh
 let saveProblem: string | null = null;
 let syncConflict: ConflictVersion | undefined; // shown in the sync conflict banner
 let entries: NoteEntry[] = [];
+/** Counts list drawings; rows still to come of an older one are dropped. */
+let listDrawing = 0;
+/** Rows of a list drawn at once, and per frame after that (ADR-0046). */
+const FIRST_ROWS = 100;
+const ROWS_PER_FRAME = 500;
+/** The format of `toLocaleString()`, made once instead of for each row. */
+const dateTime = new Intl.DateTimeFormat(undefined, {
+  year: "numeric",
+  month: "numeric",
+  day: "numeric",
+  hour: "numeric",
+  minute: "numeric",
+  second: "numeric",
+});
 let saveTimer: number | undefined;
 let saving: Promise<void> = Promise.resolve();
 /** Why the open vault is read-only; `null` if it is writable or none is open. */
@@ -249,7 +263,15 @@ function vaultOpened(info: VaultInfo): void {
   ui.readOnly.hidden = readOnly === null;
   ui.readOnlyText.textContent = readOnly ?? "";
   ui.newNote.disabled = readOnly !== null;
-  ui.empty.hidden = true;
+  // The previous vault's notes go at once: listing a vault that is still
+  // downloading can take a while, and their rows must not open in this one.
+  listDrawing++;
+  entries = [];
+  hitsInTrash = new Set();
+  ui.notes.style.paddingBottom = "";
+  ui.notes.replaceChildren();
+  ui.empty.textContent = t.list.reading;
+  ui.empty.hidden = false;
   sidebar.reset();
   retag.reset();
   sidebar.setEnabled(true);
@@ -291,7 +313,71 @@ function showSetup(folder: FolderSetup): void {
   ui.setupCreate.focus();
 }
 
+/**
+ * Rows of the note list to draw at once: a first screenful, or, when the list
+ * is scrolled, all rows down to the bottom of the window, so that drawing it
+ * again keeps its scroll position.
+ */
+function rowsAtOnce(): number {
+  if (ui.notes.offsetParent === null) return FIRST_ROWS;
+  const rows = ui.notes.children;
+  const bottom = window.innerHeight;
+  let low = 0;
+  let high = rows.length;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if ((rows.item(middle)?.getBoundingClientRect().top ?? bottom) < bottom) low = middle + 1;
+    else high = middle;
+  }
+  return Math.max(FIRST_ROWS, low);
+}
+
+/** A row of the note list and how far below the top of the list's view it is. */
+interface RowInView {
+  path: string;
+  offset: number;
+}
+
+/**
+ * The first row in view of a scrolled note list, other than the open note's,
+ * which moves to the top when it is saved.
+ */
+function rowInView(): RowInView | null {
+  const view = ui.notes.closest<HTMLElement>(".list");
+  if (view === null || view.scrollTop === 0 || ui.notes.offsetParent === null) return null;
+  const top = view.getBoundingClientRect().top;
+  const rows = ui.notes.children;
+  let low = 0;
+  let high = rows.length;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if ((rows.item(middle)?.getBoundingClientRect().bottom ?? top) <= top) low = middle + 1;
+    else high = middle;
+  }
+  for (let i = low; i < Math.min(rows.length, low + 3); i++) {
+    const row = rows.item(i);
+    const path = row?.querySelector<HTMLElement>("button")?.dataset["path"];
+    if (row && path !== undefined && path !== current?.path) {
+      return { path, offset: row.getBoundingClientRect().top - top };
+    }
+  }
+  return null;
+}
+
+/** Scrolls the note list so that `anchor` is where it was before drawing. */
+function keepInView(anchor: RowInView | null): void {
+  const view = ui.notes.closest<HTMLElement>(".list");
+  if (anchor === null || view === null) return;
+  const row = [...ui.notes.querySelectorAll<HTMLElement>("li > button:first-child")]
+    .find((button) => button.dataset["path"] === anchor.path)
+    ?.closest("li");
+  if (!row) return;
+  view.scrollTop +=
+    row.getBoundingClientRect().top - view.getBoundingClientRect().top - anchor.offset;
+}
+
 async function refreshList(): Promise<void> {
+  const drawing = ++listDrawing;
   if (listMode === "trash") {
     ui.listFilter.hidden = true;
     await showTrashList();
@@ -299,10 +385,10 @@ async function refreshList(): Promise<void> {
   }
   const filter = sidebar.filter();
   showFilter(filter);
+  let found: NoteEntry[] = [];
   let snippets = new Map<string, SnippetPart[]>();
   /** Search hits in the trash (`in:trash`): restored from the Trash view, not opened. */
   let inTrash = new Set<string>();
-  hitsInTrash = inTrash;
   // Timed until drawn (ADR-0045).
   const since = performance.now();
   const kinds = {
@@ -315,11 +401,11 @@ async function refreshList(): Promise<void> {
   try {
     switch (filter.kind) {
       case "all":
-        entries = await invoke<NoteEntry[]>("list_notes", { sort: sortOrder });
+        found = await invoke<NoteEntry[]>("list_notes", { sort: sortOrder });
         break;
       case "tag":
       case "untagged":
-        entries = await invoke<NoteEntry[]>("notes_in_tags", {
+        found = await invoke<NoteEntry[]>("notes_in_tags", {
           keys: filter.kind === "tag" ? filter.keys : [],
           sort: sortOrder,
         });
@@ -336,54 +422,87 @@ async function refreshList(): Promise<void> {
                 utcOffsetMinutes,
               })
             : await invoke<SearchHit[]>("search_notes", { query: filter.query, utcOffsetMinutes });
-        entries = hits.map((h) => ({ ...h, available: true }));
+        found = hits.map((h) => ({ ...h, available: true }));
         snippets = new Map(hits.map((h) => [h.path, h.snippet]));
         inTrash = new Set(hits.filter((h) => h.inTrash).map((h) => h.path));
-        hitsInTrash = inTrash;
         break;
       }
     }
   } catch (e) {
+    if (drawing !== listDrawing) return; // a newer drawing has started
     const err = asError(e);
     entries = [];
+    hitsInTrash = inTrash;
+    ui.notes.style.paddingBottom = "";
     ui.notes.replaceChildren();
     ui.empty.hidden = false;
     ui.empty.textContent = err.kind === "noIndex" ? t.list.indexing : err.message;
     return;
   }
-  ui.notes.replaceChildren(
-    ...entries.map((note) => {
-      const item = document.createElement("li");
-      const button = document.createElement("button");
-      button.type = "button";
-      button.textContent = note.title;
-      if (note.pinned) button.classList.add("pinned");
-      if (!note.available) {
-        button.classList.add("cloud");
-        button.title = t.list.inICloud;
-      }
-      if (note.path === current?.path) button.setAttribute("aria-current", "true");
-      if (inTrash.has(note.path)) {
-        button.classList.add("trashed");
-        button.title = t.list.inTrash;
-        button.addEventListener("click", () => {
-          setStatus(t.list.inTrashStatus(note.title));
-        });
-      } else {
-        button.addEventListener("click", () => void openNote(note));
-      }
-      item.append(button);
-      const snippet = snippets.get(note.path);
-      if (snippet && snippet.length > 0) {
-        item.append(snippetElement(snippet));
-      } else {
-        const meta = document.createElement("small");
-        meta.textContent = `${note.path} · ${new Date(note.modifiedMs).toLocaleString()}`;
-        item.append(meta);
-      }
-      return item;
-    }),
-  );
+  // Only the newest drawing is shown: an older one finishing later would
+  // replace it with its own rows and then stop.
+  if (drawing !== listDrawing) return;
+  entries = found;
+  hitsInTrash = inTrash;
+  const row = (note: NoteEntry): HTMLLIElement => {
+    const item = document.createElement("li");
+    const button = document.createElement("button");
+    button.type = "button";
+    button.dataset["path"] = note.path;
+    button.textContent = note.title;
+    if (note.pinned) button.classList.add("pinned");
+    if (!note.available) {
+      button.classList.add("cloud");
+      button.title = t.list.inICloud;
+    }
+    if (note.path === current?.path) button.setAttribute("aria-current", "true");
+    if (inTrash.has(note.path)) {
+      button.classList.add("trashed");
+      button.title = t.list.inTrash;
+      button.addEventListener("click", () => {
+        setStatus(t.list.inTrashStatus(note.title));
+      });
+    } else {
+      button.addEventListener("click", () => void openNote(note));
+    }
+    item.append(button);
+    const snippet = snippets.get(note.path);
+    if (snippet && snippet.length > 0) {
+      item.append(snippetElement(snippet));
+    } else {
+      const meta = document.createElement("small");
+      meta.textContent = `${note.path} · ${dateTime.format(note.modifiedMs)}`;
+      item.append(meta);
+    }
+    return item;
+  };
+  // A long list shows its first rows at once and the rest frame by frame. The
+  // rows still to come are kept as space below the list, so its height and
+  // the scroll bar stay as they will be.
+  const shown = entries;
+  const first = rowsAtOnce();
+  const anchor = rowInView();
+  ui.notes.style.paddingBottom = "";
+  ui.notes.replaceChildren(...shown.slice(0, first).map(row));
+  const drawn = Math.min(first, shown.length);
+  const perRow = drawn === 0 ? 0 : ui.notes.getBoundingClientRect().height / drawn;
+  const reserve = (from: number): void => {
+    const left = shown.length - from;
+    ui.notes.style.paddingBottom = left > 0 ? `${String(Math.round(left * perRow))}px` : "";
+  };
+  reserve(first);
+  keepInView(anchor);
+  const more = (from: number): void => {
+    if (drawing !== listDrawing || from >= shown.length) return;
+    ui.notes.append(...shown.slice(from, from + ROWS_PER_FRAME).map(row));
+    reserve(from + ROWS_PER_FRAME);
+    requestAnimationFrame(() => {
+      more(from + ROWS_PER_FRAME);
+    });
+  };
+  requestAnimationFrame(() => {
+    more(first);
+  });
   ui.empty.hidden = entries.length > 0;
   if (entries.length === 0) {
     ui.empty.textContent =
@@ -484,6 +603,7 @@ async function checkStrays(): Promise<void> {
 
 async function showTrashList(): Promise<void> {
   const trashed = await invoke<TrashedNote[]>("list_trash");
+  ui.notes.style.paddingBottom = "";
   ui.notes.replaceChildren(
     ...trashed.map((note) => {
       const item = document.createElement("li");

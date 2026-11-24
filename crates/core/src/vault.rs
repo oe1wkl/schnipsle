@@ -27,7 +27,9 @@ use std::time::UNIX_EPOCH;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 
-use crate::conflicts::{ConflictVersion, NoIdLookup, NoSyncConflicts, NotesById, SyncConflicts};
+use crate::conflicts::{
+    ConflictVersion, KnownNotes, NoIdLookup, NoSyncConflicts, NotesById, SyncConflicts,
+};
 use crate::coordination::{Coordinator, Uncoordinated};
 use crate::front_matter;
 use crate::layout::{ATTACHMENTS_DIR, FORMAT, NOTES_DIR, VAULT_FILE, VaultIdentity};
@@ -356,15 +358,18 @@ impl Vault {
         self.list_notes_by(SortOrder::Modified)
     }
 
-    /// Lists all notes like [`Vault::list_notes`], in the given order.
+    /// Lists all notes like [`Vault::list_notes`], in the given order. Title
+    /// and `pinned` of a file unchanged since it was indexed come from the
+    /// index instead of the file (ADR-0046).
     ///
     /// # Errors
     /// As for [`Vault::list_notes`].
     pub fn list_notes_by(&self, order: SortOrder) -> Result<Vec<NoteEntry>> {
+        let known = self.by_id.known_notes();
         // One coordinated read of the folder covers the files inside it.
         let listed = self.coordinated(Access::Read, &self.notes, |notes_dir| {
             let mut notes = Vec::new();
-            collect(notes_dir, "", &mut notes, true)?;
+            collect(notes_dir, "", &mut notes, true, known.as_deref())?;
             Ok(notes)
         });
         let mut notes = match listed {
@@ -847,7 +852,7 @@ fn canonical_lenient(path: &Path) -> Option<PathBuf> {
 /// Paths of the downloaded notes below `dir`, relative to it.
 pub(crate) fn note_paths(dir: &Path) -> Vec<String> {
     let mut notes = Vec::new();
-    let _ = collect(dir, "", &mut notes, true);
+    let _ = collect(dir, "", &mut notes, true, None);
     notes
         .into_iter()
         .filter(|n| n.available)
@@ -858,12 +863,18 @@ pub(crate) fn note_paths(dir: &Path) -> Vec<String> {
 /// Number of notes below `dir`, iCloud placeholders included.
 pub(crate) fn count_notes(dir: &Path) -> Result<usize> {
     let mut notes = Vec::new();
-    collect(dir, "", &mut notes, true)?;
+    collect(dir, "", &mut notes, true, None)?;
     Ok(notes.len())
 }
 
 /// Recursively collects notes below `dir`; `prefix` is `dir` relative to `notes/`.
-fn collect(dir: &Path, prefix: &str, out: &mut Vec<NoteEntry>, is_root: bool) -> Result<()> {
+fn collect(
+    dir: &Path,
+    prefix: &str,
+    out: &mut Vec<NoteEntry>,
+    is_root: bool,
+    known: Option<&KnownNotes>,
+) -> Result<()> {
     let entries = match fs::read_dir(dir) {
         Ok(entries) => entries,
         Err(e) if !is_root => {
@@ -878,7 +889,8 @@ fn collect(dir: &Path, prefix: &str, out: &mut Vec<NoteEntry>, is_root: bool) ->
         let Ok(file_type) = entry.file_type() else {
             continue;
         };
-        let modified_ms = entry.metadata().map_or(0, |m| modified_ms(&m));
+        let meta = entry.metadata().ok();
+        let modified_ms = meta.as_ref().map_or(0, modified_ms);
 
         if let Some(real) = placeholder_note_name(&name) {
             out.push(NoteEntry {
@@ -891,15 +903,35 @@ fn collect(dir: &Path, prefix: &str, out: &mut Vec<NoteEntry>, is_root: bool) ->
         } else if name.starts_with('.') {
             // hidden file or folder, including .notesapp/
         } else if file_type.is_dir() {
-            collect(&entry.path(), &format!("{prefix}{name}/"), out, false)?;
+            collect(
+                &entry.path(),
+                &format!("{prefix}{name}/"),
+                out,
+                false,
+                known,
+            )?;
         } else if file_type.is_file() && has_md_extension(&name) {
+            let path = format!("{prefix}{name}");
+            let unchanged = known
+                .and_then(|known| known.get(&path))
+                .filter(|k| meta.as_ref().is_some_and(|m| k.matches(m)));
+            if let Some(k) = unchanged {
+                out.push(NoteEntry {
+                    path,
+                    title: k.title.clone(),
+                    modified_ms,
+                    available: true,
+                    pinned: k.pinned,
+                });
+                continue;
+            }
             let stem = name[..name.len() - 3].to_owned();
             let head = read_head(&entry.path());
             let title = head
                 .as_ref()
                 .map_or_else(|_| stem.clone(), |head| title_of(head, &stem));
             out.push(NoteEntry {
-                path: format!("{prefix}{name}"),
+                path,
                 title,
                 modified_ms,
                 available: true,
@@ -1001,7 +1033,7 @@ fn read_head(path: &Path) -> io::Result<String> {
     Ok(String::from_utf8_lossy(&buf).into_owned())
 }
 
-fn modified_ms(meta: &fs::Metadata) -> u64 {
+pub(crate) fn modified_ms(meta: &fs::Metadata) -> u64 {
     meta.modified()
         .ok()
         .and_then(|t| t.duration_since(UNIX_EPOCH).ok())

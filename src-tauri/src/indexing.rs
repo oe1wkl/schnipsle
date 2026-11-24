@@ -7,6 +7,10 @@
 //! events and the app's own writes update single notes. A save never waits
 //! for a running sync: paths that arrive while the index is busy are queued
 //! and handled when the sync ends.
+//!
+//! A snapshot of what the index knows per note is kept beside it, taken when
+//! it opens and after each sync, so the list and the copy search can skip
+//! unchanged files even while a sync holds the index (ADR-0046).
 
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
@@ -14,7 +18,7 @@ use std::time::Instant;
 
 use schnipsle_core::vault::sha256_hex;
 use schnipsle_core::watch::VaultChanges;
-use schnipsle_core::{Index, NotesById, Vault};
+use schnipsle_core::{Index, KnownNotes, NotesById, Vault};
 use tauri::{AppHandle, Emitter as _, Manager as _};
 
 /// The index and the root of the vault it belongs to.
@@ -24,6 +28,9 @@ struct Open {
     index: Index,
 }
 
+/// What the index of the vault at a root knew per note (ADR-0046).
+type Snapshot = Option<(PathBuf, Arc<KnownNotes>)>;
+
 /// The index of the open vault, shared between commands, the watcher and the
 /// background sync. Cheap to clone.
 #[derive(Debug, Clone, Default)]
@@ -31,6 +38,9 @@ pub struct SharedIndex {
     open: Arc<Mutex<Option<Open>>>,
     /// Paths changed while the index was busy, by vault root.
     pending: Arc<Mutex<Vec<(PathBuf, String)>>>,
+    /// What the index knew per note when it opened or last synced, by vault
+    /// root (ADR-0046).
+    known: Arc<Mutex<Snapshot>>,
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -42,6 +52,7 @@ impl SharedIndex {
     /// Opens the index of `vault` and syncs it in the background. Failures
     /// leave the app without an index, which only search needs.
     pub fn open_for(&self, app: &AppHandle, vault: &Vault) {
+        *lock(&self.known) = None;
         let file = match index_file(app, vault) {
             Ok(file) => file,
             Err(e) => {
@@ -56,6 +67,7 @@ impl SharedIndex {
                 return;
             }
         };
+        self.remember_known(vault, &index);
         *lock(&self.open) = Some(Open {
             root: vault.root().to_owned(),
             index,
@@ -79,6 +91,9 @@ impl SharedIndex {
                     };
                     let start = Instant::now();
                     let report = vault.sync_index(&mut open.index);
+                    if report.is_ok() {
+                        shared.remember_known(&vault, &open.index);
+                    }
                     if let Ok(r) = &report {
                         let notes = open.index.len().unwrap_or_default();
                         crate::measuring::record(
@@ -146,6 +161,23 @@ impl SharedIndex {
         }
     }
 
+    /// Takes the snapshot of what `index` knows about the notes of `vault`.
+    fn remember_known(&self, vault: &Vault, index: &Index) {
+        let prefix = format!("{}/", schnipsle_core::layout::NOTES_DIR);
+        let known = match index.known_notes() {
+            Ok(known) => known
+                .into_iter()
+                .filter_map(|(key, note)| Some((key.strip_prefix(&prefix)?.to_owned(), note)))
+                .collect(),
+            Err(e) => {
+                eprintln!("index snapshot not taken: {e}");
+                *lock(&self.known) = None;
+                return;
+            }
+        };
+        *lock(&self.known) = Some((vault.root().to_owned(), Arc::new(known)));
+    }
+
     fn drain_pending(&self, vault: &Vault) {
         self.update(vault, &[]);
     }
@@ -163,7 +195,8 @@ impl SharedIndex {
 
 /// Finds copies of a note in other folders (format.md §4) through the index
 /// of the vault at `root`. While a sync holds the index it answers nothing,
-/// and the copies in the note's own folder are still found.
+/// and the copies in the note's own folder are still found. Also hands out
+/// the snapshot of what the index knows (ADR-0046), which a sync never blocks.
 #[derive(Debug)]
 pub struct IndexIds {
     shared: SharedIndex,
@@ -189,6 +222,13 @@ impl NotesById for IndexIds {
             .into_iter()
             .filter_map(|key| key.strip_prefix(&prefix).map(str::to_owned))
             .collect()
+    }
+
+    fn known_notes(&self) -> Option<Arc<KnownNotes>> {
+        lock(&self.shared.known)
+            .as_ref()
+            .filter(|(root, _)| *root == self.root)
+            .map(|(_, known)| Arc::clone(known))
     }
 }
 
