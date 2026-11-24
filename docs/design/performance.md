@@ -61,6 +61,225 @@ iOS 16 runs on the iPhone 8 and X (A11) and later (ADR-0002). There is none at h
 
 Each run adds a section: date, device and system, app version and build, the vault (notes, seed), the times against the limits, the memory, the estimate for the A11 where it applies, and the copied text.
 
+### iPhone 18 Pro, 2026-11-24, with ADR-0046
+
+- Device: iPhone 18 Pro (iPhone19,2), iOS 27.2.1.
+- App: 0.1.0, Release build (`pnpm tauri ios build --export-method debugging`) of `perf/n03-index-reads` at b312adc, the code merged in PR 112.
+- Vault: the same `Schnipsle-Perf-10k` in iCloud Drive, completely downloaded; the app was started again after the first index build.
+
+| What                                     | In the core              | Until shown            | Limit  |        |
+| ---------------------------------------- | ------------------------ | ---------------------- | ------ | ------ |
+| Start, indexed vault                     |                          | 583 ms                 | 1.5 s  | met    |
+| All notes                                | median 262, max 290 ms   | median 273, max 314 ms | 200 ms | missed |
+| Notes of a tag folder (up to 2347 notes) | median 3.1, max 9.4 ms   | median 40, max 130 ms  | 200 ms | met    |
+| Notes of a smart folder                  | median 23, max 27 ms     | median 35, max 130 ms  | 200 ms | met    |
+| Search, while typing                     | median 9.4, max 106 ms   | median 26, max 132 ms  | 200 ms | met    |
+| Opening a note                           | median 61, max 74 ms     | median 67, max 88 ms   | 100 ms | met    |
+| Index sync, nothing changed              | 298–320 ms               |                        | none   |        |
+| Export of 33 notes                       | PDF 176 ms, HTML 46 ms   |                        | none   |        |
+| Memory                                   | 37.9 MB, at most 46.5 MB |                        | none   |        |
+
+- All notes took 237–290 ms in the core, about five times the Mac's median of 51 ms, although no note had changed since the index sync, so no file needed to be read. The index sync, which also only compares each file's modification time and size, took about 300 ms. Both list the 10,000 files of `notes/` and ask each for its time and size; on the iPhone this probably takes most of the time. It is not measured on its own yet.
+- Reading a note took about 61 ms in the core, against 18 ms on the Mac.
+- The searches were typed letter by letter; the copied text keeps the last 20 of 137, among them `(spule OR dipol) #radio/cw` (32 ms). The slowest was the one letter "A" (93–106 ms in the core).
+- The first index build after the download is not in the copied text: it was in the app's run before the restart.
+
+#### Estimate for the A11
+
+Geekbench 6 single-core scores, as of 2026-11-24: the iPhone 18 Pro (A20 Pro) 4,735, from [Tom's Guide's review](https://www.tomsguide.com/phones/iphones/iphone-18-pro-benchmarks-apple-just-built-the-most-powerful-phones-weve-ever-seen); the A11 1,040, the average on [CPU-Monkey](https://www.cpu-monkey.com/en/benchmark-apple_a11_bionic-geekbench_6_single_core) ([Notebookcheck](https://www.notebookcheck.net/Apple-A11-Bionic-SoC-Benchmarks-and-Specs.250986.0.html) lists 1,100; the lower score is used). Factor: 4,735 / 1,040 × 1.5 ≈ 6.8.
+
+| What                    | iPhone 18 Pro, until shown | A11, estimated          | Limit  |                                |
+| ----------------------- | -------------------------- | ----------------------- | ------ | ------------------------------ |
+| Start, indexed vault    | 583 ms                     | 4.0 s                   | 1.5 s  | missed                         |
+| All notes               | median 273, max 314 ms     | median 1.9 s, max 2.1 s | 200 ms | missed                         |
+| Notes of a tag folder   | median 40, max 130 ms      | median 273, max 888 ms  | 200 ms | missed                         |
+| Notes of a smart folder | median 35, max 130 ms      | median 239, max 888 ms  | 200 ms | missed                         |
+| Search                  | median 26, max 132 ms      | median 178, max 901 ms  | 200 ms | median met, the slowest missed |
+| Opening a note          | median 67, max 88 ms       | median 458, max 601 ms  | 100 ms | missed                         |
+
+- The estimate scales every time with the processor, also waiting for storage and drawing in WebKit, and adds 50 %. It is meant to be on the safe side, not exact.
+
+<details>
+<summary>Copied text</summary>
+
+```text
+Schnipsle 0.1.0 on iPhone19,2, ios 27.2.1
+2026-11-24T07:49:25.741Z
+Memory: 37.9 MB, at most 46.5 MB
+
+Start, until the note list shows: 1 time; median of the last ones 583 ms, slowest 583 ms
+  583 ms
+
+Opening the vault: 1 time; median of the last ones 11 ms, slowest 11 ms
+  11 ms
+
+Index sync: 2 times; median of the last ones 309 ms, slowest 320 ms (10000 notes, 0 read, 0 removed)
+  298 ms (10000 notes, 0 read, 0 removed)
+  320 ms (10000 notes, 0 read, 0 removed)
+
+All notes: 11 times; median of the last ones 262 ms, slowest 290 ms (10000 notes)
+  290 ms (10000 notes)
+  263 ms (10000 notes)
+  266 ms (10000 notes)
+  253 ms (10000 notes)
+  247 ms (10000 notes)
+  245 ms (10000 notes)
+  258 ms (10000 notes)
+  266 ms (10000 notes)
+  262 ms (10000 notes)
+  237 ms (10000 notes)
+  285 ms (10000 notes)
+
+All notes, until shown: 11 times; median of the last ones 273 ms, slowest 314 ms (10000 notes)
+  314 ms (10000 notes)
+  270 ms (10000 notes)
+  273 ms (10000 notes)
+  263 ms (10000 notes)
+  258 ms (10000 notes)
+  257 ms (10000 notes)
+  265 ms (10000 notes)
+  273 ms (10000 notes)
+  278 ms (10000 notes)
+  283 ms (10000 notes)
+  292 ms (10000 notes)
+
+Tag folders: 12 times; median of the last ones 20 ms, slowest 47 ms (21 folders)
+  47 ms (21 folders)
+  16 ms (23 folders)
+  16 ms (23 folders)
+  18 ms (22 folders)
+  22 ms (22 folders)
+  17 ms (23 folders)
+  31 ms (22 folders)
+  16 ms (23 folders)
+  28 ms (22 folders)
+  40 ms (23 folders)
+  19 ms (22 folders)
+  23 ms (22 folders)
+
+Notes of a tag folder: 11 times; median of the last ones 3.1 ms, slowest 9.4 ms (1971 notes)
+  2.5 ms (33 notes)
+  3.0 ms (33 notes)
+  1.9 ms (33 notes)
+  2.8 ms (33 notes)
+  2.8 ms (33 notes)
+  3.2 ms (648 notes)
+  9.4 ms (1971 notes)
+  6.3 ms (2347 notes)
+  3.1 ms (651 notes)
+  5.9 ms (1870 notes)
+  4.2 ms (1870 notes)
+
+Notes of a tag folder, until shown: 11 times; median of the last ones 40 ms, slowest 130 ms (1870 notes)
+  18 ms (33 notes)
+  18 ms (33 notes)
+  13 ms (33 notes)
+  14 ms (33 notes)
+  40 ms (33 notes)
+  30 ms (648 notes)
+  65 ms (1971 notes)
+  46 ms (2347 notes)
+  64 ms (651 notes)
+  58 ms (1870 notes)
+  130 ms (1870 notes)
+
+Notes of a smart folder: 14 times; median of the last ones 23 ms, slowest 27 ms (200 notes)
+  25 ms (200 notes)
+  9.6 ms (200 notes)
+  25 ms (200 notes)
+  10 ms (200 notes)
+  27 ms (200 notes)
+  9.7 ms (200 notes)
+  25 ms (200 notes)
+  9.6 ms (200 notes)
+  25 ms (200 notes)
+  9.0 ms (200 notes)
+  23 ms (200 notes)
+  23 ms (200 notes)
+  26 ms (200 notes)
+  22 ms (200 notes)
+
+Notes of a smart folder, until shown: 14 times; median of the last ones 35 ms, slowest 130 ms (200 notes)
+  37 ms (200 notes)
+  13 ms (200 notes)
+  35 ms (200 notes)
+  52 ms (200 notes)
+  35 ms (200 notes)
+  25 ms (200 notes)
+  35 ms (200 notes)
+  25 ms (200 notes)
+  35 ms (200 notes)
+  18 ms (200 notes)
+  130 ms (200 notes)
+  34 ms (200 notes)
+  36 ms (200 notes)
+  32 ms (200 notes)
+
+Search: 137 times; median of the last ones 9.4 ms, slowest 106 ms (200 notes, for “A”)
+  28 ms (200 notes, for “Antenne”)
+  29 ms (200 notes, for “Antenn”)
+  32 ms (200 notes, for “Ante”)
+  57 ms (200 notes, for “An”)
+  93 ms (200 notes, for “A”)
+  0.0 ms (0 notes, for “-”)
+  0.0 ms (0 notes, for “-#”)
+  9.2 ms (200 notes, for “-#r”)
+  9.6 ms (200 notes, for “-#ra”)
+  9.2 ms (200 notes, for “-#rall”)
+  9.0 ms (200 notes, for “-#ralll”)
+  12 ms (200 notes, for “-#radio”)
+  8.1 ms (200 notes, for “-#radi”)
+  11 ms (200 notes, for “-#rad”)
+  8.4 ms (200 notes, for “-#ra”)
+  11 ms (200 notes, for “-#r”)
+  0.0 ms (0 notes, for “-#”)
+  0.0 ms (0 notes, for “-”)
+  32 ms (200 notes, for “(Spule OR Dipol) #radio/CW”)
+  0.5 ms (0 notes, for “(Spule OR Dipol) #radio/C”)
+
+Search, until shown: 137 times; median of the last ones 26 ms, slowest 132 ms (200 notes)
+  40 ms (200 notes)
+  40 ms (200 notes)
+  42 ms (200 notes)
+  65 ms (200 notes)
+  114 ms (200 notes)
+  7.0 ms (0 notes)
+  19 ms (0 notes)
+  25 ms (200 notes)
+  27 ms (200 notes)
+  27 ms (200 notes)
+  24 ms (200 notes)
+  23 ms (200 notes)
+  21 ms (200 notes)
+  26 ms (200 notes)
+  21 ms (200 notes)
+  23 ms (200 notes)
+  19 ms (0 notes)
+  71 ms (0 notes)
+  42 ms (200 notes)
+  12 ms (0 notes)
+
+Reading a note: 5 times; median of the last ones 61 ms, slowest 74 ms (2 KB)
+  63 ms (3 KB)
+  60 ms (3 KB)
+  61 ms (3 KB)
+  61 ms (2 KB)
+  74 ms (2 KB)
+
+Opening a note, until shown: 5 times; median of the last ones 67 ms, slowest 88 ms (2 KB)
+  68 ms (3 KB)
+  65 ms (3 KB)
+  66 ms (3 KB)
+  67 ms (2 KB)
+  88 ms (2 KB)
+
+Export: 2 times; median of the last ones 111 ms, slowest 176 ms (PDF, 33 notes)
+  46 ms (HTML, 33 notes)
+  176 ms (PDF, 33 notes)
+```
+
+</details>
+
 ### Mac, 2026-11-23, with ADR-0046
 
 - Device, vault and procedure as in the run before; release build of branch `perf/n03-index-reads` (ADR-0046), started twice after the build so the start was not the first one.
