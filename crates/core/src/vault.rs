@@ -33,6 +33,7 @@ use crate::conflicts::{
 use crate::coordination::{Coordinator, Uncoordinated};
 use crate::front_matter;
 use crate::layout::{ATTACHMENTS_DIR, FORMAT, NOTES_DIR, VAULT_FILE, VaultIdentity};
+use crate::listing::{EntryKind, FolderLister, PlainLister};
 use crate::stamp::{new_ulid, now_ms, rfc3339_utc};
 
 /// Errors from vault operations.
@@ -214,6 +215,7 @@ pub struct Vault {
     coordinator: Arc<dyn Coordinator>,
     sync: Arc<dyn SyncConflicts>,
     by_id: Arc<dyn NotesById>,
+    lister: Arc<dyn FolderLister>,
 }
 
 impl Vault {
@@ -282,6 +284,7 @@ impl Vault {
             coordinator,
             sync: Arc::new(NoSyncConflicts),
             by_id: Arc::new(NoIdLookup),
+            lister: Arc::new(PlainLister),
         })
     }
 
@@ -305,6 +308,18 @@ impl Vault {
     pub fn with_notes_by_id(mut self, by_id: Arc<dyn NotesById>) -> Self {
         self.by_id = by_id;
         self
+    }
+
+    /// Uses `lister` to list the folders of the vault (ADR-0047); without
+    /// one, [`PlainLister`].
+    #[must_use]
+    pub fn with_folder_lister(mut self, lister: Arc<dyn FolderLister>) -> Self {
+        self.lister = lister;
+        self
+    }
+
+    pub(crate) fn lister(&self) -> &dyn FolderLister {
+        self.lister.as_ref()
     }
 
     /// The vault's root folder.
@@ -369,7 +384,14 @@ impl Vault {
         // One coordinated read of the folder covers the files inside it.
         let listed = self.coordinated(Access::Read, &self.notes, |notes_dir| {
             let mut notes = Vec::new();
-            collect(notes_dir, "", &mut notes, true, known.as_deref())?;
+            collect(
+                self.lister(),
+                notes_dir,
+                "",
+                &mut notes,
+                true,
+                known.as_deref(),
+            )?;
             Ok(notes)
         });
         let mut notes = match listed {
@@ -852,7 +874,7 @@ fn canonical_lenient(path: &Path) -> Option<PathBuf> {
 /// Paths of the downloaded notes below `dir`, relative to it.
 pub(crate) fn note_paths(dir: &Path) -> Vec<String> {
     let mut notes = Vec::new();
-    let _ = collect(dir, "", &mut notes, true, None);
+    let _ = collect(&PlainLister, dir, "", &mut notes, true, None);
     notes
         .into_iter()
         .filter(|n| n.available)
@@ -863,19 +885,20 @@ pub(crate) fn note_paths(dir: &Path) -> Vec<String> {
 /// Number of notes below `dir`, iCloud placeholders included.
 pub(crate) fn count_notes(dir: &Path) -> Result<usize> {
     let mut notes = Vec::new();
-    collect(dir, "", &mut notes, true, None)?;
+    collect(&PlainLister, dir, "", &mut notes, true, None)?;
     Ok(notes.len())
 }
 
 /// Recursively collects notes below `dir`; `prefix` is `dir` relative to `notes/`.
 fn collect(
+    lister: &dyn FolderLister,
     dir: &Path,
     prefix: &str,
     out: &mut Vec<NoteEntry>,
     is_root: bool,
     known: Option<&KnownNotes>,
 ) -> Result<()> {
-    let entries = match fs::read_dir(dir) {
+    let entries = match lister.list(dir) {
         Ok(entries) => entries,
         Err(e) if !is_root => {
             // A subfolder we cannot read must not hide the rest of the vault.
@@ -884,13 +907,9 @@ fn collect(
         }
         Err(e) => return Err(e.into()),
     };
-    for entry in entries.flatten() {
-        let name = entry.file_name().to_string_lossy().into_owned();
-        let Ok(file_type) = entry.file_type() else {
-            continue;
-        };
-        let meta = entry.metadata().ok();
-        let modified_ms = meta.as_ref().map_or(0, modified_ms);
+    for entry in entries {
+        let name = entry.name.to_string_lossy().into_owned();
+        let modified_ms = entry.stat.map_or(0, |stat| stat.modified_ms);
 
         if let Some(real) = placeholder_note_name(&name) {
             out.push(NoteEntry {
@@ -902,19 +921,20 @@ fn collect(
             });
         } else if name.starts_with('.') {
             // hidden file or folder, including .notesapp/
-        } else if file_type.is_dir() {
+        } else if entry.kind == EntryKind::Folder {
             collect(
-                &entry.path(),
+                lister,
+                &dir.join(&entry.name),
                 &format!("{prefix}{name}/"),
                 out,
                 false,
                 known,
             )?;
-        } else if file_type.is_file() && has_md_extension(&name) {
+        } else if entry.kind == EntryKind::File && has_md_extension(&name) {
             let path = format!("{prefix}{name}");
             let unchanged = known
                 .and_then(|known| known.get(&path))
-                .filter(|k| meta.as_ref().is_some_and(|m| k.matches(m)));
+                .filter(|k| entry.stat.is_some_and(|stat| k.matches(stat)));
             if let Some(k) = unchanged {
                 out.push(NoteEntry {
                     path,
@@ -926,7 +946,7 @@ fn collect(
                 continue;
             }
             let stem = name[..name.len() - 3].to_owned();
-            let head = read_head(&entry.path());
+            let head = read_head(&dir.join(&entry.name));
             let title = head
                 .as_ref()
                 .map_or_else(|_| stem.clone(), |head| title_of(head, &stem));

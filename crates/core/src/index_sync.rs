@@ -25,6 +25,7 @@ use serde::Serialize;
 use crate::front_matter;
 use crate::index::{FileStamp, Index, IndexError, NoteState, analyze};
 use crate::layout::NOTES_DIR;
+use crate::listing::{EntryKind, FolderLister};
 use crate::trash::TRASH_DIR;
 use crate::vault::{Access, Result, Vault, VaultError, sha256_hex};
 
@@ -75,10 +76,17 @@ impl Vault {
     /// cannot be read only counts as `failed`.
     pub fn sync_index(&self, index: &mut Index) -> Result<IndexSync> {
         let mut found = Vec::new();
-        walk(self.notes_dir(), NOTES_DIR, NoteState::Active, &mut found)?;
+        let lister = self.lister();
+        walk(
+            lister,
+            self.notes_dir(),
+            NOTES_DIR,
+            NoteState::Active,
+            &mut found,
+        )?;
         let trash = self.root().join(TRASH_DIR);
         if trash.is_dir() {
-            walk(&trash, TRASH_DIR, NoteState::Trash, &mut found)?;
+            walk(lister, &trash, TRASH_DIR, NoteState::Trash, &mut found)?;
         }
 
         let stamps = index.stamps()?;
@@ -265,32 +273,41 @@ fn lost_identity(index: &Index, key: &str, state: NoteState, bytes: &[u8]) -> Re
 
 /// Collects the `.md` files below `dir` (hidden files and folders skipped,
 /// so iCloud placeholders too), keyed by `prefix/…`.
-fn walk(dir: &Path, prefix: &str, state: NoteState, out: &mut Vec<Found>) -> io::Result<()> {
-    let entries = match fs::read_dir(dir) {
+fn walk(
+    lister: &dyn FolderLister,
+    dir: &Path,
+    prefix: &str,
+    state: NoteState,
+    out: &mut Vec<Found>,
+) -> io::Result<()> {
+    let entries = match lister.list(dir) {
         Ok(entries) => entries,
         Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(()),
         Err(e) if out.is_empty() && prefix == NOTES_DIR => return Err(e),
         Err(_) => return Ok(()), // an unreadable subfolder must not stop the rest
     };
-    for entry in entries.flatten() {
-        let name = entry.file_name().to_string_lossy().into_owned();
+    for entry in entries {
+        let name = entry.name.to_string_lossy().into_owned();
         if name.starts_with('.') {
             continue;
         }
-        let Ok(meta) = entry.metadata() else {
+        let Some(stat) = entry.stat else {
             continue;
         };
         let key = format!("{prefix}/{name}");
-        if meta.is_dir() {
+        if entry.kind == EntryKind::Folder {
             if state == NoteState::Active {
-                walk(&entry.path(), &key, state, out)?;
+                walk(lister, &dir.join(&entry.name), &key, state, out)?;
             }
-        } else if meta.is_file() && name.len() > 3 && name.to_ascii_lowercase().ends_with(".md") {
+        } else if entry.kind == EntryKind::File
+            && name.len() > 3
+            && name.to_ascii_lowercase().ends_with(".md")
+        {
             out.push(Found {
                 key,
                 state,
-                mtime_ms: mtime_ms(&meta),
-                size: meta.len(),
+                mtime_ms: stat.modified_ms,
+                size: stat.size,
             });
         }
     }

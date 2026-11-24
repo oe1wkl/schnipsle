@@ -60,3 +60,4 @@ This folder records every significant architectural decision of the project, one
 | [0044](0044-a-note-keeps-its-id-when-another-program-drops-it.md) | A note keeps its `id` when another program drops it | Accepted | 2026-11-21 |
 | [0045](0045-measuring-performance-on-devices.md) | Measuring performance on devices | Accepted | 2026-11-23 |
 | [0046](0046-unchanged-files-are-not-read-again.md) | Unchanged files are not read again to list notes or find copies | Accepted | 2026-11-23 |
+| [0047](0047-folders-are-listed-in-bulk-on-apple-platforms.md) | Folders are listed in bulk on Apple platforms | Accepted | 2026-11-24 |

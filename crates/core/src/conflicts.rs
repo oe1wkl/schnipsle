@@ -20,10 +20,10 @@ use std::sync::Arc;
 use serde::Serialize;
 
 use crate::front_matter;
+use crate::listing::{EntryKind, FileStat};
 use crate::stamp::{is_ulid, new_ulid, now_ms, rfc3339_utc};
 use crate::vault::{
-    Access, NoteContent, Result, Vault, VaultError, created_ms, modified_ms, modified_ms_of,
-    sha256_hex,
+    Access, NoteContent, Result, Vault, VaultError, created_ms, modified_ms_of, sha256_hex,
 };
 
 /// A conflict version as the sync service stores it.
@@ -108,11 +108,11 @@ pub struct KnownNote {
 }
 
 impl KnownNote {
-    /// `true` if the file with `meta` has the modification time and size
+    /// `true` if a file with `stat` has the modification time and size
     /// recorded, so it is taken as unchanged; the index sync uses the same test.
     #[must_use]
-    pub fn matches(&self, meta: &fs::Metadata) -> bool {
-        self.mtime_ms == modified_ms(meta) && self.size == meta.len()
+    pub fn matches(&self, stat: FileStat) -> bool {
+        self.mtime_ms == stat.modified_ms && self.size == stat.size
     }
 }
 
@@ -216,13 +216,13 @@ impl Vault {
         };
         // The index records valid ids only; for any other id it cannot tell.
         let known = is_ulid(&id).then(|| self.by_id().known_notes()).flatten();
-        let other_id = |rel: &str, entry: &fs::DirEntry| {
+        let other_id = |rel: &str, stat: Option<FileStat>| {
             known
                 .as_ref()
                 .and_then(|known| known.get(rel))
                 .is_some_and(|k| {
                     !k.id.as_deref().is_some_and(|k| k.eq_ignore_ascii_case(&id))
-                        && entry.metadata().is_ok_and(|m| k.matches(&m))
+                        && stat.is_some_and(|stat| k.matches(stat))
                 })
         };
         let folder = path.rsplit_once('/').map_or("", |(dir, _)| dir);
@@ -238,13 +238,13 @@ impl Vault {
         };
         let names = self.coordinated(Access::Read, &dir, |dir| {
             let mut names = Vec::new();
-            for entry in fs::read_dir(dir)?.flatten() {
-                let name = entry.file_name().to_string_lossy().into_owned();
-                let is_note = entry.file_type().is_ok_and(|t| t.is_file())
+            for entry in self.lister().list(dir)? {
+                let name = entry.name.to_string_lossy().into_owned();
+                let is_note = entry.kind == EntryKind::File
                     && !name.starts_with('.')
                     && name.to_ascii_lowercase().ends_with(".md");
                 let rel = format!("{prefix}{name}");
-                if is_note && rel != path && !other_id(&rel, &entry) {
+                if is_note && rel != path && !other_id(&rel, entry.stat) {
                     names.push(name);
                 }
             }
@@ -400,6 +400,7 @@ mod tests {
     use std::sync::{Arc, Mutex};
 
     use super::*;
+    use crate::vault::modified_ms;
 
     /// A sync service with conflict versions held in memory.
     #[derive(Debug, Default)]
