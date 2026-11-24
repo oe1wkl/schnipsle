@@ -263,7 +263,15 @@ function vaultOpened(info: VaultInfo): void {
   ui.readOnly.hidden = readOnly === null;
   ui.readOnlyText.textContent = readOnly ?? "";
   ui.newNote.disabled = readOnly !== null;
-  ui.empty.hidden = true;
+  // The previous vault's notes go at once: listing a vault that is still
+  // downloading can take a while, and their rows must not open in this one.
+  listDrawing++;
+  entries = [];
+  hitsInTrash = new Set();
+  ui.notes.style.paddingBottom = "";
+  ui.notes.replaceChildren();
+  ui.empty.textContent = t.list.reading;
+  ui.empty.hidden = false;
   sidebar.reset();
   retag.reset();
   sidebar.setEnabled(true);

@@ -145,6 +145,7 @@ export const en = {
       "Open a vault to start: pick its folder, or an empty folder for a new vault. On iPhone, " +
       "pick a folder in iCloud Drive.",
     indexing: "The index is being built; try again in a moment.",
+    reading: "Reading the notes…",
     nothingFound: "Nothing found.",
     noNotesYet: "No notes in this folder yet. Tap New.",
     noNotesHere: "No notes here.",
