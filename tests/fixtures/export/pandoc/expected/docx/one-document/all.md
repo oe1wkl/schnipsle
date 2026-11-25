@@ -80,7 +80,9 @@ and last year's log.
 Bake at 230 °C for 20 minutes.
 ```
 
-    Indented code is code too.
+```
+Indented code is code too.
+```
 
 ```{=openxml}
 <w:p><w:r><w:br w:type="page"/></w:r></w:p>
