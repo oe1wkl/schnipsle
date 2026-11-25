@@ -28,12 +28,12 @@
     "@codemirror/view": "~6.43.15",
     "@lezer/common": "~1.5.5",
     "@lezer/highlight": "~1.2.5",
-    "@tauri-apps/api": "~2.12.4",
+    "@tauri-apps/api": "~2.12.5",
     "abcjs": "~6.7.2"
   },
   "devDependencies": {
     "@eslint/js": "~10.0.1",
-    "@tauri-apps/cli": "~2.12.4",
+    "@tauri-apps/cli": "~2.12.6",
     "@types/node": "~26.6.6",
     "eslint": "~10.15.0",
     "globals": "~17.14.0",
