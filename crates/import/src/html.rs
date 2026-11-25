@@ -16,6 +16,8 @@
 //! - `<s>`, `<del>` and `<strike>` become `~~…~~`; checkboxes `[x]` and
 //!   `[ ]`; `<hr>` `---`. Scripts, styles and other form fields are left
 //!   out.
+//! - Text that Markdown would read as markup (`$5` as math, `1)` as a
+//!   list) gets a backslash, but a plain `&` (`Q&A`) does not.
 //! - Text that is not UTF-8 is read as Windows-1252 (which covers
 //!   ISO-8859-1) unless the page declares another encoding; such a page is
 //!   not imported, and the report says so.
@@ -162,9 +164,9 @@ fn note(root: &Path, page: &Found, html: &str, notices: &mut Vec<Notice>) -> Imp
 
     let mut title = String::new();
     if let Some(heading) = files::leading_heading(&body) {
-        title = unescape(heading);
+        title = files::unescape(heading);
     } else if let Some(page_title) = converted.title {
-        title = unescape(&page_title);
+        title = files::unescape(&page_title);
         body = if body.is_empty() {
             format!("# {page_title}")
         } else {
@@ -293,7 +295,7 @@ fn convert(html: &str) -> Converted {
         |m| m.into_inner().unwrap_or_else(PoisonError::into_inner),
     );
     Converted {
-        markdown: tidy(&markdown),
+        markdown: tidy(&plain_ampersands(&markdown)),
         title: collected.title,
         attachments: collected.attachments,
         problems: collected.problems,
@@ -318,8 +320,10 @@ fn converter(collected: &Arc<Mutex<Collected>>) -> HtmlToMarkdown {
         .skip_tags(vec!["script", "style", "noscript", "template"])
         .add_handler(
             vec!["title"],
-            move |handlers: &dyn Handlers, element: Element| {
-                let text = handlers.walk_children(element.node).content;
+            move |handlers: &dyn Handlers, element: &Element| {
+                let text = handlers
+                    .walk_children(element.node, element.context)
+                    .content;
                 let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
                 let mut collected = lock(&for_title);
                 if collected.title.is_none() && !text.is_empty() {
@@ -330,8 +334,8 @@ fn converter(collected: &Arc<Mutex<Collected>>) -> HtmlToMarkdown {
         )
         .add_handler(
             vec!["img"],
-            move |handlers: &dyn Handlers, element: Element| {
-                let src = attr(&element, "src").unwrap_or_default();
+            move |handlers: &dyn Handlers, element: &Element| {
+                let src = attr(element, "src").unwrap_or_default();
                 if !src
                     .trim_start()
                     .get(..5)
@@ -339,7 +343,7 @@ fn converter(collected: &Arc<Mutex<Collected>>) -> HtmlToMarkdown {
                 {
                     return handlers.fallback(element);
                 }
-                let alt = attr(&element, "alt")
+                let alt = attr(element, "alt")
                     .map(|a| a.split_whitespace().collect::<Vec<_>>().join(" "))
                     .unwrap_or_default()
                     .replace(['[', ']'], "");
@@ -363,8 +367,10 @@ fn converter(collected: &Arc<Mutex<Collected>>) -> HtmlToMarkdown {
         )
         .add_handler(
             vec!["s", "del", "strike"],
-            |handlers: &dyn Handlers, element: Element| {
-                let content = handlers.walk_children(element.node).content;
+            |handlers: &dyn Handlers, element: &Element| {
+                let content = handlers
+                    .walk_children(element.node, element.context)
+                    .content;
                 let trimmed = content.trim();
                 if trimmed.is_empty() {
                     return Some(HandlerResult::from(content));
@@ -374,20 +380,20 @@ fn converter(collected: &Arc<Mutex<Collected>>) -> HtmlToMarkdown {
                 Some(HandlerResult::from(format!("{start}~~{trimmed}~~{end}")))
             },
         )
-        .add_handler(vec!["input"], |_: &dyn Handlers, element: Element| {
+        .add_handler(vec!["input"], |_: &dyn Handlers, element: &Element| {
             let checkbox =
-                attr(&element, "type").is_some_and(|t| t.eq_ignore_ascii_case("checkbox"));
+                attr(element, "type").is_some_and(|t| t.eq_ignore_ascii_case("checkbox"));
             if !checkbox {
                 return Some(HandlerResult::from(""));
             }
-            let mark = if attr(&element, "checked").is_some() {
+            let mark = if attr(element, "checked").is_some() {
                 "[x] "
             } else {
                 "[ ] "
             };
             Some(HandlerResult::from(mark))
         })
-        .add_handler(vec!["hr"], |_: &dyn Handlers, _: Element| {
+        .add_handler(vec!["hr"], |_: &dyn Handlers, _: &Element| {
             Some(HandlerResult::from("\n\n---\n\n"))
         })
         .build()
@@ -395,11 +401,7 @@ fn converter(collected: &Arc<Mutex<Collected>>) -> HtmlToMarkdown {
 
 /// The value of the attribute `name` of `element`.
 fn attr(element: &Element<'_>, name: &str) -> Option<String> {
-    element
-        .attrs
-        .iter()
-        .find(|a| &*a.name.local == name)
-        .map(|a| a.value.to_string())
+    element.node.attr(name).map(|value| value.to_string())
 }
 
 /// The content and file extension of a `data:` URL holding a picture.
@@ -461,17 +463,106 @@ fn tidy(markdown: &str) -> String {
     out.trim_matches('\n').to_owned()
 }
 
-/// Markdown text without its backslash escapes.
-fn unescape(text: &str) -> String {
-    let mut out = String::new();
-    let mut chars = text.chars().peekable();
-    while let Some(c) = chars.next() {
-        if c == '\\' && chars.peek().is_some_and(char::is_ascii_punctuation) {
-            continue;
+/// `markdown` without the backslash the converter writes before every `&`
+/// where that `&` cannot start a character reference, so `Q&A` stays
+/// readable while `\&amp;` keeps its backslash. Code spans and fenced code
+/// are left as they are.
+fn plain_ampersands(markdown: &str) -> String {
+    let bytes = markdown.as_bytes();
+    let mut out = String::with_capacity(markdown.len());
+    let mut sent = 0;
+    let mut at = 0;
+    let mut fence: Option<(u8, usize)> = None;
+    let mut line_start = true;
+    while at < bytes.len() {
+        if line_start {
+            line_start = false;
+            let line_end = markdown[at..].find('\n').map_or(bytes.len(), |e| at + e);
+            let line = markdown[at..line_end].trim_start_matches(' ');
+            let mark = line.bytes().next().filter(|b| matches!(b, b'`' | b'~'));
+            let run = mark.map_or(0, |m| line.bytes().take_while(|&b| b == m).count());
+            let indent = line_end - at - line.len();
+            let opens = run >= 3 && indent <= 3;
+            match fence {
+                Some((m, len)) => {
+                    if mark == Some(m) && run >= len && line[run..].trim().is_empty() {
+                        fence = None;
+                    }
+                    at = line_end;
+                    continue;
+                }
+                None if opens => {
+                    fence = mark.map(|m| (m, run));
+                    at = line_end;
+                    continue;
+                }
+                None => {}
+            }
         }
-        out.push(c);
+        match bytes[at] {
+            b'\n' => {
+                line_start = true;
+                at += 1;
+            }
+            b'\\' if bytes.get(at + 1) == Some(&b'&') => {
+                if !starts_reference(&markdown[at + 1..]) {
+                    out.push_str(&markdown[sent..at]);
+                    sent = at + 1;
+                }
+                at += 2;
+            }
+            b'\\' if bytes.get(at + 1).is_some_and(u8::is_ascii_punctuation) => at += 2,
+            b'`' => {
+                let run = bytes[at..].iter().take_while(|&&b| b == b'`').count();
+                at += run;
+                if let Some(close) = closing_backticks(&markdown[at..], run) {
+                    at += close + run;
+                }
+            }
+            _ => at += 1,
+        }
     }
+    out.push_str(&markdown[sent..]);
     out
+}
+
+/// `true` if `text` starts with what `CommonMark` reads as an entity or
+/// numeric character reference: `&name;`, `&#35;`, `&#x23;`.
+fn starts_reference(text: &str) -> bool {
+    let rest = text.get(1..).unwrap_or_default();
+    let Some(end) = rest.bytes().take(40).position(|b| b == b';') else {
+        return false;
+    };
+    let name = &rest[..end];
+    if let Some(number) = name.strip_prefix('#') {
+        match number.strip_prefix(['x', 'X']) {
+            Some(hex) => (1..=6).contains(&hex.len()) && hex.bytes().all(|b| b.is_ascii_hexdigit()),
+            None => (1..=7).contains(&number.len()) && number.bytes().all(|b| b.is_ascii_digit()),
+        }
+    } else {
+        name.bytes().next().is_some_and(|b| b.is_ascii_alphabetic())
+            && name.bytes().all(|b| b.is_ascii_alphanumeric())
+    }
+}
+
+/// Where in `text` the run of exactly `len` backticks that closes a code
+/// span starts, looking no further than the end of the paragraph.
+fn closing_backticks(text: &str, len: usize) -> Option<usize> {
+    let text = &text[..text.find("\n\n").unwrap_or(text.len())];
+    let bytes = text.as_bytes();
+    let mut at = 0;
+    while at < bytes.len() {
+        if bytes[at] == b'`' {
+            let run = bytes[at..].iter().take_while(|&&b| b == b'`').count();
+            if run == len {
+                return Some(at);
+            }
+            at += run;
+        } else {
+            at += 1;
+        }
+    }
+    None
 }
 
 #[cfg(test)]
@@ -544,8 +635,31 @@ mod tests {
     }
 
     #[test]
-    fn headings_and_escapes() {
-        assert_eq!(unescape("A \\*b\\* \\ c"), "A *b* \\ c");
+    fn escapes() {
+        // `&` without a backslash where it starts no character reference.
+        assert_eq!(
+            markdown(
+                "<h1>Tom &amp; Jerry</h1><p>Q&amp;A, &amp;amp; &amp;#35; \\&amp;</p>\
+                 <p><a href=\"a&amp;b.pdf\">x</a> <img src=\"p.png\" alt=\"a &amp; b\"></p>"
+            ),
+            "# Tom & Jerry\n\nQ&A, \\&amp; \\&#35; \\\\&\n\n[x](a&b.pdf) ![a & b](p.png)"
+        );
+        // Text that would read as math, strikethrough or a block stays text.
+        assert_eq!(
+            markdown("<p>$5 and $10, a ~ b</p><p>-</p><p>1) one</p>"),
+            "\\$5 and \\$10, a \\~ b\n\n\\-\n\n1\\) one"
+        );
+    }
+
+    #[test]
+    fn plain_ampersands_skips_code() {
+        assert_eq!(
+            plain_ampersands(
+                "a\\&b \\&copy; \\&#x23; `x\\&y` ``p ` \\&``\n```\n\\&\n```\n~~~~\n\\&\n~~~\n~~~~\n\\&"
+            ),
+            "a&b \\&copy; \\&#x23; `x\\&y` ``p ` \\&``\n```\n\\&\n```\n~~~~\n\\&\n~~~\n~~~~\n&"
+        );
+        assert_eq!(plain_ampersands("`a\n\nb \\& `"), "`a\n\nb & `");
     }
 
     #[test]

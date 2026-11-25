@@ -171,8 +171,24 @@ pub(crate) fn leading_heading(markdown: &str) -> Option<&str> {
     (!text.is_empty()).then_some(text)
 }
 
+/// Markdown text without its backslash escapes.
+pub(crate) fn unescape(text: &str) -> String {
+    let mut out = String::new();
+    let mut chars = text.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '\\' && chars.peek().is_some_and(char::is_ascii_punctuation) {
+            if let Some(next) = chars.next() {
+                out.push(next);
+            }
+            continue;
+        }
+        out.push(c);
+    }
+    out
+}
+
 /// The link destinations in `markdown` as written: `](dest)`,
-/// `](dest "title")` and `](<dest>)`, with `\(` and `\)` kept.
+/// `](dest "title")` and `](<dest>)`, with their backslash escapes kept.
 pub(crate) fn destinations(markdown: &str) -> Vec<&str> {
     let mut out = Vec::new();
     let mut rest = markdown;
@@ -248,7 +264,7 @@ pub(crate) fn local_file(root: &Path, dir: &Path, dest: &str) -> Option<PathBuf>
     if dest.contains(':') || dest.starts_with(['/', '#', '?']) {
         return None;
     }
-    let dest = dest.replace("\\(", "(").replace("\\)", ")");
+    let dest = unescape(dest);
     let dest = dest.split(['#', '?']).next().unwrap_or_default();
     let dest = percent_decode_str(dest).decode_utf8().ok()?;
     let mut path = dir.to_path_buf();
@@ -281,6 +297,7 @@ mod tests {
         assert_eq!(leading_heading("\n# A \\*b\\*\n\ntext"), Some("A \\*b\\*"));
         assert_eq!(leading_heading("## A"), None);
         assert_eq!(leading_heading("#tag\n"), None);
+        assert_eq!(unescape("A \\*b\\* \\ c \\\\\\& d"), "A *b* \\ c \\& d");
     }
 
     #[test]
@@ -302,6 +319,10 @@ mod tests {
         assert_eq!(
             file("../b/x\\(1\\).png"),
             Some(PathBuf::from("/r/b/x(1).png"))
+        );
+        assert_eq!(
+            file("a\\&b\\\\c.pdf"),
+            Some(PathBuf::from("/r/a/a&b\\c.pdf"))
         );
         assert_eq!(file("../../etc/passwd"), None);
         for dest in [
