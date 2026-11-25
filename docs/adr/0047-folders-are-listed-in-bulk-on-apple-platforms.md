@@ -46,5 +46,5 @@ No file format changes.
 
 - Positive: All notes, the index sync and opening a note no longer take time per file for the lookup; with 10,000 notes the listing is expected to drop from about 250 ms to under 20 ms on the iPhone 18 Pro.
 - Negative: two listers must give the same answers; a difference would show as files read again (harmless) or, if a time were wrong in the other direction, as a change not seen until a file is read for another reason. The tests compare them entry by entry.
-- Follow-up work: measure again on the iPhone (ADR-0045) and record the results in `docs/design/performance.md`.
+- Measured on the iPhone 18 Pro on 2026-11-24 (`docs/design/performance.md`): all notes 57 ms until shown instead of 273 ms, the start 204 ms instead of 583 ms, the index sync 27 ms instead of about 300 ms.
 - Implemented in `crates/core/src/listing.rs` (`FolderLister`, `PlainLister`), `crates/apple/src/listing.rs` (`BulkLister`), used by `vault.rs`, `index_sync.rs` and `conflicts.rs`; chosen in `src-tauri/src/lib.rs`.

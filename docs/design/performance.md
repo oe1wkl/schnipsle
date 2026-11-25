@@ -61,6 +61,202 @@ iOS 16 runs on the iPhone 8 and X (A11) and later (ADR-0002). There is none at h
 
 Each run adds a section: date, device and system, app version and build, the vault (notes, seed), the times against the limits, the memory, the estimate for the A11 where it applies, and the copied text.
 
+### iPhone 18 Pro, 2026-11-24, with ADR-0047
+
+- Device, vault and procedure as in the run before.
+- App: 0.1.0, Release build (`pnpm tauri ios build --export-method debugging`) of `perf/n03-bulk-listing`, the code merged in PR 114 (folders listed with `getattrlistbulk`, ADR-0047).
+
+| What                                     | In the core              | Until shown            | Limit  |     |
+| ---------------------------------------- | ------------------------ | ---------------------- | ------ | --- |
+| Start, indexed vault                     |                          | 204 ms                 | 1.5 s  | met |
+| All notes                                | median 38, max 45 ms     | median 57, max 128 ms  | 200 ms | met |
+| Notes of a tag folder (up to 2347 notes) | median 2.8, max 11 ms    | median 128, max 162 ms | 200 ms | met |
+| Notes of a smart folder                  | 8.2 ms                   | 124 ms                 | 200 ms | met |
+| Search, while typing                     | median 25, max 93 ms     | median 34, max 118 ms  | 200 ms | met |
+| Opening a note                           | median 22, max 38 ms     | median 45, max 57 ms   | 100 ms | met |
+| Index sync, nothing changed              | 27 ms                    |                        | none   |     |
+| Memory                                   | 38.4 MB, at most 40.4 MB |                        | none   |     |
+
+- Against the run before (ADR-0046 only): all notes 262 → 38 ms in the core and 273 → 57 ms until shown, the start 583 → 204 ms, the index sync about 300 → 27 ms, reading a note 61 → 22 ms. Asking each of 10,000 files for its time and size with `lstat` had taken about 230 ms; in a test build the same for a folder with `getattrlistbulk` took about 0.4 µs per entry instead of 23 µs.
+- Tag and smart folders showed either after about 30 ms or after about 125 ms, although the core took 2–11 ms. On the phone the list was shown while hidden and drawn afterwards, so the next frame laid out every old row first; PR 115 draws it before showing it. That build is not measured here.
+- No export was made in this run. The first index build is not in the copied text.
+
+#### Estimate for the A11
+
+Scores and factor as in the run before: 4,735 / 1,040 × 1.5 ≈ 6.8.
+
+| What                    | iPhone 18 Pro, until shown | A11, estimated           | Limit  |        |
+| ----------------------- | -------------------------- | ------------------------ | ------ | ------ |
+| Start, indexed vault    | 204 ms                     | 1.4 s                    | 1.5 s  | met    |
+| All notes               | median 57, max 128 ms      | median 389, max 874 ms   | 200 ms | missed |
+| Notes of a tag folder   | median 128, max 162 ms     | median 874 ms, max 1.1 s | 200 ms | missed |
+| Notes of a smart folder | 124 ms                     | 847 ms                   | 200 ms | missed |
+| Search                  | median 34, max 118 ms      | median 232, max 806 ms   | 200 ms | missed |
+| Opening a note          | median 45, max 57 ms       | median 307, max 389 ms   | 100 ms | missed |
+
+- With the start within its limit on the A11 estimate too, the editor stays loaded at the start (see Limits).
+- The tag and smart folder times are those before PR 115.
+
+<details>
+<summary>Copied text</summary>
+
+```text
+Schnipsle 0.1.0 on iPhone19,2, ios 27.2.1
+2026-11-24T15:30:30.252Z
+Memory: 38.4 MB, at most 40.4 MB
+
+Start, until the note list shows: 1 time; median of the last ones 204 ms, slowest 204 ms
+  204 ms
+
+Opening the vault: 1 time; median of the last ones 10 ms, slowest 10 ms
+  10 ms
+
+Index sync: 1 time; median of the last ones 27 ms, slowest 27 ms (10000 notes, 0 read, 0 removed)
+  27 ms (10000 notes, 0 read, 0 removed)
+
+All notes: 22 times; median of the last ones 38 ms, slowest 45 ms (10000 notes)
+  31 ms (10000 notes)
+  20 ms (10000 notes)
+  43 ms (10000 notes)
+  43 ms (10000 notes)
+  40 ms (10000 notes)
+  40 ms (10000 notes)
+  35 ms (10000 notes)
+  43 ms (10000 notes)
+  28 ms (10000 notes)
+  19 ms (10000 notes)
+  32 ms (10000 notes)
+  44 ms (10000 notes)
+  43 ms (10000 notes)
+  33 ms (10000 notes)
+  38 ms (10000 notes)
+  45 ms (10000 notes)
+  37 ms (10000 notes)
+  39 ms (10000 notes)
+  29 ms (10000 notes)
+  17 ms (10000 notes)
+
+All notes, until shown: 22 times; median of the last ones 57 ms, slowest 128 ms (10000 notes)
+  128 ms (10000 notes)
+  34 ms (10000 notes)
+  55 ms (10000 notes)
+  57 ms (10000 notes)
+  59 ms (10000 notes)
+  56 ms (10000 notes)
+  72 ms (10000 notes)
+  58 ms (10000 notes)
+  122 ms (10000 notes)
+  38 ms (10000 notes)
+  70 ms (10000 notes)
+  57 ms (10000 notes)
+  56 ms (10000 notes)
+  75 ms (10000 notes)
+  52 ms (10000 notes)
+  57 ms (10000 notes)
+  73 ms (10000 notes)
+  53 ms (10000 notes)
+  125 ms (10000 notes)
+  29 ms (10000 notes)
+
+Tag folders: 2 times; median of the last ones 25 ms, slowest 26 ms (22 folders)
+  25 ms (22 folders)
+  26 ms (22 folders)
+
+Notes of a tag folder: 11 times; median of the last ones 2.8 ms, slowest 11 ms (1971 notes)
+  11 ms (1971 notes)
+  5.4 ms (2347 notes)
+  2.0 ms (653 notes)
+  2.5 ms (653 notes)
+  2.7 ms (622 notes)
+  3.0 ms (648 notes)
+  1.4 ms (659 notes)
+  3.0 ms (659 notes)
+  2.8 ms (666 notes)
+  1.9 ms (600 notes)
+  3.1 ms (661 notes)
+
+Notes of a tag folder, until shown: 11 times; median of the last ones 128 ms, slowest 162 ms (661 notes)
+  30 ms (1971 notes)
+  128 ms (2347 notes)
+  32 ms (653 notes)
+  128 ms (653 notes)
+  127 ms (622 notes)
+  129 ms (648 notes)
+  29 ms (659 notes)
+  128 ms (659 notes)
+  125 ms (666 notes)
+  128 ms (600 notes)
+  162 ms (661 notes)
+
+Notes of a smart folder: 1 time; median of the last ones 8.2 ms, slowest 8.2 ms (200 notes)
+  8.2 ms (200 notes)
+
+Notes of a smart folder, until shown: 1 time; median of the last ones 124 ms, slowest 124 ms (200 notes)
+  124 ms (200 notes)
+
+Search: 22 times; median of the last ones 25 ms, slowest 93 ms (200 notes, for “T”)
+  29 ms (200 notes, for “Morgen”)
+  12 ms (200 notes, for “Morgen”)
+  25 ms (200 notes, for “Morgen”)
+  12 ms (200 notes, for “Morgen”)
+  25 ms (200 notes, for “Morgen”)
+  11 ms (200 notes, for “Morgen”)
+  29 ms (200 notes, for “Morgen”)
+  35 ms (200 notes, for “Morge”)
+  45 ms (200 notes, for “Mo”)
+  83 ms (200 notes, for “M”)
+  54 ms (200 notes, for “P”)
+  30 ms (200 notes, for “Fo”)
+  0.7 ms (0 notes, for “For”)
+  0.8 ms (0 notes, for “Form”)
+  0.7 ms (0 notes, for “Forma”)
+  0.7 ms (0 notes, for “Form”)
+  0.7 ms (0 notes, for “For”)
+  38 ms (200 notes, for “Fo”)
+  73 ms (200 notes, for “F”)
+  0.8 ms (0 notes, for “Typ”)
+
+Search, until shown: 22 times; median of the last ones 34 ms, slowest 118 ms (200 notes)
+  39 ms (200 notes)
+  25 ms (200 notes)
+  33 ms (200 notes)
+  27 ms (200 notes)
+  34 ms (200 notes)
+  25 ms (200 notes)
+  41 ms (200 notes)
+  49 ms (200 notes)
+  58 ms (200 notes)
+  108 ms (200 notes)
+  66 ms (200 notes)
+  42 ms (200 notes)
+  5.0 ms (0 notes)
+  9.0 ms (0 notes)
+  20 ms (0 notes)
+  12 ms (0 notes)
+  16 ms (0 notes)
+  54 ms (200 notes)
+  82 ms (200 notes)
+  10 ms (0 notes)
+
+Reading a note: 6 times; median of the last ones 22 ms, slowest 38 ms (2 KB)
+  20 ms (3 KB)
+  38 ms (2 KB)
+  35 ms (1 KB)
+  19 ms (2 KB)
+  15 ms (3 KB)
+  23 ms (2 KB)
+
+Opening a note, until shown: 6 times; median of the last ones 45 ms, slowest 57 ms (3 KB)
+  43 ms (3 KB)
+  46 ms (2 KB)
+  43 ms (1 KB)
+  26 ms (2 KB)
+  57 ms (3 KB)
+  52 ms (2 KB)
+```
+
+</details>
+
 ### iPhone 18 Pro, 2026-11-24, with ADR-0046
 
 - Device: iPhone 18 Pro (iPhone19,2), iOS 27.2.1.
