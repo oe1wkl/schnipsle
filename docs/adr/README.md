@@ -61,3 +61,5 @@ This folder records every significant architectural decision of the project, one
 | [0045](0045-measuring-performance-on-devices.md) | Measuring performance on devices | Accepted | 2026-11-23 |
 | [0046](0046-unchanged-files-are-not-read-again.md) | Unchanged files are not read again to list notes or find copies | Accepted | 2026-11-23 |
 | [0047](0047-folders-are-listed-in-bulk-on-apple-platforms.md) | Folders are listed in bulk on Apple platforms | Accepted | 2026-11-24 |
+| [0048](0048-a-default-vault-with-the-manual-as-notes.md) | A default vault, with the manual as notes | Accepted | 2026-11-25 |
+| [0049](0049-book-notes.md) | Book notes: a title page and an order for exported notes | Accepted | 2026-11-25 |
