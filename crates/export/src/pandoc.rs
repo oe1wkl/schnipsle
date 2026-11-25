@@ -609,7 +609,7 @@ impl Markdown {
             && let NodeValue::List(list) = &mut parent.data_mut().value
         {
             list.is_task_list = false;
-            let list = *list;
+            let list = list.clone();
             node.data_mut().value = NodeValue::Item(list);
         }
         let text = match &mut node.data_mut().value {

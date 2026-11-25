@@ -270,11 +270,7 @@ fn name_footnotes<'a>(root: &'a AstNode<'a>, anchor: &str) {
 /// 3). A first heading of any level or a first paragraph of one line is the
 /// title (format.md §5.2), so it becomes that heading rather than repeating it.
 fn start_with_title<'a>(arena: &'a Arena<'a>, root: &'a AstNode<'a>, title: &str) {
-    let heading = NodeValue::Heading(NodeHeading {
-        level: 1,
-        setext: false,
-        closed: false,
-    });
+    let heading = NodeValue::Heading(NodeHeading::new(1));
     if let Some(first) = root.first_child()
         && let NodeValue::Heading(existing) = &mut first.data_mut().value
     {
@@ -490,10 +486,7 @@ impl<'a> Preparer<'a, '_> {
         let path = self.rules.titles.get(&normalize(title));
         let href = path.and_then(|path| self.rules.hrefs.get(path)).cloned();
         if let Some(url) = href {
-            let link = NodeLink {
-                url,
-                title: String::new(),
-            };
+            let link = NodeLink::new(url, String::new());
             node.data_mut().value = NodeValue::Link(Box::new(link));
         } else {
             let kind = self.no_link_to(path.map(String::as_str));
@@ -514,10 +507,7 @@ impl<'a> Preparer<'a, '_> {
                     &description
                 };
                 self.replace_children(node, text);
-                let link = NodeLink {
-                    url: url.to_owned(),
-                    title: String::new(),
-                };
+                let link = NodeLink::new(url, String::new());
                 node.data_mut().value = NodeValue::Link(Box::new(link));
             }
             Target::File(path) => self.picture_in_vault(node, &path, url, &description),
@@ -536,10 +526,7 @@ impl<'a> Preparer<'a, '_> {
     ) {
         let Some(mime) = picture_mime(path) else {
             // Written as a picture, but another kind of file.
-            let link = NodeLink {
-                url: url.to_owned(),
-                title: String::new(),
-            };
+            let link = NodeLink::new(url, String::new());
             node.data_mut().value = NodeValue::Link(Box::new(link));
             self.link_to_file(node, path, url);
             return;
@@ -623,10 +610,9 @@ impl<'a> Preparer<'a, '_> {
             for svg in &tunes {
                 let _ = writeln!(figures, "<figure class=\"score\">{svg}</figure>");
             }
-            let figures = NodeValue::HtmlBlock(NodeHtmlBlock {
-                block_type: 6,
-                literal: figures,
-            });
+            let mut figures = NodeHtmlBlock::new(figures);
+            figures.block_type = 6;
+            let figures = NodeValue::HtmlBlock(figures);
             node.insert_before(self.arena.alloc(figures.into()));
         } else {
             self.pictures(node, source, &tunes);
@@ -641,10 +627,7 @@ impl<'a> Preparer<'a, '_> {
         let title = music::title_of(source);
         for svg in tunes {
             let paragraph: &'a AstNode<'a> = self.arena.alloc(NodeValue::Paragraph.into());
-            let link = NodeLink {
-                url: String::new(),
-                title: String::new(),
-            };
+            let link = NodeLink::new(String::new(), String::new());
             let picture: &'a AstNode<'a> =
                 self.arena.alloc(NodeValue::Image(Box::new(link)).into());
             picture.append(
@@ -722,24 +705,15 @@ fn math<'a>(node: &'a AstNode<'a>, display: bool, literal: &str) {
     if let Some(paragraph) =
         parent.filter(|p| display && alone && matches!(p.data().value, NodeValue::Paragraph))
     {
-        let block = NodeCodeBlock {
-            fenced: true,
-            fence_char: b'`',
-            fence_length: 3,
-            fence_offset: 0,
-            info: String::new(),
-            literal: format!("$${literal}$$\n"),
-            closed: true,
-        };
+        let block = NodeCodeBlock::fenced(String::new(), format!("$${literal}$$\n"));
         node.detach();
         paragraph.data_mut().value = NodeValue::CodeBlock(Box::new(block));
         return;
     }
     let delimiter = if display { "$$" } else { "$" };
-    node.data_mut().value = NodeValue::Code(NodeCode {
-        num_backticks: 1,
-        literal: format!("{delimiter}{literal}{delimiter}"),
-    });
+    let mut code = NodeCode::new(format!("{delimiter}{literal}{delimiter}"));
+    code.num_backticks = 1;
+    node.data_mut().value = NodeValue::Code(code);
 }
 
 /// Pictures of this type show in hardly any program but Apple's (ADR-0027).

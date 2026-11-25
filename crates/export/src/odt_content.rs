@@ -157,7 +157,7 @@ impl Content {
                     write_source(&mut self.body, block.literal.trim_end_matches('\n'));
                     self.body.push_str("</text:p>\n");
                 }
-                NodeValue::ThematicBreak => {
+                NodeValue::ThematicBreak(_) => {
                     self.open_paragraph("Horizontal_20_Line");
                     self.body.push_str("</text:p>\n");
                 }
@@ -275,7 +275,7 @@ impl Content {
             ..place
         };
         for row in node.children() {
-            let header = matches!(row.data().value, NodeValue::TableRow(true));
+            let header = matches!(row.data().value, NodeValue::TableRow(ref row) if row.header);
             if header {
                 self.body.push_str("<table:table-header-rows>\n");
             }
@@ -340,9 +340,9 @@ impl Content {
                     write_source(&mut self.body, &code.literal);
                     self.body.push_str("</text:span>");
                 }
-                NodeValue::Emph => self.span(child, "Emphasis", place, notes),
-                NodeValue::Strong => self.span(child, "Strong_20_Emphasis", place, notes),
-                NodeValue::Strikethrough => self.span(child, "Strikethrough", place, notes),
+                NodeValue::Emph(_) => self.span(child, "Emphasis", place, notes),
+                NodeValue::Strong(_) => self.span(child, "Strong_20_Emphasis", place, notes),
+                NodeValue::Strikethrough(_) => self.span(child, "Strikethrough", place, notes),
                 NodeValue::Underline => self.span(child, "Underline", place, notes),
                 NodeValue::Superscript => self.span(child, "Superscript", place, notes),
                 NodeValue::Subscript => self.span(child, "Subscript", place, notes),

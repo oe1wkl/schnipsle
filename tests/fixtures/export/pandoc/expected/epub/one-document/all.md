@@ -68,7 +68,9 @@ and last year's log.
 Bake at 230 °C for 20 minutes.
 ```
 
-    Indented code is code too.
+```
+Indented code is code too.
+```
 
 # Abendlied {#note-abendlied}
 
