@@ -45,6 +45,8 @@ mod share;
 #[cfg(target_os = "macos")]
 mod terminate;
 #[cfg(any(target_os = "macos", target_os = "ios"))]
+mod ubiquity;
+#[cfg(any(target_os = "macos", target_os = "ios"))]
 mod versions;
 
 #[cfg(any(target_os = "macos", target_os = "ios"))]
@@ -67,5 +69,7 @@ pub use process::{Footprint, device_model, footprint, system_version};
 pub use share::share_files;
 #[cfg(target_os = "macos")]
 pub use terminate::{ask_before_terminating, reply_to_terminate};
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+pub use ubiquity::{has_icloud_account, ubiquity_container};
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 pub use versions::ICloudVersions;

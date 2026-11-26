@@ -142,6 +142,63 @@ class VaultAccessPlugin: Plugin {
     }
   }
 
+  /// The running spike query, kept alive until it reports.
+  private var probeQuery: NSMetadataQuery?
+  private var probeObserver: NSObjectProtocol?
+
+  /// Spike (docs/spikes/icloud-container.md): what iCloud lists in the
+  /// `Documents` of the app's container, also files not downloaded yet.
+  /// Resolves `{ started, finished, ms, lines }` at the first full result, or
+  /// after 30 s with `finished: false`.
+  @objc public func icloudQuery(_ invoke: Invoke) {
+    DispatchQueue.main.async {
+      if self.probeQuery != nil {
+        invoke.reject("An iCloud query is already running")
+        return
+      }
+      let start = Date()
+      let query = NSMetadataQuery()
+      query.searchScopes = [NSMetadataQueryUbiquitousDocumentsScope]
+      query.predicate = NSPredicate(format: "%K LIKE %@", NSMetadataItemFSNameKey, "*")
+      var done = false
+      let finish: (Bool, Bool) -> Void = { started, finished in
+        if done { return }
+        done = true
+        query.disableUpdates()
+        let ms = Date().timeIntervalSince(start) * 1000
+        var lines: [String] = []
+        for case let item as NSMetadataItem in query.results {
+          let url = item.value(forAttribute: NSMetadataItemURLKey) as? URL
+          let status = (item.value(forAttribute: NSMetadataUbiquitousItemDownloadingStatusKey)
+            as? String)?.replacingOccurrences(
+              of: "NSMetadataUbiquitousItemDownloadingStatus", with: "") ?? "?"
+          let uploaded = (item.value(forAttribute: NSMetadataUbiquitousItemIsUploadedKey)
+            as? NSNumber)?.boolValue
+          let size = (item.value(forAttribute: NSMetadataItemFSSizeKey) as? NSNumber)?.stringValue
+          lines.append(
+            "\(url?.path ?? "?") | \(status) | uploaded \(uploaded.map { String($0) } ?? "?") | \(size ?? "?") B"
+          )
+        }
+        query.stop()
+        if let observer = self.probeObserver {
+          NotificationCenter.default.removeObserver(observer)
+        }
+        self.probeObserver = nil
+        self.probeQuery = nil
+        invoke.resolve(["started": started, "finished": finished, "ms": ms, "lines": lines])
+      }
+      self.probeObserver = NotificationCenter.default.addObserver(
+        forName: .NSMetadataQueryDidFinishGathering, object: query, queue: .main
+      ) { _ in finish(true, true) }
+      self.probeQuery = query
+      if !query.start() {
+        finish(false, false)
+        return
+      }
+      DispatchQueue.main.asyncAfter(deadline: .now() + 30) { finish(true, false) }
+    }
+  }
+
   private func activate(_ url: URL) {
     if let previous = activeURL, previous != url {
       previous.stopAccessingSecurityScopedResource()

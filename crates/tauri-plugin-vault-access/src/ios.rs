@@ -32,6 +32,19 @@ struct ShareResponse {
     completed: bool,
 }
 
+/// What iCloud listed in the app's container (spike, docs/spikes/icloud-container.md).
+#[derive(Debug, Deserialize)]
+pub struct ICloudQuery {
+    /// Whether the query could start.
+    pub started: bool,
+    /// Whether iCloud gave its first full result within 30 s.
+    pub finished: bool,
+    /// Milliseconds until then.
+    pub ms: f64,
+    /// One line per item: path, download state, uploaded, size.
+    pub lines: Vec<String>,
+}
+
 #[derive(Serialize)]
 struct PathArgs<'a> {
     path: &'a str,
@@ -77,5 +90,14 @@ impl<R: Runtime> VaultAccess<R> {
     pub fn download(&self, path: &str) -> Result<(), tauri::plugin::mobile::PluginInvokeError> {
         self.0
             .run_mobile_plugin::<()>("download", PathArgs { path })
+    }
+
+    /// Spike: lists the `Documents` of the app's iCloud container with
+    /// `NSMetadataQuery`, waiting up to 30 s for its first full result.
+    ///
+    /// # Errors
+    /// If a query is already running.
+    pub fn icloud_query(&self) -> Result<ICloudQuery, tauri::plugin::mobile::PluginInvokeError> {
+        self.0.run_mobile_plugin("icloudQuery", ())
     }
 }
