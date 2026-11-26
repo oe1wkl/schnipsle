@@ -24,7 +24,7 @@ use tauri::{
 #[cfg(target_os = "ios")]
 mod ios;
 #[cfg(target_os = "ios")]
-pub use ios::{ICloudQuery, VaultAccess};
+pub use ios::VaultAccess;
 
 /// Creates the plugin. Register it with `tauri::Builder::plugin`.
 #[must_use]

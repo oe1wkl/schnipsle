@@ -7,7 +7,6 @@
 
 mod closing;
 mod exporting;
-mod icloud_probe;
 mod importing;
 mod indexing;
 mod measuring;
@@ -1071,8 +1070,7 @@ pub fn run() {
             importing::read_apple_notes_metadata,
             measuring::ui_started,
             measuring::ui_measured,
-            measuring::diagnostics,
-            icloud_probe::icloud_probe
+            measuring::diagnostics
         ])
         .build(tauri::generate_context!())
         .expect("error while building Schnipsle")

@@ -29,7 +29,7 @@ The container `iCloud.cc.kraml.schnipsle` has to be registered for the App ID `c
   3. iPhone: delete the app and install it again, so nothing is downloaded, then probe at once (question 2); again in flight mode.
   4. iPhone: iCloud Drive off for the app in Settings, probe (question 5).
   5. Mac with the entitlement (question 4): only if run 2 fails, with a Mac development profile; Developer ID waits for the certificate (M7 packaging).
-- The probes are removed after the spike; the code stays in a commit named here, as in the other spikes.
+- The probes are removed after the spike; the code is in commit `0640069` (`feat(ios): spike the app's iCloud container for the default vault`). The entitlements and the `Info.ios.plist` keys stay.
 
 ## Results
 

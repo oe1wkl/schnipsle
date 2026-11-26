@@ -7,7 +7,6 @@
 import { invoke } from "@tauri-apps/api/core";
 
 import { asError, el } from "./dom";
-import "./icloud-probe";
 import { t } from "./strings";
 import type { Diagnostics, MeasureDetail, MeasureSeries, Measurement } from "./types";
 

@@ -71,7 +71,7 @@ The Xcode project lives in `src-tauri/gen/apple` and is committed. Its "Build Ru
 
 One-time setup for a real iPhone:
 
-1. Xcode → Settings → Accounts → add your Apple ID (a free account is enough for your own devices).
+1. Xcode → Settings → Accounts → add your Apple ID. The app uses an iCloud container (`iCloud.cc.kraml.schnipsle`, ADR-0048), which needs a paid Apple Developer Program team; with a free account, remove the iCloud keys from `src-tauri/gen/apple/schnipsle_iOS/schnipsle_iOS.entitlements` locally to build for your own devices.
 2. Find your team ID: open `src-tauri/gen/apple/schnipsle.xcodeproj`, target `schnipsle_iOS` → Signing & Capabilities → choose your team; the ID then appears as `DEVELOPMENT_TEAM` in `project.pbxproj`. Put it in `~/.zshrc`, so it survives project regeneration and stays out of the repository:
 
    ```sh
