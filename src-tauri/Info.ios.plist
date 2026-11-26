@@ -9,6 +9,12 @@
   UIApplicationSupportsMultipleScenes must be true; with false, tao's startup
   runs twice and the app aborts.
   See https://github.com/tauri-apps/tao/issues/1340
+
+  NSUbiquitousContainers: iCloud Drive shows the Documents folder of the app's
+  iCloud container as "Schnipsle" (ADR-0048, docs/spikes/icloud-container.md).
+  UIFileSharingEnabled and LSSupportsOpeningDocumentsInPlace: the app's local
+  Documents folder shows in Files under "On My iPhone", for the default vault
+  without iCloud Drive.
 -->
 <plist version="1.0">
 <dict>
@@ -17,5 +23,21 @@
 		<key>UIApplicationSupportsMultipleScenes</key>
 		<true/>
 	</dict>
+	<key>NSUbiquitousContainers</key>
+	<dict>
+		<key>iCloud.cc.kraml.schnipsle</key>
+		<dict>
+			<key>NSUbiquitousContainerIsDocumentScopePublic</key>
+			<true/>
+			<key>NSUbiquitousContainerName</key>
+			<string>Schnipsle</string>
+			<key>NSUbiquitousContainerSupportedFolderLevels</key>
+			<string>Any</string>
+		</dict>
+	</dict>
+	<key>UIFileSharingEnabled</key>
+	<true/>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
 </dict>
 </plist>

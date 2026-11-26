@@ -1,6 +1,6 @@
 # ADR-0048: A default vault, with the manual as notes
 
-- Status: Accepted
+- Status: Accepted; where the vault goes without iCloud Drive and on the Mac (rule 2), when an empty iCloud folder counts as empty (rule 4) and the Mac's entitlement (consequences) amended by [ADR-0050](0050-the-default-vault-on-a-second-device-and-on-the-mac.md)
 - Date: 2026-11-25
 - Deciders: Willi Kraml
 - Related: N-02, F-07, F-14, ADR-0004, ADR-0006, ADR-0036, ADR-0039, ADR-0042, ADR-0046, ADR-0049
