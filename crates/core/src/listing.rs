@@ -7,6 +7,11 @@
 //! folder and asks each entry with `lstat`, as `std::fs` does; on Apple
 //! platforms the app shell passes in one from `schnipsle-apple` that gets
 //! them for many entries in one system call. Both must give the same answers.
+//!
+//! On macOS and iOS an entry also says whether it is *dataless*: iCloud
+//! keeps its name and size on the device but not its content, which is
+//! downloaded when it is read (ADR-0050). Such a file counts as not
+//! downloaded, like a `.Name.md.icloud` placeholder.
 
 use std::ffi::OsString;
 use std::fmt;
@@ -57,6 +62,36 @@ pub struct FolderEntry {
     pub kind: EntryKind,
     /// Its time and size; `None` if the system could not tell them.
     pub stat: Option<FileStat>,
+    /// Its content is not on this device (`SF_DATALESS`, ADR-0050); always
+    /// `false` on systems without the flag. Only files are read, so only a
+    /// dataless file counts as not downloaded.
+    pub dataless: bool,
+}
+
+/// `SF_DATALESS` of `<sys/stat.h>`: the file's content is not on this
+/// device; reading it makes the system download it first.
+pub const SF_DATALESS: u32 = 0x4000_0000;
+
+/// Whether `meta`, from `lstat`, is of an entry whose content is not on
+/// this device. `false` on systems without the flag.
+#[must_use]
+pub fn is_dataless(meta: &fs::Metadata) -> bool {
+    flags_of(meta) & SF_DATALESS != 0
+}
+
+#[cfg(target_os = "macos")]
+fn flags_of(meta: &fs::Metadata) -> u32 {
+    std::os::macos::fs::MetadataExt::st_flags(meta)
+}
+
+#[cfg(target_os = "ios")]
+fn flags_of(meta: &fs::Metadata) -> u32 {
+    std::os::ios::fs::MetadataExt::st_flags(meta)
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "ios")))]
+fn flags_of(_meta: &fs::Metadata) -> u32 {
+    0
 }
 
 /// Lists the entries of a folder, in no particular order.
@@ -80,10 +115,13 @@ impl FolderLister for PlainLister {
             let Ok(file_type) = entry.file_type() else {
                 continue;
             };
+            // Like `lstat`: `DirEntry::metadata` does not follow links.
+            let meta = entry.metadata().ok();
             out.push(FolderEntry {
                 name: entry.file_name(),
                 kind: kind_of(file_type),
-                stat: entry.metadata().ok().map(|meta| FileStat::of(&meta)),
+                stat: meta.as_ref().map(FileStat::of),
+                dataless: meta.as_ref().is_some_and(is_dataless),
             });
         }
         Ok(out)
@@ -99,6 +137,23 @@ pub fn kind_of(file_type: fs::FileType) -> EntryKind {
         EntryKind::Folder
     } else {
         EntryKind::Other
+    }
+}
+
+/// For tests: lists as [`PlainLister`] and marks the files with these names
+/// as dataless, which a test cannot make without iCloud.
+#[cfg(test)]
+#[derive(Debug, Default)]
+pub(crate) struct MarkDataless(pub(crate) Vec<&'static str>);
+
+#[cfg(test)]
+impl FolderLister for MarkDataless {
+    fn list(&self, dir: &Path) -> io::Result<Vec<FolderEntry>> {
+        let mut entries = PlainLister.list(dir)?;
+        for entry in &mut entries {
+            entry.dataless = self.0.iter().any(|name| entry.name == *name);
+        }
+        Ok(entries)
     }
 }
 
@@ -146,6 +201,17 @@ mod tests {
         let folder = entries.last().unwrap();
         assert_eq!(folder.kind, EntryKind::Folder);
         assert_eq!(folder.stat.unwrap().size, 0);
+        // Files written here have their content on this device.
+        assert!(entries.iter().all(|e| !e.dataless));
+    }
+
+    #[test]
+    fn a_file_written_here_is_not_dataless() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("a.md");
+        fs::write(&file, "x").unwrap();
+        assert!(!is_dataless(&fs::symlink_metadata(&file).unwrap()));
+        assert!(!is_dataless(&fs::symlink_metadata(dir.path()).unwrap()));
     }
 
     #[test]

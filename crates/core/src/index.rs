@@ -534,6 +534,27 @@ impl Index {
         Ok(rows.collect::<rusqlite::Result<_>>()?)
     }
 
+    /// The stamp of the file at `path`, if it is indexed.
+    ///
+    /// # Errors
+    /// SQLite errors.
+    pub fn stamp(&self, path: &str) -> Result<Option<FileStamp>> {
+        Ok(self
+            .db
+            .query_row(
+                "SELECT mtime_ms, size, hash FROM notes WHERE path = ?1",
+                [path],
+                |row| {
+                    Ok(FileStamp {
+                        mtime_ms: u64::try_from(row.get::<_, i64>(0)?).unwrap_or(0),
+                        size: u64::try_from(row.get::<_, i64>(1)?).unwrap_or(0),
+                        hash: row.get(2)?,
+                    })
+                },
+            )
+            .optional()?)
+    }
+
     /// Updates the stamp of the note at `path` only: its file was touched
     /// but its content is unchanged. `false` if it is not in the index.
     ///

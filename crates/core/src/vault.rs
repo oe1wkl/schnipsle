@@ -11,8 +11,9 @@
 //! opened read-only, and every write then fails with [`VaultError::ReadOnly`].
 //!
 //! iCloud Drive keeps notes that are not downloaded yet as hidden placeholder files
-//! (`.Name.md.icloud`). They are listed with `available: false` so the app can ask
-//! the system to download them.
+//! (`.Name.md.icloud`) or, in newer versions, as dataless files under their own
+//! name (ADR-0050). Both are listed with `available: false` so the app can ask
+//! the system to download them, and neither is read until it is.
 //!
 //! Every file access runs inside the vault's [`Coordinator`] (ADR-0015).
 
@@ -33,7 +34,7 @@ use crate::conflicts::{
 use crate::coordination::{Coordinator, Uncoordinated};
 use crate::front_matter;
 use crate::layout::{ATTACHMENTS_DIR, FORMAT, NOTES_DIR, VAULT_FILE, VaultIdentity};
-use crate::listing::{EntryKind, FolderLister, PlainLister};
+use crate::listing::{EntryKind, FolderLister, PlainLister, is_dataless};
 use crate::stamp::{new_ulid, now_ms, rfc3339_utc};
 
 /// Errors from vault operations.
@@ -49,7 +50,8 @@ pub enum VaultError {
     ReadOnly(String),
     /// A note path is absolute, leaves the vault, or does not end in `.md`.
     InvalidPath(String),
-    /// The note exists only as a cloud placeholder and must be downloaded first.
+    /// The note exists only in iCloud (a placeholder or a dataless file) and
+    /// must be downloaded first.
     NotDownloaded(String),
     /// The note changed on disk since it was read; nothing was written.
     Conflict {
@@ -155,7 +157,8 @@ pub struct NoteEntry {
     pub title: String,
     /// Last modification, milliseconds since the Unix epoch.
     pub modified_ms: u64,
-    /// `false` if only a cloud placeholder is on this device.
+    /// `false` if the note's content is not on this device yet: a cloud
+    /// placeholder or a dataless file.
     pub available: bool,
     /// Front matter `pinned: true` (format.md §4): listed first.
     pub pinned: bool,
@@ -239,7 +242,7 @@ impl Vault {
         let mut vault = Self::unopened(root.into(), coordinator)?;
         let file = vault.root.join(VAULT_FILE);
         // Checked before coordinating, as for notes (see `read_note`).
-        if !file.exists() && placeholder_of(&file).exists() {
+        if not_downloaded(&file) {
             return Err(VaultError::NotDownloaded(VAULT_FILE.to_owned()));
         }
         let text = vault.coordinated(Access::Read, &file, |file| match fs::read(file) {
@@ -364,7 +367,7 @@ impl Vault {
 
     /// Lists all notes (`*.md`) in `notes/`, newest first. Hidden files and
     /// folders (names starting with `.`) are skipped, except iCloud placeholders
-    /// of notes.
+    /// of notes. Notes not downloaded are listed but not read.
     ///
     /// # Errors
     /// I/O errors while reading `notes/`; unreadable subfolders are skipped, and
@@ -431,9 +434,9 @@ impl Vault {
     /// As [`Vault::read_note`].
     pub fn read_note_text(&self, path: &str) -> Result<NoteContent> {
         let full = self.resolve(path)?;
-        // Checked before coordinating: a coordinated read of a placeholder waits
-        // for the download, which can take forever when offline.
-        if !full.exists() && placeholder_of(&full).exists() {
+        // Checked before coordinating: a coordinated read of a placeholder or a
+        // dataless file waits for the download, which can take forever offline.
+        if not_downloaded(&full) {
             return Err(VaultError::NotDownloaded(path.to_owned()));
         }
         self.coordinated(Access::Read, &full, |file| match fs::read(file) {
@@ -882,7 +885,7 @@ pub(crate) fn note_paths(dir: &Path) -> Vec<String> {
         .collect()
 }
 
-/// Number of notes below `dir`, iCloud placeholders included.
+/// Number of notes below `dir`, those not downloaded included.
 pub(crate) fn count_notes(dir: &Path) -> Result<usize> {
     let mut notes = Vec::new();
     collect(&PlainLister, dir, "", &mut notes, true, None)?;
@@ -932,20 +935,33 @@ fn collect(
             )?;
         } else if entry.kind == EntryKind::File && has_md_extension(&name) {
             let path = format!("{prefix}{name}");
+            let available = !entry.dataless;
             let unchanged = known
                 .and_then(|known| known.get(&path))
                 .filter(|k| entry.stat.is_some_and(|stat| k.matches(stat)));
             if let Some(k) = unchanged {
+                // Also for a dataless file: same time and size, same text.
                 out.push(NoteEntry {
                     path,
                     title: k.title.clone(),
                     modified_ms,
-                    available: true,
+                    available,
                     pinned: k.pinned,
                 });
                 continue;
             }
             let stem = name[..name.len() - 3].to_owned();
+            if !available {
+                // Reading it would wait for the download.
+                out.push(NoteEntry {
+                    path,
+                    title: stem,
+                    modified_ms,
+                    available,
+                    pinned: false,
+                });
+                continue;
+            }
             let head = read_head(&dir.join(&entry.name));
             let title = head
                 .as_ref()
@@ -1035,6 +1051,15 @@ pub(crate) fn has_md_extension(name: &str) -> bool {
 pub(crate) fn placeholder_note_name(name: &str) -> Option<&str> {
     let inner = name.strip_prefix('.')?.strip_suffix(".icloud")?;
     has_md_extension(inner).then_some(inner)
+}
+
+/// Whether the file at `full` is on this device only as iCloud's stand-in:
+/// dataless itself, or missing with a `.Name.icloud` placeholder next to it.
+pub(crate) fn not_downloaded(full: &Path) -> bool {
+    match fs::symlink_metadata(full) {
+        Ok(meta) => meta.is_file() && is_dataless(&meta),
+        Err(_) => placeholder_of(full).exists(),
+    }
 }
 
 pub(crate) fn placeholder_of(full: &Path) -> PathBuf {

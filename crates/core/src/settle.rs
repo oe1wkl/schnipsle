@@ -20,8 +20,8 @@ use crate::front_matter;
 use crate::stamp::{is_ulid, new_ulid, rfc3339_utc};
 use crate::trash::TrashedNote;
 use crate::vault::{
-    Access, NoteContent, Result, SavedNote, Vault, VaultError, created_ms, placeholder_of,
-    sha256_hex,
+    Access, NoteContent, Result, SavedNote, Vault, VaultError, created_ms, not_downloaded,
+    placeholder_of, sha256_hex,
 };
 
 /// What "Use other version" left. Serialized with camelCase names.
@@ -95,13 +95,17 @@ impl Vault {
     ///
     /// # Errors
     /// [`VaultError::Conflict`] if the note changed while its `id` was being
-    /// added; [`VaultError::NotDownloaded`] for an iCloud placeholder;
+    /// added; [`VaultError::NotDownloaded`] for a note only in iCloud;
     /// [`VaultError::ReadOnly`], [`VaultError::InvalidPath`], or I/O errors,
     /// such as a full disk, or a note that is not UTF-8 and has no `id`.
     /// The note is unchanged then.
     pub fn use_other(&self, path: &str, text: &str) -> Result<OtherUsed> {
         self.check_writable()?;
         let full = self.resolve(path)?;
+        // As in `read_note_text`: reading would wait for the download.
+        if not_downloaded(&full) {
+            return Err(VaultError::NotDownloaded(path.to_owned()));
+        }
         let on_disk = self.coordinated(Access::Read, &full, |file| match fs::read(file) {
             Ok(bytes) => Ok(Some(bytes)),
             Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(None),

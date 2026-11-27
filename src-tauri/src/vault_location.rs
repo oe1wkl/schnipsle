@@ -51,6 +51,13 @@ mod platform {
             .filter(|p| p.is_dir()))
     }
 
+    /// Asks iCloud for a file not on this Mac (ADR-0050).
+    #[cfg(target_os = "macos")]
+    pub fn download(_app: &AppHandle, path: &Path) -> CmdResult<()> {
+        schnipsle_apple::download(path).map_err(CommandError::other)
+    }
+
+    #[cfg(not(target_os = "macos"))]
     #[allow(clippy::unnecessary_wraps)] // same signature as the iOS version
     pub fn download(_app: &AppHandle, _path: &Path) -> CmdResult<()> {
         Ok(())
