@@ -64,6 +64,18 @@
       ></button>
     </div>
 
+    <div
+      id="manual-offer"
+      class="banner"
+      role="alertdialog"
+      aria-labelledby="manual-offer-text"
+      hidden
+    >
+      <span id="manual-offer-text" data-text="manual.offer"></span>
+      <button id="manual-add" type="button" data-text="manual.add"></button>
+      <button id="manual-later" type="button" data-text="common.notNow"></button>
+    </div>
+
     <div id="read-only" class="banner" role="status" hidden>
       <span id="read-only-text"></span>
     </div>
@@ -670,6 +682,13 @@
             <p class="muted" data-text="settings.updatesHint"></p>
           </div>
           <p id="settings-device-error" class="folder-error" role="alert" hidden></p>
+        </section>
+        <section class="settings-section" aria-labelledby="settings-manual-title">
+          <h3 id="settings-manual-title" data-text="manual.title"></h3>
+          <p class="muted" data-text="manual.hint"></p>
+          <div class="folder-buttons">
+            <button id="settings-manual" type="button" data-text="manual.open"></button>
+          </div>
         </section>
         <section class="settings-section" aria-labelledby="settings-diagnostics-title">
           <h3 id="settings-diagnostics-title" data-text="diagnostics.title"></h3>

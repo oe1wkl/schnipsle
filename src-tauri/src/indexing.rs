@@ -31,6 +31,21 @@ struct Open {
 /// What the index of the vault at a root knew per note (ADR-0046).
 type Snapshot = Option<(PathBuf, Arc<KnownNotes>)>;
 
+/// Work that needs the synced index of a vault, see [`SharedIndex::after_sync`].
+pub type Job = Box<dyn FnOnce(&Vault, &mut Index) + Send>;
+
+/// Jobs waiting for the sync of the vault at their root.
+#[derive(Default)]
+struct Jobs(Vec<(PathBuf, Job)>);
+
+impl std::fmt::Debug for Jobs {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_list()
+            .entries(self.0.iter().map(|(root, _)| root))
+            .finish()
+    }
+}
+
 /// The index of the open vault, shared between commands, the watcher and the
 /// background sync. Cheap to clone.
 #[derive(Debug, Clone, Default)]
@@ -41,6 +56,8 @@ pub struct SharedIndex {
     /// What the index knew per note when it opened or last synced, by vault
     /// root (ADR-0046).
     known: Arc<Mutex<Snapshot>>,
+    /// Run once the next sync of their vault has ended well.
+    jobs: Arc<Mutex<Jobs>>,
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -57,6 +74,7 @@ impl SharedIndex {
             Ok(file) => file,
             Err(e) => {
                 eprintln!("no search index: {e}");
+                self.drop_jobs(vault);
                 return;
             }
         };
@@ -64,6 +82,7 @@ impl SharedIndex {
             Ok(index) => index,
             Err(e) => {
                 eprintln!("no search index: {e}");
+                self.drop_jobs(vault);
                 return;
             }
         };
@@ -92,7 +111,12 @@ impl SharedIndex {
                     let start = Instant::now();
                     let report = vault.sync_index(&mut open.index);
                     if report.is_ok() {
+                        for job in shared.take_jobs(&vault) {
+                            job(&vault, &mut open.index);
+                        }
                         shared.remember_known(&vault, &open.index);
+                    } else {
+                        shared.drop_jobs(&vault);
                     }
                     if let Ok(r) = &report {
                         let notes = open.index.len().unwrap_or_default();
@@ -118,6 +142,33 @@ impl SharedIndex {
             });
         if let Err(e) = spawned {
             eprintln!("search index not synced: {e}");
+        }
+    }
+
+    /// Runs `job` with the index of the vault at `root` once its next sync
+    /// has ended well, before the UI hears of it (`index-synced`). Register
+    /// it before the vault is opened. A job whose sync fails is dropped.
+    pub fn after_sync(&self, root: PathBuf, job: Job) {
+        lock(&self.jobs).0.push((root, job));
+    }
+
+    /// Removes and returns the jobs waiting for `vault`.
+    fn take_jobs(&self, vault: &Vault) -> Vec<Job> {
+        let mut jobs = lock(&self.jobs);
+        let (mine, others): (Vec<_>, Vec<_>) = std::mem::take(&mut jobs.0)
+            .into_iter()
+            .partition(|(root, _)| root == vault.root());
+        jobs.0 = others;
+        mine.into_iter().map(|(_, job)| job).collect()
+    }
+
+    fn drop_jobs(&self, vault: &Vault) {
+        let dropped = self.take_jobs(vault).len();
+        if dropped > 0 {
+            eprintln!(
+                "{dropped} jobs dropped: the index of {} is not there",
+                vault.root().display()
+            );
         }
     }
 

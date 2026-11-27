@@ -22,6 +22,7 @@ import { t } from "./strings";
 import type { SongHost } from "./song";
 import type {
   FirstStart,
+  ManualAdded,
   VaultInfo,
   FolderSetup,
   StrayNotes,
@@ -292,6 +293,7 @@ const retag = createRetag({
 function vaultOpened(info: VaultInfo): void {
   ui.setup.hidden = true;
   ui.firstStart.hidden = true;
+  ui.manualOffer.hidden = true;
   ui.vaultName.textContent = info.name;
   ui.vaultHint.textContent = info.path;
   readOnly = info.readOnly;
@@ -1333,6 +1335,8 @@ async function firstStartDone(first: FirstStart): Promise<void> {
       return;
     case "opened": {
       await folderOpened({ kind: "vault", ...first.vault });
+      // A new vault starts with the manual open (ADR-0048 rule 6).
+      if (first.manual !== null) await openPath(first.manual);
       const name = first.vault.name;
       const done = first.made ? t.firstStart.made(name) : t.firstStart.opened(name);
       setStatus(done + (first.local === null ? t.firstStart.inICloud : t.firstStart[first.local]));
@@ -1384,6 +1388,54 @@ ui.firstStartPick.addEventListener("click", () => {
 });
 ui.firstStartICloud.addEventListener("click", () => {
   openDefault(false);
+});
+
+// The manual (ADR-0048 rules 6 and 7): notes tagged #schnipsle_manual, whose
+// book note Help › Manual opens. A vault without it is offered the manual.
+
+/** Help › Manual: opens the manual's book note, or offers to add the manual. */
+async function openManual(): Promise<void> {
+  if (!vaultIsOpen) return;
+  try {
+    const book = await invoke<string | null>("open_manual");
+    if (book === null) {
+      ui.manualOffer.hidden = false;
+      ui.manualAdd.focus();
+      return;
+    }
+    if (!(await leaveNote())) return;
+    await openPath(book);
+  } catch (e) {
+    setStatus(asError(e).message);
+  }
+}
+
+/** Shows what adding the manual did, and lists the notes added. */
+function manualAdded(done: ManualAdded): void {
+  setStatus(done.added.length > 0 ? t.manual.added(done.added.length) : t.manual.noneMissing);
+  if (done.added.length > 0) queueCheck();
+}
+
+ui.manualAdd.addEventListener("click", () => {
+  ui.manualOffer.hidden = true;
+  void invoke<ManualAdded>("add_manual")
+    .then(async (done) => {
+      manualAdded(done);
+      if (done.book === null || !(await leaveNote())) return;
+      await openPath(done.book);
+    })
+    .catch((e: unknown) => {
+      setStatus(t.manual.notAdded(asError(e).message));
+    });
+});
+ui.manualLater.addEventListener("click", () => {
+  ui.manualOffer.hidden = true;
+});
+
+// A vault found at the first start gets the manual notes it lacks once its
+// index has synced.
+void listen<ManualAdded>("manual-added", (event) => {
+  if (event.payload.added.length > 0) manualAdded(event.payload);
 });
 
 ui.setupCreate.addEventListener("click", () => {
@@ -1542,6 +1594,7 @@ ui.exportList.addEventListener("click", () => void exporter.open("list"));
 
 const settingsView = createSettings({
   vaultState: () => (vaultIsOpen ? { open: true, readOnly } : { open: false }),
+  openManual: () => void openManual(),
   chordNamesChanged: () => {
     // Read the open note again, so its song sheets show the new names.
     void leaveNote().then(async (left) => {
@@ -1569,6 +1622,7 @@ void listen<string>("menu", (event) => {
   else if (event.payload === "imports") imports.open();
   else if (event.payload === "export") void exporter.open();
   else if (event.payload === "settings") void settingsView.open();
+  else if (event.payload === "manual") void openManual();
 });
 
 /** Runs a check after any save in progress, so a save's own echo is not mistaken for a change. */

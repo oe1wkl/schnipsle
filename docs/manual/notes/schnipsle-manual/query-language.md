@@ -1,3 +1,9 @@
+---
+id: 01M8EAJZW0SBC98SYAA2Y0ZTG4
+created: 2026-11-27T12:00:00+01:00
+modified: 2026-11-27T12:00:00+01:00
+---
+
 # Query language
 
 The search field and smart folders (format.md §9) use the same language. A query is a list of terms; a note is found if it matches **all** of them.
@@ -78,3 +84,5 @@ A smart folder is a saved query. Search for something, then tap **Save** next to
 Drag a folder by its ≡ handle to move it: onto the upper or lower edge of another folder to place it before or after that one, onto the middle of a folder to put it inside. With the keyboard, focus the handle and use ↑ and ↓ to reorder, → to move the folder into the one above it, ← to move it out of its parent.
 
 The folders are stored in `.notesapp/smart-folders.yaml` (format.md §9), so they sync with the vault.
+
+#schnipsle_manual

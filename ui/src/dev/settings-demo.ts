@@ -191,5 +191,8 @@ const settings = createSettings({
   chordNamesChanged: () => {
     console.info("chord names changed: the open note would be read again");
   },
+  openManual: () => {
+    console.info("the manual's book note would open");
+  },
 });
 await settings.open();

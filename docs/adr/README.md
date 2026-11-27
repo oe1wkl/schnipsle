@@ -64,3 +64,4 @@ This folder records every significant architectural decision of the project, one
 | [0048](0048-a-default-vault-with-the-manual-as-notes.md) | A default vault, with the manual as notes | Accepted | 2026-11-25 |
 | [0049](0049-book-notes.md) | Book notes: a title page and an order for exported notes | Accepted | 2026-11-25 |
 | [0050](0050-the-default-vault-on-a-second-device-and-on-the-mac.md) | The default vault on a second device and on the Mac | Accepted | 2026-11-26 |
+| [0051](0051-the-manual-links-its-notes-by-relative-links.md) | The manual links its notes by relative links, and is built into the app | Proposed | 2026-11-27 |

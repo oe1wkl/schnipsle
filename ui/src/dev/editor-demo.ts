@@ -42,6 +42,7 @@ Links to open with ⌘-click: the [manual](<../attachments/61/manual v2.pdf>), t
 |:-----|--------:|:-----:|
 | 40 m | 7,030 MHz | QRP \\| CW |
 | 20 m | 14,060 MHz | *gut* |
+| \`"Wörter in Folge"\` | **fett**, ~~alt~~, \\* | [Tuner](Projects/Tuner.md), \`#tag\` |
 
 \`\`\`sh
 cargo test --workspace

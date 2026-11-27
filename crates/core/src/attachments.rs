@@ -214,7 +214,7 @@ impl Vault {
 
     /// Puts `bytes` at `target` unless something is there already; `true` if
     /// it was written.
-    fn place_new_file(&self, target: &Path, bytes: &[u8]) -> Result<bool> {
+    pub(crate) fn place_new_file(&self, target: &Path, bytes: &[u8]) -> Result<bool> {
         if target.exists() {
             return Ok(false);
         }

@@ -9,7 +9,6 @@ pub struct MenuText {
     pub file: &'static str,
     pub edit: &'static str,
     pub window: &'static str,
-    #[cfg_attr(target_os = "macos", allow(dead_code))]
     pub help: &'static str,
     pub new_note: &'static str,
     pub open_vault: &'static str,
@@ -17,6 +16,8 @@ pub struct MenuText {
     pub imports: &'static str,
     pub export: &'static str,
     pub settings: &'static str,
+    /// Help › Manual (ADR-0048 rule 7).
+    pub manual: &'static str,
     /// "Quit", followed by the app's name on macOS.
     pub quit: &'static str,
 }
@@ -32,6 +33,7 @@ const EN: MenuText = MenuText {
     imports: "Imports…",
     export: "Export…",
     settings: "Settings…",
+    manual: "Manual",
     quit: "Quit",
 };
 
