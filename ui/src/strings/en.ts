@@ -77,6 +77,28 @@ export const en = {
     notOpened: (message: string) => `Not opened: ${message}`,
   },
 
+  /** The default vault at the first start (ADR-0048, ADR-0050). */
+  firstStart: {
+    waiting: "Waiting for iCloud…",
+    offline:
+      "Schnipsle cannot reach iCloud to look for your notes, so it has not made a vault yet. " +
+      "It keeps trying; or use a folder on this device, or choose one.",
+    useLocal: "Use a folder on this device",
+    choose: "Choose a folder…",
+    arrived: (name: string) => `iCloud can be reached now, and the vault ${q(name)} is there.`,
+    openICloud: "Open it",
+    made: (name: string) => `Made the vault ${q(name)}.`,
+    opened: (name: string) => `Opened the vault ${q(name)}.`,
+    inICloud: " It is in iCloud Drive, where your other devices find it.",
+    iCloudOff: " iCloud Drive is off for Schnipsle, so it is on this device only.",
+    noICloudFolder:
+      " It is in Documents on this Mac: the iPhone app does not see it until you move it to " +
+      "iCloud Drive.",
+    chosen: " It is on this device only.",
+    noICloud: " It is in your Documents folder.",
+    notMade: (message: string) => `No vault made: ${message}`,
+  },
+
   strays: {
     move: "Move into “notes”",
     show: "Show them",

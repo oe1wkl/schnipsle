@@ -10,6 +10,7 @@ pub mod chordpro;
 pub mod conflicts;
 pub mod coordination;
 pub mod dates;
+pub mod default_vault;
 pub mod diff;
 mod flat_yaml;
 pub mod front_matter;

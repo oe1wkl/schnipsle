@@ -85,6 +85,10 @@ Findings:
 
 With Schnipsle switched off under the apps using iCloud Drive: `ubiquityIdentityToken` is `nil` and `url(forUbiquityContainerIdentifier:)` gives `nil` (4.2 ms). The app's local `Documents` is there, so the fallback of ADR-0048 rule 2 has a folder to use. The token alone tells the app whether to use iCloud; it need not ask for the container to know.
 
+### Run 5: iPhone, the first start with iCloud Drive off for Schnipsle, 2026-11-27
+
+With the first start built (ADR-0050 rules 2 to 4), the app deleted and installed again while Schnipsle was switched off under the apps using iCloud Drive: at its first launch iOS switched it on again, gave the app an identity token and the container, and the app opened the vault there. The same happened a second time. So the switch only counts for an app that is installed and has started once: at a new install's first start, the local fallback of rule 2 comes only from iCloud Drive being off altogether or no Apple Account, which was not tried.
+
 ## Conclusion
 
 - **iPhone:** the container works as ADR-0048 assumes. It is shown as "Schnipsle" with the app's icon in Files and in Finder, the vault is read and written there as in a picked folder, and `NSMetadataQuery` lists it, also before it is downloaded, in about 60 ms.

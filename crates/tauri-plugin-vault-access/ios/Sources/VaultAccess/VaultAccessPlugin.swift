@@ -20,6 +20,10 @@ struct PathArgs: Decodable {
   let path: String
 }
 
+struct DefaultFolderArgs: Decodable {
+  let untilReady: Bool
+}
+
 /// Receives the picker's result and forwards it to a closure.
 final class FolderPickerDelegate: NSObject, UIDocumentPickerDelegate {
   var onResult: ((URL?) -> Void)?
@@ -42,6 +46,7 @@ class VaultAccessPlugin: Plugin {
   private let pickerDelegate = FolderPickerDelegate()
   /// The folder we currently hold security-scoped access to.
   private var activeURL: URL?
+  private let folderFinder = DefaultFolder()
 
   /// Shows the folder picker; resolves `{ path }` or `{ path: null }` if cancelled.
   @objc public func pickFolder(_ invoke: Invoke) {
@@ -139,6 +144,34 @@ class VaultAccessPlugin: Plugin {
       invoke.resolve()
     } catch {
       invoke.reject("Download request failed: \(error.localizedDescription)")
+    }
+  }
+
+  /// Where the default vault goes (ADR-0050 rules 2 and 3): resolves
+  /// `{ state: "local", path }`, `{ state: "iCloud", path, listed }` or, unless
+  /// `untilReady`, `{ state: "offline" }`.
+  @objc public func defaultFolder(_ invoke: Invoke) throws {
+    let args = try invoke.parseArgs(DefaultFolderArgs.self)
+    folderFinder.find(untilReady: args.untilReady) { answer in
+      invoke.resolve(answer.json)
+    }
+  }
+
+  /// The app's own Documents folder; resolves `{ path }`.
+  @objc public func localFolder(_ invoke: Invoke) {
+    invoke.resolve(["path": DefaultFolder.localDocuments().path])
+  }
+
+  /// Remembers a folder the app chose itself, as a picked one is.
+  @objc public func rememberFolder(_ invoke: Invoke) throws {
+    let args = try invoke.parseArgs(PathArgs.self)
+    let url = URL(fileURLWithPath: args.path, isDirectory: true)
+    do {
+      activate(url)
+      try saveBookmark(for: url)
+      invoke.resolve()
+    } catch {
+      invoke.reject("Could not remember the folder: \(error.localizedDescription)")
     }
   }
 
