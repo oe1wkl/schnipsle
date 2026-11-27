@@ -16,6 +16,7 @@ use std::io;
 use serde::Serialize;
 
 use crate::layout::{ATTACHMENTS_DIR, NOTES_DIR};
+use crate::listing::is_dataless;
 use crate::names::candidate;
 use crate::vault::{
     Access, Result, Vault, VaultError, count_notes, has_md_extension, note_paths,
@@ -84,8 +85,12 @@ impl Vault {
                         strays.notes += notes;
                     }
                 } else if file_type.is_file() && has_md_extension(&name) {
-                    strays.items.push(name);
-                    strays.notes += 1;
+                    if entry.metadata().is_ok_and(|m| is_dataless(&m)) {
+                        strays.not_downloaded.push(name);
+                    } else {
+                        strays.items.push(name);
+                        strays.notes += 1;
+                    }
                 }
             }
             strays.items.sort();

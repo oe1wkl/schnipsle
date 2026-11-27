@@ -797,7 +797,8 @@ async fn keep_both(
     })
 }
 
-/// Asks iCloud to download a note that is only a placeholder (iOS); no-op elsewhere.
+/// Asks iCloud to download a note that is not on this device (macOS, iOS);
+/// no-op elsewhere.
 #[tauri::command]
 async fn download_note(
     app: tauri::AppHandle,

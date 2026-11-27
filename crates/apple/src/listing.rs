@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Folders listed in bulk with `getattrlistbulk(2)` (ADR-0047).
 //!
-//! One call returns the name, kind, modification time and size of many
-//! entries of a folder, where `std::fs` needs one `lstat` per entry; on an
+//! One call returns the name, kind, modification time, flags and size of
+//! many entries of a folder, where `std::fs` needs one `lstat` per entry; on an
 //! iPhone with 10,000 notes in iCloud Drive that is about 1.5 ms instead of
 //! 230 ms. [`BulkLister`] gives the same answers as
 //! [`schnipsle_core::PlainLister`]: an entry whose attributes the system
 //! cannot give is asked with `lstat`, and a folder the call fails for is
-//! listed with `PlainLister`, so errors are the same as there.
+//! listed with `PlainLister`, so errors are the same as there. The flags
+//! tell whether a file is dataless (ADR-0050).
 
 use std::ffi::{OsString, c_int, c_void};
 use std::fs::{self, File};
@@ -16,7 +17,7 @@ use std::os::fd::AsRawFd;
 use std::os::unix::ffi::OsStringExt;
 use std::path::Path;
 
-use schnipsle_core::listing::kind_of;
+use schnipsle_core::listing::{SF_DATALESS, is_dataless, kind_of};
 use schnipsle_core::{EntryKind, FileStat, FolderEntry, FolderLister, PlainLister};
 
 /// Lists folders with `getattrlistbulk`, falling back to [`PlainLister`].
@@ -57,6 +58,7 @@ const ATTR_BIT_MAP_COUNT: u16 = 5;
 const ATTR_CMN_NAME: u32 = 0x0000_0001;
 const ATTR_CMN_OBJTYPE: u32 = 0x0000_0008;
 const ATTR_CMN_MODTIME: u32 = 0x0000_0400;
+const ATTR_CMN_FLAGS: u32 = 0x0004_0000;
 const ATTR_CMN_ERROR: u32 = 0x2000_0000;
 const ATTR_CMN_RETURNED_ATTRS: u32 = 0x8000_0000;
 const ATTR_FILE_DATALENGTH: u32 = 0x0000_0200;
@@ -76,7 +78,8 @@ fn bulk_list(dir: &Path) -> io::Result<Vec<FolderEntry>> {
             | ATTR_CMN_NAME
             | ATTR_CMN_ERROR
             | ATTR_CMN_OBJTYPE
-            | ATTR_CMN_MODTIME,
+            | ATTR_CMN_MODTIME
+            | ATTR_CMN_FLAGS,
         volattr: 0,
         dirattr: 0,
         fileattr: ATTR_FILE_DATALENGTH,
@@ -129,6 +132,8 @@ struct Raw {
     error: u32,
     kind: Option<u32>,
     modified: Option<(i64, i64)>,
+    /// `st_flags`, as `lstat` gives them.
+    flags: Option<u32>,
     size: Option<i64>,
 }
 
@@ -151,11 +156,12 @@ impl Raw {
             }),
             _ => None,
         };
-        if let (Some(kind), Some(stat)) = (kind, stat) {
+        if let (Some(kind), Some(stat), Some(flags)) = (kind, stat, self.flags) {
             return Some(FolderEntry {
                 name: self.name,
                 kind,
                 stat: Some(stat),
+                dataless: flags & SF_DATALESS != 0,
             });
         }
         // The system could not tell everything: ask as `PlainLister` does.
@@ -164,7 +170,8 @@ impl Raw {
         Some(FolderEntry {
             name: self.name,
             kind,
-            stat: meta.ok().map(|m| FileStat::of(&m)),
+            stat: meta.as_ref().ok().map(FileStat::of),
+            dataless: meta.as_ref().is_ok_and(is_dataless),
         })
     }
 }
@@ -222,6 +229,11 @@ fn parse(group: &[u8]) -> Option<Raw> {
         modified = Some((read_i64(group, at)?, read_i64(group, at + 8)?));
         at += 16;
     }
+    let mut flags = None;
+    if common & ATTR_CMN_FLAGS != 0 {
+        flags = Some(read_u32(group, at)?);
+        at += 4;
+    }
     let mut size = None;
     if file & ATTR_FILE_DATALENGTH != 0 {
         size = Some(read_i64(group, at)?);
@@ -231,6 +243,7 @@ fn parse(group: &[u8]) -> Option<Raw> {
         error,
         kind,
         modified,
+        flags,
         size,
     })
 }

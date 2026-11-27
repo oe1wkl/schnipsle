@@ -182,7 +182,7 @@ pub(crate) fn file_url(path: &Path) -> io::Result<Retained<NSURL>> {
 }
 
 /// POSIX errors keep their error number, so `io::ErrorKind` stays meaningful.
-fn to_io_error(error: &NSError) -> io::Error {
+pub(crate) fn to_io_error(error: &NSError) -> io::Error {
     let code = error.code();
     if error.domain().to_string() == "NSPOSIXErrorDomain"
         && let Ok(errno) = i32::try_from(code)

@@ -8,7 +8,10 @@
 //! runs when a vault opens and after events that may have been missed.
 //! [`Vault::index_file`] updates one path, after a change event or the app's
 //! own write. Notes that are only iCloud placeholders are not indexed until
-//! they are downloaded.
+//! they are downloaded. A dataless note (ADR-0050) is not read either: it
+//! stays in the index while its time and size match its stamp, since its
+//! text is then the one indexed; otherwise it leaves the index until it is
+//! downloaded.
 //!
 //! Both give a note back its `id` and `created` when a change made
 //! elsewhere removed them (ADR-0044, format.md §4): the index still has them
@@ -25,7 +28,7 @@ use serde::Serialize;
 use crate::front_matter;
 use crate::index::{FileStamp, Index, IndexError, NoteState, analyze};
 use crate::layout::NOTES_DIR;
-use crate::listing::{EntryKind, FolderLister};
+use crate::listing::{EntryKind, FolderLister, is_dataless};
 use crate::trash::TRASH_DIR;
 use crate::vault::{Access, Result, Vault, VaultError, sha256_hex};
 
@@ -66,6 +69,8 @@ struct Found {
     state: NoteState,
     mtime_ms: u64,
     size: u64,
+    /// Its content is not on this device; it is not read.
+    dataless: bool,
 }
 
 impl Vault {
@@ -94,13 +99,17 @@ impl Vault {
         let mut seen = HashSet::new();
         let mut lost = Vec::new();
         for file in found {
-            seen.insert(file.key.clone());
             if let Some(old) = stamps.get(&file.key)
                 && old.mtime_ms == file.mtime_ms
                 && old.size == file.size
             {
+                seen.insert(file.key);
                 continue;
             }
+            if file.dataless {
+                continue; // not seen: out of the index until downloaded
+            }
+            seen.insert(file.key.clone());
             let bytes = match self.read_for_index(&file.key) {
                 Ok(bytes) => bytes,
                 Err(e) => {
@@ -159,6 +168,16 @@ impl Vault {
             }
             Err(e) => return Err(e.into()),
         };
+        if is_dataless(&meta) {
+            // As in `sync_index`: kept only while it is the text indexed.
+            let unchanged = index
+                .stamp(key)?
+                .is_some_and(|old| old.mtime_ms == mtime_ms(&meta) && old.size == meta.len());
+            if !unchanged {
+                index.remove(key)?;
+            }
+            return Ok(());
+        }
         let bytes = self.coordinated(Access::Read, &file, |file| Ok(fs::read(file)?))?;
         let stamp = FileStamp {
             mtime_ms: mtime_ms(&meta),
@@ -272,7 +291,8 @@ fn lost_identity(index: &Index, key: &str, state: NoteState, bytes: &[u8]) -> Re
 }
 
 /// Collects the `.md` files below `dir` (hidden files and folders skipped,
-/// so iCloud placeholders too), keyed by `prefix/…`.
+/// so iCloud placeholders too), keyed by `prefix/…`; dataless ones are
+/// marked.
 fn walk(
     lister: &dyn FolderLister,
     dir: &Path,
@@ -308,6 +328,7 @@ fn walk(
                 state,
                 mtime_ms: stat.modified_ms,
                 size: stat.size,
+                dataless: entry.dataless,
             });
         }
     }
@@ -324,6 +345,7 @@ fn mtime_ms(meta: &fs::Metadata) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
 
     fn setup() -> (tempfile::TempDir, Vault, Index) {
         let dir = tempfile::tempdir().unwrap();
@@ -335,6 +357,30 @@ mod tests {
         let mut paths: Vec<_> = index.stamps().unwrap().into_keys().collect();
         paths.sort();
         paths
+    }
+
+    #[test]
+    fn a_dataless_note_stays_indexed_while_unchanged_and_is_never_read() {
+        let (dir, vault, mut index) = setup();
+        vault.create_note("a.md", "# A #eins\n").unwrap();
+        vault.create_note("b.md", "# B\n").unwrap();
+        assert_eq!(vault.sync_index(&mut index).unwrap().indexed, 2);
+        let lister = crate::listing::MarkDataless(vec!["a.md"]);
+        let evicted = vault.clone().with_folder_lister(Arc::new(lister));
+
+        let sync = evicted.sync_index(&mut index).unwrap();
+        assert_eq!((sync.indexed, sync.removed, sync.failed), (0, 0, 0));
+        assert_eq!(paths(&index), ["notes/a.md", "notes/b.md"]);
+
+        // Changed elsewhere and not downloaded: out of the index, not failed.
+        fs::write(dir.path().join("notes/a.md"), "# A, longer now\n").unwrap();
+        let sync = evicted.sync_index(&mut index).unwrap();
+        assert_eq!((sync.indexed, sync.removed, sync.failed), (0, 1, 0));
+        assert_eq!(paths(&index), ["notes/b.md"]);
+
+        // Downloaded: read and indexed again.
+        assert_eq!(vault.sync_index(&mut index).unwrap().indexed, 1);
+        assert_eq!(paths(&index), ["notes/a.md", "notes/b.md"]);
     }
 
     #[test]

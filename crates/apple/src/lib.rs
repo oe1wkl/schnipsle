@@ -17,7 +17,8 @@
 //! [`footprint`] reads the app's memory, and [`device_model`] and
 //! [`system_version`] tell what it runs on, for the measurements of ADR-0045.
 //! [`BulkLister`] lists folders with their files' times and sizes in a few
-//! system calls (ADR-0047).
+//! system calls (ADR-0047), and [`download`] asks iCloud for a file that is
+//! not on this device (ADR-0050).
 //!
 //! This is one of two crates allowed to use `unsafe`. Every `unsafe` block carries
 //! a `// SAFETY:` comment, and the public API is safe. On other platforms the
@@ -27,6 +28,8 @@
 mod anchors;
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 mod coordinator;
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+mod download;
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 mod listing;
 
@@ -51,6 +54,8 @@ mod versions;
 pub use anchors::{AnchorText, FoundLine, find_anchors};
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 pub use coordinator::FileCoordinator;
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+pub use download::download;
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 pub use listing::BulkLister;
 #[cfg(target_os = "macos")]

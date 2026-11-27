@@ -23,7 +23,8 @@ use crate::front_matter;
 use crate::listing::{EntryKind, FileStat};
 use crate::stamp::{is_ulid, new_ulid, now_ms, rfc3339_utc};
 use crate::vault::{
-    Access, NoteContent, Result, Vault, VaultError, created_ms, modified_ms_of, sha256_hex,
+    Access, NoteContent, Result, Vault, VaultError, created_ms, modified_ms_of, not_downloaded,
+    sha256_hex,
 };
 
 /// A conflict version as the sync service stores it.
@@ -209,7 +210,8 @@ impl Vault {
     /// §4): those in the same folder, where iCloud Drive puts its copies, and
     /// those [`NotesById`] knows anywhere in the vault. Each one is checked on
     /// disk, since the lookup may be behind. A file in the folder that is
-    /// unchanged since it was indexed with another `id` is not read (ADR-0046).
+    /// unchanged since it was indexed with another `id` is not read (ADR-0046),
+    /// nor is one not downloaded (ADR-0050).
     fn copies_of(&self, path: &str, text: &str) -> Result<Vec<Copy>> {
         let Some(id) = front_matter::get(text, "id") else {
             return Ok(Vec::new());
@@ -241,6 +243,7 @@ impl Vault {
             for entry in self.lister().list(dir)? {
                 let name = entry.name.to_string_lossy().into_owned();
                 let is_note = entry.kind == EntryKind::File
+                    && !entry.dataless
                     && !name.starts_with('.')
                     && name.to_ascii_lowercase().ends_with(".md");
                 let rel = format!("{prefix}{name}");
@@ -255,7 +258,12 @@ impl Vault {
             .map(|name| format!("{prefix}{name}"))
             .collect();
         for other in self.by_id().paths_with_id(&id) {
-            if other != path && !candidates.contains(&other) && self.resolve(&other).is_ok() {
+            if other != path
+                && !candidates.contains(&other)
+                && self
+                    .resolve(&other)
+                    .is_ok_and(|full| !not_downloaded(&full))
+            {
                 candidates.push(other);
             }
         }
@@ -938,6 +946,47 @@ mod tests {
             .unwrap()
             .with_notes_by_id(Arc::new(snapshot));
         assert_eq!(copy_paths(&vault, "a.md"), ["a 2.md"]);
+    }
+
+    #[test]
+    fn a_copy_not_downloaded_is_not_read() {
+        let (_dir, vault, _, _) = vault_with_copy();
+        let lister = crate::listing::MarkDataless(vec!["Einkaufsliste 2.md"]);
+        let vault = vault.with_folder_lister(Arc::new(lister));
+        assert!(copy_paths(&vault, "Einkaufsliste.md").is_empty());
+    }
+
+    #[test]
+    fn a_dataless_note_is_listed_as_not_downloaded_and_not_read() {
+        let dir = tempfile::tempdir().unwrap();
+        let notes = dir.path().join("notes");
+        fs::create_dir_all(&notes).unwrap();
+        fs::write(notes.join("known.md"), "# On disk K\n").unwrap();
+        fs::write(notes.join("new.md"), "# On disk N\n").unwrap();
+        fs::write(notes.join("here.md"), "# On disk H\n").unwrap();
+        let snapshot = Snapshot::of(&notes, &[("known.md", None, "From the index", true)], &[]);
+        let evicted = crate::listing::MarkDataless(vec!["known.md", "new.md"]);
+        let vault = Vault::create(dir.path())
+            .unwrap()
+            .with_notes_by_id(Arc::new(snapshot))
+            .with_folder_lister(Arc::new(evicted));
+        let mut listed: Vec<_> = vault
+            .list_notes()
+            .unwrap()
+            .into_iter()
+            .map(|n| (n.path, n.title, n.available, n.pinned))
+            .collect();
+        listed.sort();
+        assert_eq!(
+            listed,
+            [
+                ("here.md".into(), "On disk H".into(), true, false),
+                // Unchanged since indexed: its title is known without reading.
+                ("known.md".into(), "From the index".into(), false, true),
+                // Not read: the file name stands in for the title.
+                ("new.md".into(), "new".into(), false, false),
+            ]
+        );
     }
 
     #[test]

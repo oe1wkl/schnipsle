@@ -20,9 +20,11 @@ use serde::Serialize;
 
 use crate::coordination::{Coordinator, Uncoordinated};
 use crate::flat_yaml;
+use crate::listing::is_dataless;
 use crate::stamp::{is_ulid, new_ulid, now_ms, rfc3339_utc};
 use crate::vault::{
-    Access, Result, TempFile, Vault, VaultError, accessor_ran_twice, count_notes, placeholder_of,
+    Access, Result, TempFile, Vault, VaultError, accessor_ran_twice, count_notes, not_downloaded,
+    placeholder_of,
 };
 
 /// The vault's identity file, relative to the vault root (format.md §2).
@@ -115,7 +117,8 @@ impl VaultIdentity {
 pub enum Folder {
     /// A vault: open it with [`Vault::open`].
     Vault,
-    /// A vault whose `vault.yaml` iCloud has not downloaded yet.
+    /// A vault whose `vault.yaml` iCloud has not downloaded yet (a
+    /// placeholder or a dataless file).
     VaultNotDownloaded,
     /// A folder inside the vault at `root`, which should be opened instead.
     InsideVault {
@@ -219,11 +222,11 @@ impl Vault {
 
     fn inspect(&self) -> Result<Folder> {
         let file = self.root().join(VAULT_FILE);
+        if not_downloaded(&file) {
+            return Ok(Folder::VaultNotDownloaded);
+        }
         if fs::symlink_metadata(&file).is_ok() {
             return Ok(Folder::Vault);
-        }
-        if placeholder_of(&file).exists() {
-            return Ok(Folder::VaultNotDownloaded);
         }
         if let Some(root) = self
             .root()
@@ -246,6 +249,12 @@ impl Vault {
                     .and_then(|n| n.strip_suffix(".icloud"))
                 {
                     not_downloaded.push(real.to_owned());
+                } else if !name.starts_with('.')
+                    && entry
+                        .metadata()
+                        .is_ok_and(|m| m.is_file() && is_dataless(&m))
+                {
+                    not_downloaded.push(name);
                 } else if !(name.starts_with('.') || notes_dir && name == NOTES_DIR) {
                     items.push(name);
                 }
