@@ -1,6 +1,6 @@
 # ADR-0048: A default vault, with the manual as notes
 
-- Status: Accepted; where the vault goes without iCloud Drive and on the Mac (rule 2), when an empty iCloud folder counts as empty (rule 4) and the Mac's entitlement (consequences) amended by [ADR-0050](0050-the-default-vault-on-a-second-device-and-on-the-mac.md)
+- Status: Accepted; where the vault goes without iCloud Drive and on the Mac (rule 2), when an empty iCloud folder counts as empty (rule 4) and the Mac's entitlement (consequences) amended by [ADR-0050](0050-the-default-vault-on-a-second-device-and-on-the-mac.md); how manual notes link each other and how the app carries them (rules 6 and 9) amended by [ADR-0051](0051-the-manual-links-its-notes-by-relative-links.md) (proposed)
 - Date: 2026-11-25
 - Deciders: Willi Kraml
 - Related: N-02, F-07, F-14, ADR-0004, ADR-0006, ADR-0036, ADR-0039, ADR-0042, ADR-0046, ADR-0049
@@ -79,3 +79,8 @@ No change to the vault format: the manual notes are ordinary notes.
   - Moving `docs/manual/` into a vault and writing the missing pages (getting started, vaults, tags and smart folders, import, export, history and trash, sync, settings); the links to its pages (format.md §9, comments in the code) follow the move.
   - Core: making the default vault and adding or updating the manual (`schnipsle-core`, with tests); the app shell: the container and the first start; the Help menu on the Mac and its place on the iPhone.
   - `docs/dev-setup.md`: the iCloud container and the provisioning profiles.
+- Rules 6 and 7 implemented on 2026-11-27, with the links and the build of ADR-0051:
+  - `docs/manual/` is a vault: `notes/schnipsle-manual/` holds the book note "Schnipsle manual", Getting started, Query language, Music, and Keyboard and VoiceOver; the other parts are still to be written. A test (`crates/core/src/manual.rs`) checks each note's `id`, dates, tags and links, that the book links to every note, and that `README.md` follows the book.
+  - `Vault::add_manual` adds the notes and pictures that are missing. A vault made at the first start gets the whole manual, and its book note opens. A vault found at the first start gets the missing notes once its search index has synced, so a note the user moved is known by its `id`; a moved note that is not downloaded on this device yet is not known, and comes back as a second copy with the same `id` (format.md §4 handles it as a copy).
+  - Help › Manual on the Mac, and **Open the manual** in Settings (on the iPhone, where there is no menu): opens the book note, or offers to add the manual to the open vault.
+  - Rule 8 (Help › Update the Manual) is not done yet.

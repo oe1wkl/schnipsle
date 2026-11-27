@@ -6,7 +6,7 @@
 //! or range (see [`DateSpec`]), `has:image|task|link|chord`, `chord:Am`,
 //! `is:pinned|untagged` and `in:trash`. `-term` excludes, `OR` and parentheses combine; terms next
 //! to each other must all match. The reference for users is
-//! `docs/manual/query-language.md`.
+//! `docs/manual/notes/schnipsle-manual/query-language.md`.
 //!
 //! The parser never fails: a missing `)` closes at the end, a stray `)` or a
 //! lone `-` is ignored, an operator with a value it does not know (`has:x`,

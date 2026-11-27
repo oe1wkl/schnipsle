@@ -25,6 +25,8 @@ export interface SettingsHooks {
   vaultState: () => { open: false } | { open: true; readOnly: string | null };
   /** The chord names changed: song sheets in the open note are drawn again. */
   chordNamesChanged: () => void;
+  /** Open the manual (ADR-0048 rule 7), after the dialog has closed. */
+  openManual: () => void;
 }
 
 const dialog = el("settings-dialog") as HTMLDialogElement;
@@ -47,6 +49,7 @@ const pandocFind = el("settings-pandoc-find") as HTMLButtonElement;
 const updates = el("settings-updates") as HTMLInputElement;
 const deviceError = el("settings-device-error");
 const closeButton = el("settings-close") as HTMLButtonElement;
+const manualButton = el("settings-manual") as HTMLButtonElement;
 
 function showError(target: HTMLElement, message: string | null): void {
   target.textContent = message ?? "";
@@ -256,6 +259,10 @@ export function createSettings(hooks: SettingsHooks): { open(): Promise<void> } 
   });
   closeButton.addEventListener("click", () => {
     dialog.close();
+  });
+  manualButton.addEventListener("click", () => {
+    dialog.close();
+    hooks.openManual();
   });
   // Escape: like Done, but not while a removal waits for an answer.
   dialog.addEventListener("cancel", (event) => {

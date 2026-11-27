@@ -1,3 +1,9 @@
+---
+id: 01M8EAJZW05F7CJSG6M174SV1F
+created: 2026-11-27T12:00:00+01:00
+modified: 2026-11-27T12:00:00+01:00
+---
+
 # Music
 
 A note can hold music of two kinds, each in a fenced code block:
@@ -164,3 +170,5 @@ Scores and song sheets are exported as they look in the note:
 ## Larger scores
 
 Scores from notation programs, such as MusicXML (`.musicxml`, `.mxl`), MIDI (`.mid`), LilyPond (`.ly`) or PDF, can be dragged into a note on the Mac: Schnipsle keeps the file in the vault and links it. ⌘-click the link to open the file. It is not shown in the note itself.
+
+#schnipsle_manual

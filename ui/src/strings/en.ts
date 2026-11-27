@@ -99,6 +99,19 @@ export const en = {
     notMade: (message: string) => `No vault made: ${message}`,
   },
 
+  manual: {
+    title: "Manual",
+    hint: "The manual is a set of notes in your vault, tagged #schnipsle_manual.",
+    open: "Open the manual",
+    offer:
+      "This vault has no manual. Add its notes to the folder “schnipsle-manual”? Your own notes " +
+      "stay as they are.",
+    add: "Add the manual",
+    added: (notes: number) => `Added ${count(notes, "note", "notes")} of the manual.`,
+    noneMissing: "The manual's notes are here already, or in the trash.",
+    notAdded: (message: string) => `The manual was not added: ${message}`,
+  },
+
   strays: {
     move: "Move into “notes”",
     show: "Show them",

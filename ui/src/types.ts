@@ -36,8 +36,24 @@ export type LocalWhy = "iCloudOff" | "noICloudFolder" | "chosen" | "noICloud";
 /** What the first start did (src-tauri `FirstStart`, ADR-0048, ADR-0050). */
 export type FirstStart =
   | { kind: "notFirst" }
-  | { kind: "opened"; vault: VaultInfo; made: boolean; local: LocalWhy | null }
+  | {
+      kind: "opened";
+      vault: VaultInfo;
+      made: boolean;
+      local: LocalWhy | null;
+      /** The manual's book note in a vault made now, to open. */
+      manual: string | null;
+    }
   | { kind: "offline" };
+/** What adding the manual did (src-tauri `manual::Added`, ADR-0048 rule 6). */
+export interface ManualAdded {
+  /** Paths of the notes added, relative to notes/. */
+  added: string[];
+  /** Manual notes that were there already, or in the trash. */
+  kept: number;
+  /** The book note, if the vault has one now. */
+  book: string | null;
+}
 /** Result of picking or restoring a folder (src-tauri `Opened`). */
 export type Opened = ({ kind: "vault" } & VaultInfo) | ({ kind: "setup" } & FolderSetup);
 export interface NoteEntry {

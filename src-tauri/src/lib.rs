@@ -9,6 +9,7 @@ mod closing;
 mod exporting;
 mod importing;
 mod indexing;
+mod manual;
 mod measuring;
 mod retagging;
 mod settings;
@@ -339,6 +340,8 @@ enum FirstStart {
         made: bool,
         /// Why it is on this device only, if it is.
         local: Option<vault_location::LocalWhy>,
+        /// The manual's book note in a vault made now, for the UI to open.
+        manual: Option<String>,
     },
     /// iPhone: iCloud cannot be asked yet. The UI offers a folder on this
     /// device or one to choose, and calls [`wait_for_icloud`].
@@ -412,10 +415,21 @@ fn open_default_in(
         Err(e) => return Err(e.into()),
     };
     vault_location::remember(app, vault.root())?;
+    // ADR-0048 rule 3: the manual goes into a new vault at once; an existing
+    // one gets the notes it lacks once its index knows which those are.
+    let made = choice.spot != default_vault::Spot::Vault;
+    let manual = if made {
+        manual::add_to_new(&vault);
+        vault.manual_book()
+    } else {
+        manual::add_after_sync(app, state, &vault);
+        None
+    };
     Ok(FirstStart::Opened {
         vault: remember(app, state, vault)?,
-        made: choice.spot != default_vault::Spot::Vault,
+        made,
         local,
+        manual,
     })
 }
 
@@ -687,7 +701,7 @@ async fn tag_folders(state: State<'_, AppState>, keys: Vec<String>) -> CmdResult
 }
 
 /// Full-text search (F-09) in the query language of
-/// `docs/manual/query-language.md`; best matches first, with snippets.
+/// `docs/manual/notes/schnipsle-manual/query-language.md`; best matches first, with snippets.
 /// `utc_offset_minutes` (local time minus UTC) makes `created:2026-10-23`
 /// and `today` mean the user's local days.
 #[tauri::command]
@@ -951,7 +965,6 @@ fn extract_tags(markdown: &str) -> Vec<Tag> {
 /// Everything else is a standard system item.
 #[cfg(desktop)]
 fn install_menu(app: &tauri::App) -> tauri::Result<()> {
-    use tauri::Emitter as _;
     use tauri::menu::{AboutMetadata, Menu, MenuItem, PredefinedMenuItem, Submenu};
 
     let handle = app.handle();
@@ -1018,34 +1031,49 @@ fn install_menu(app: &tauri::App) -> tauri::Result<()> {
         ],
     )?;
 
+    let manual = MenuItem::with_id(app, "manual", text.manual, true, None::<&str>)?;
     #[cfg(target_os = "macos")]
-    let menu = Menu::with_items(app, &[&app_menu(app, about)?, &file, &edit, &window])?;
+    let help = Submenu::with_items(app, text.help, true, &[&manual])?;
+    #[cfg(target_os = "macos")]
+    let menu = Menu::with_items(app, &[&app_menu(app, about)?, &file, &edit, &window, &help])?;
     #[cfg(not(target_os = "macos"))]
     let menu = {
         let help = Submenu::with_items(
             app,
             text.help,
             true,
-            &[&PredefinedMenuItem::about(app, None, Some(about))?],
+            &[
+                &manual,
+                &separator()?,
+                &PredefinedMenuItem::about(app, None, Some(about))?,
+            ],
         )?;
         Menu::with_items(app, &[&file, &edit, &window, &help])?
     };
     #[cfg(target_os = "macos")]
-    window.set_as_windows_menu_for_nsapp()?;
+    {
+        window.set_as_windows_menu_for_nsapp()?;
+        help.set_as_help_menu_for_nsapp()?;
+    }
 
     app.set_menu(menu)?;
-    app.on_menu_event(|app, event| {
-        let id = event.id().as_ref();
-        if matches!(
-            id,
-            "new-note" | "open-vault" | "import" | "imports" | "export" | "settings"
-        ) {
-            let _ = app.emit("menu", id);
-        } else if id == "quit" && closing::may_close(app) {
-            app.exit(0);
-        }
-    });
+    app.on_menu_event(|app, event| menu_event(app, &event));
     Ok(())
+}
+
+/// Hands the menu's own items to the page, and quits after Quit.
+#[cfg(desktop)]
+fn menu_event(app: &tauri::AppHandle, event: &tauri::menu::MenuEvent) {
+    use tauri::Emitter as _;
+    let id = event.id().as_ref();
+    if matches!(
+        id,
+        "new-note" | "open-vault" | "import" | "imports" | "export" | "settings" | "manual"
+    ) {
+        let _ = app.emit("menu", id);
+    } else if id == "quit" && closing::may_close(app) {
+        app.exit(0);
+    }
 }
 
 /// Quit (⌘Q), which waits for the page to save the open note
@@ -1133,6 +1161,8 @@ pub fn run() {
             first_start,
             wait_for_icloud,
             open_default_vault,
+            manual::open_manual,
+            manual::add_manual,
             list_notes,
             tag_folders,
             search_notes,

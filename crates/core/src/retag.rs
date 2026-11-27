@@ -162,7 +162,7 @@ impl TagRename {
     }
 
     /// The smart-folder `query` with its tags renamed, `#tag` and `tag:tag`
-    /// alike (`docs/manual/query-language.md`); `None` if none changes.
+    /// alike (`docs/manual/notes/schnipsle-manual/query-language.md`); `None` if none changes.
     /// Phrases in quotes stay as they are.
     #[must_use]
     pub fn rename_query(&self, query: &str) -> Option<String> {

@@ -204,6 +204,61 @@ function linkAt(state: EditorState, pos: number): string | null {
   return null;
 }
 
+/** How far (px) and how long (ms) a touch may move and last and still be a tap. */
+const TAP_SLOP = 10;
+const TAP_TIME = 500;
+
+/**
+ * A tap on a link opens it, on touch screens, which have no ⌘-click: in live
+ * preview, on a line that is not being edited, so a link is changed by
+ * tapping beside it first. Any other touch edits as before.
+ */
+function tapToOpen(open: () => ((link: string) => void) | undefined, live: () => boolean) {
+  let tap: { link: string; x: number; y: number; time: number } | null = null;
+  return {
+    touchstart: (event: TouchEvent, view: EditorView): boolean => {
+      tap = null;
+      const touch = event.touches[0];
+      if (event.touches.length !== 1 || !touch || !open() || !live()) return false;
+      const pos = view.posAtCoords({ x: touch.clientX, y: touch.clientY });
+      if (pos === null) return false;
+      const line = view.state.doc.lineAt(pos);
+      if (editedLines(view)(line.from, line.to)) return false;
+      const link = linkAt(view.state, pos);
+      if (link !== null) {
+        tap = { link, x: touch.clientX, y: touch.clientY, time: event.timeStamp };
+      }
+      return false;
+    },
+    touchmove: (event: TouchEvent): boolean => {
+      const touch = event.touches[0];
+      if (
+        tap &&
+        (!touch ||
+          Math.abs(touch.clientX - tap.x) > TAP_SLOP ||
+          Math.abs(touch.clientY - tap.y) > TAP_SLOP)
+      ) {
+        tap = null;
+      }
+      return false;
+    },
+    touchend: (event: TouchEvent): boolean => {
+      const found = tap;
+      tap = null;
+      const openLink = open();
+      if (!found || !openLink || event.timeStamp - found.time > TAP_TIME) return false;
+      // No caret, no keyboard: the tap only follows the link.
+      event.preventDefault();
+      openLink(found.link);
+      return true;
+    },
+    touchcancel: (): boolean => {
+      tap = null;
+      return false;
+    },
+  };
+}
+
 /** Lines the user is editing: those touched by a selection, while focused. */
 function editedLines(view: EditorView): (from: number, to: number) => boolean {
   if (!view.hasFocus) return () => false;
@@ -397,7 +452,69 @@ function alignOf(delimiter: string): Align {
   return left ? "left" : null;
 }
 
-/** A GFM table, shown as a table; its cells show their text as written. */
+/** Inline elements of a table cell and what shows them; others show their text. */
+const CELL_ELEMENTS: Record<string, keyof HTMLElementTagNameMap> = {
+  InlineCode: "code",
+  Emphasis: "em",
+  StrongEmphasis: "strong",
+  Strikethrough: "s",
+  Link: "span",
+};
+/** Markers a cell does not show. */
+const CELL_MARKS = new Set(["CodeMark", "EmphasisMark", "StrikethroughMark", "LinkMark"]);
+
+/**
+ * A table cell's text with its inline Markdown shown: code, emphasis,
+ * strikethrough, escapes, and links as their text. Like the live preview,
+ * nothing is rewritten; the cell only looks formatted.
+ */
+function cellContent(text: string): DocumentFragment {
+  // A cell holds inline text only: the leading "." keeps `# a` or `- a` from
+  // being parsed as a heading or a list, and still lets `_a_` open emphasis.
+  const source = "." + text;
+  const tree = markdownLanguage.parser.parse(source);
+  const out = document.createDocumentFragment();
+  const addText = (parent: Node, from: number, to: number): void => {
+    const start = Math.max(from, 1); // never the "."
+    if (to > start) parent.appendChild(document.createTextNode(source.slice(start, to)));
+  };
+  const addChildren = (parent: Node, node: SyntaxNode, from: number, to: number): void => {
+    let pos = from;
+    for (let child = node.firstChild; child; child = child.nextSibling) {
+      if (child.to <= from || child.from >= to) continue; // a link's URL
+      addText(parent, pos, child.from);
+      add(parent, child);
+      pos = child.to;
+    }
+    addText(parent, pos, to);
+  };
+  const add = (parent: Node, node: SyntaxNode): void => {
+    if (CELL_MARKS.has(node.name)) return;
+    if (node.name === "Escape") {
+      addText(parent, node.from + 1, node.to);
+      return;
+    }
+    const tag = CELL_ELEMENTS[node.name];
+    if (!tag) {
+      addChildren(parent, node, node.from, node.to);
+      return;
+    }
+    const element = document.createElement(tag);
+    if (node.name === "Link") {
+      // `[text](url)`: only the text, between the first two marks.
+      const [open, close] = node.getChildren("LinkMark");
+      element.className = "cm-cell-link";
+      addChildren(element, node, open?.to ?? node.from, close?.from ?? node.to);
+    } else {
+      addChildren(element, node, node.from, node.to);
+    }
+    parent.appendChild(element);
+  };
+  addChildren(out, tree.topNode, 1, source.length);
+  return out;
+}
+
+/** A GFM table, shown as a table, its cells with their inline formatting. */
 class TableWidget extends WidgetType {
   constructor(private readonly source: string) {
     super();
@@ -412,7 +529,7 @@ class TableWidget extends WidgetType {
       const tr = document.createElement("tr");
       tableCells(line).forEach((text, i) => {
         const cell = document.createElement(tag);
-        cell.textContent = text;
+        cell.append(cellContent(text));
         const align = aligns[i];
         if (align) cell.style.textAlign = align;
         tr.append(cell);
@@ -549,7 +666,13 @@ const theme = EditorView.theme({
     padding: "4px 10px",
     textAlign: "left",
     verticalAlign: "top",
+    // Whole words: a narrow screen scrolls the table sideways instead of
+    // breaking "Term" into "Ter" and "m" (the editor's lines break anywhere).
+    overflowWrap: "normal",
+    wordBreak: "normal",
   },
+  ".cm-table code": { fontFamily: MONO, fontSize: "0.9em" },
+  ".cm-cell-link": { color: "var(--accent)", textDecoration: "underline" },
   ".cm-table th": { backgroundColor: "var(--panel)", fontWeight: "600" },
 });
 
@@ -578,7 +701,7 @@ export function createEditor(
     /** Files pasted or dropped into the note; `pos` is where they were dropped. */
     onFiles: (files: File[], pos: number | null) => void;
     loadImage: ImageLoader;
-    /** A link ⌘-clicked (Ctrl-clicked), as written in the note. */
+    /** A link ⌘-clicked (Ctrl-clicked) or tapped, as written in the note. */
     openLink?: (link: string) => void;
     /** Shown while the editor is empty; "Select a note" by default. */
     placeholderText?: string;
@@ -631,6 +754,10 @@ export function createEditor(
           blur: () => {
             events.onBlur();
           },
+          ...tapToOpen(
+            () => events.openLink,
+            () => currentMode === "live",
+          ),
           mousedown: (event, view) => {
             const { openLink } = events;
             if (!openLink || !(isApple ? event.metaKey : event.ctrlKey)) return false;

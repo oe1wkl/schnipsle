@@ -1,3 +1,9 @@
+---
+id: 01M8EAJZW0FS7B1XFW7FJ49SQ5
+created: 2026-11-27T12:00:00+01:00
+modified: 2026-11-27T18:00:00+01:00
+---
+
 # Keyboard and VoiceOver
 
 Everything in Schnipsle can be done without a mouse on the Mac, and with VoiceOver on the Mac and the iPhone.
@@ -17,7 +23,7 @@ Everything in Schnipsle can be done without a mouse on the Mac, and with VoiceOv
 ## In the editor
 
 - **Tab** leaves the editor for the next control, so the keyboard never gets stuck in it. **⌘]** indents a line or list item, **⌘[** outdents it.
-- **⌘-click** (Ctrl-click elsewhere) on a link opens it.
+- **⌘-click** (Ctrl-click elsewhere) on a link opens it. On the iPhone, a tap does.
 - **⌘Z** undoes, **⇧⌘Z** redoes.
 
 ## Menu commands on the Mac
@@ -38,3 +44,5 @@ Import…, Imports… and Export… are in the File menu.
 - Toggles say whether they are on: Pin, Source, Trash, Compare.
 - What happens without moving the focus, such as "Saved", a conflict or a finished export, is read out from the status line.
 - A rendered score is read as one picture, named by its tunes; its ABC source is read in the editor when the cursor is in it. A song sheet is read as text.
+
+#schnipsle_manual

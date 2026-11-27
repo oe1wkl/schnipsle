@@ -145,7 +145,7 @@ pub struct SmartFolder {
     pub id: String,
     /// The `name`.
     pub name: String,
-    /// The `query` (`docs/manual/query-language.md`).
+    /// The `query` (`docs/manual/notes/schnipsle-manual/query-language.md`).
     pub query: String,
     /// The parent in effect: `None` at the top level, also for a `parent`
     /// that does not exist or would make a cycle.

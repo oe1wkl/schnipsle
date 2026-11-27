@@ -22,6 +22,7 @@ pub mod layout;
 pub mod leftovers;
 pub mod links;
 pub mod listing;
+pub mod manual;
 pub mod names;
 pub mod query;
 pub mod retag;

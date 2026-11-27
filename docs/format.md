@@ -253,7 +253,7 @@ folders:
     sort: modified-desc       # modified-desc | modified-asc | created-desc | title-asc
 ```
 
-The query syntax is defined in the user manual: [Query language](manual/query-language.md).
+The query syntax is defined in the user manual: [Query language](manual/notes/schnipsle-manual/query-language.md).
 
 1. `id` (a ULID for new folders), `name` and `query` are REQUIRED, non-empty strings. A missing `parent` means `null`; a missing `sort` means `modified-desc`.
 2. The order of `folders` is the display order among folders with the same parent.
