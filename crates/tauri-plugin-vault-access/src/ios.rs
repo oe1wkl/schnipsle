@@ -28,6 +28,11 @@ struct PathResponse {
 }
 
 #[derive(Deserialize)]
+struct FolderResponse {
+    path: PathBuf,
+}
+
+#[derive(Deserialize)]
 struct ShareResponse {
     completed: bool,
 }
@@ -35,6 +40,34 @@ struct ShareResponse {
 #[derive(Serialize)]
 struct PathArgs<'a> {
     path: &'a str,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DefaultFolderArgs {
+    until_ready: bool,
+}
+
+/// Where the default vault goes (ADR-0050 rules 2 and 3).
+#[derive(Debug, Deserialize)]
+#[serde(tag = "state", rename_all = "camelCase")]
+pub enum DefaultFolder {
+    /// iCloud Drive is off for the app: its own `Documents` folder.
+    Local {
+        /// The folder.
+        path: PathBuf,
+    },
+    /// The `Documents` folder of the app's iCloud container.
+    #[serde(rename = "iCloud")]
+    ICloud {
+        /// The folder.
+        path: PathBuf,
+        /// What iCloud listed in it, relative to it: the items named
+        /// `vault.yaml` or starting with "Schnipsle".
+        listed: Vec<String>,
+    },
+    /// iCloud's answer cannot be trusted yet (offline, never synced here).
+    Offline,
 }
 
 impl<R: Runtime> VaultAccess<R> {
@@ -67,6 +100,42 @@ impl<R: Runtime> VaultAccess<R> {
     pub fn share(&self, path: &str) -> Result<bool, tauri::plugin::mobile::PluginInvokeError> {
         let response: ShareResponse = self.0.run_mobile_plugin("share", PathArgs { path })?;
         Ok(response.completed)
+    }
+
+    /// Where the default vault goes. With `until_ready` false this answers
+    /// [`DefaultFolder::Offline`] when iCloud cannot be asked yet; with true it
+    /// waits until it can, which may be never.
+    ///
+    /// # Errors
+    /// If the plugin call fails.
+    pub fn default_folder(
+        &self,
+        until_ready: bool,
+    ) -> Result<DefaultFolder, tauri::plugin::mobile::PluginInvokeError> {
+        self.0
+            .run_mobile_plugin("defaultFolder", DefaultFolderArgs { until_ready })
+    }
+
+    /// The app's own `Documents` folder ("On My iPhone" in Files).
+    ///
+    /// # Errors
+    /// If the plugin call fails.
+    pub fn local_folder(&self) -> Result<PathBuf, tauri::plugin::mobile::PluginInvokeError> {
+        let response: FolderResponse = self.0.run_mobile_plugin("localFolder", ())?;
+        Ok(response.path)
+    }
+
+    /// Remembers a folder the app chose itself, so that
+    /// [`VaultAccess::restore_folder`] opens it after a restart.
+    ///
+    /// # Errors
+    /// If the bookmark cannot be stored.
+    pub fn remember_folder(
+        &self,
+        path: &str,
+    ) -> Result<(), tauri::plugin::mobile::PluginInvokeError> {
+        self.0
+            .run_mobile_plugin::<()>("rememberFolder", PathArgs { path })
     }
 
     /// Starts downloading an iCloud file that is only a placeholder on this device.

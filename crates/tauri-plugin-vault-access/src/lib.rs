@@ -9,6 +9,9 @@
 //! - [`VaultAccess::pick_folder`]: show the picker, start access, store a bookmark;
 //! - [`VaultAccess::restore_folder`]: re-open the stored folder after a restart;
 //! - [`VaultAccess::download`]: ask iCloud to download a note that is only a placeholder;
+//! - [`VaultAccess::default_folder`], [`VaultAccess::local_folder`] and
+//!   [`VaultAccess::remember_folder`]: the folder of the default vault at the
+//!   first start (ADR-0048, ADR-0050);
 //! - [`VaultAccess::share`]: hand an exported file to the share sheet, as an
 //!   export on iOS has no save dialog.
 //!
@@ -24,7 +27,7 @@ use tauri::{
 #[cfg(target_os = "ios")]
 mod ios;
 #[cfg(target_os = "ios")]
-pub use ios::VaultAccess;
+pub use ios::{DefaultFolder, VaultAccess};
 
 /// Creates the plugin. Register it with `tauri::Builder::plugin`.
 #[must_use]

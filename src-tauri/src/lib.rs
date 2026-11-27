@@ -22,6 +22,7 @@ mod watching;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
+use schnipsle_core::default_vault;
 use schnipsle_core::layout::VAULT_FILE;
 use schnipsle_core::{
     AddedAttachment, Comparison, Coordinator, Folder, LinkTarget, MovedNotes, NewNote, NoteContent,
@@ -318,6 +319,132 @@ async fn restore_vault(
     match vault_location::restore(&app)? {
         Some(path) => open_folder(&app, &state, &path).map(Some),
         None => Ok(None),
+    }
+}
+
+/// What the first start did (ADR-0048 rules 1 to 5, ADR-0050 rules 2 to 4).
+#[derive(Serialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+enum FirstStart {
+    /// This device has had a vault before: the UI asks for one as usual.
+    NotFirst,
+    /// The default vault is open.
+    Opened {
+        vault: VaultInfo,
+        /// Made now, not found.
+        made: bool,
+        /// Why it is on this device only, if it is.
+        local: Option<vault_location::LocalWhy>,
+    },
+    /// iPhone: iCloud cannot be asked yet. The UI offers a folder on this
+    /// device or one to choose, and calls [`wait_for_icloud`].
+    Offline,
+}
+
+/// At a start with no vault remembered: makes or opens the default vault, if
+/// this device has not had a vault before.
+#[tauri::command]
+async fn first_start(app: tauri::AppHandle, state: State<'_, AppState>) -> CmdResult<FirstStart> {
+    if vault_location::had_vault(&app) {
+        return Ok(FirstStart::NotFirst);
+    }
+    open_default_in(&app, &state, vault_location::default_folder(&app, false)?)
+}
+
+/// Waits until iCloud can be asked, after [`FirstStart::Offline`] (iPhone),
+/// and gives the name of the vault there to open, if there is one. Opens
+/// nothing.
+#[tauri::command]
+async fn wait_for_icloud(app: tauri::AppHandle) -> CmdResult<Option<String>> {
+    let vault_location::DefaultFolder::ICloud { path, listed } =
+        vault_location::default_folder(&app, true)?
+    else {
+        return Ok(None);
+    };
+    let listed = default_vault::Listed::from_paths(listed.iter().map(String::as_str));
+    let choice = default_vault::choose(&path, |p| listed.spot(p, coordinator()))?;
+    Ok((choice.spot == default_vault::Spot::Vault).then(|| folder_name(&choice.path)))
+}
+
+/// Makes or opens the default vault after [`FirstStart::Offline`]: on this
+/// device (`local`), or in iCloud once it can be asked.
+#[tauri::command]
+async fn open_default_vault(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    local: bool,
+) -> CmdResult<FirstStart> {
+    let folder = if local {
+        vault_location::DefaultFolder::Local {
+            path: vault_location::local_folder(&app)?,
+            why: vault_location::LocalWhy::Chosen,
+        }
+    } else {
+        vault_location::default_folder(&app, true)?
+    };
+    open_default_in(&app, &state, folder)
+}
+
+fn open_default_in(
+    app: &tauri::AppHandle,
+    state: &AppState,
+    folder: vault_location::DefaultFolder,
+) -> CmdResult<FirstStart> {
+    let (parent, listed, local) = match folder {
+        vault_location::DefaultFolder::Offline => return Ok(FirstStart::Offline),
+        vault_location::DefaultFolder::ICloud { path, listed } => (
+            path,
+            default_vault::Listed::from_paths(listed.iter().map(String::as_str)),
+            None,
+        ),
+        vault_location::DefaultFolder::Local { path, why } => {
+            (path, default_vault::Listed::default(), Some(why))
+        }
+    };
+    let choice = default_vault::choose(&parent, |p| listed.spot(p, coordinator()))?;
+    let vault = match default_vault::make_or_open(&choice, coordinator()) {
+        Ok(vault) => vault,
+        Err(_) if choice.spot == default_vault::Spot::Vault => wait_for_vault(app, &choice.path)?,
+        Err(e) => return Err(e.into()),
+    };
+    vault_location::remember(app, vault.root())?;
+    Ok(FirstStart::Opened {
+        vault: remember(app, state, vault)?,
+        made: choice.spot != default_vault::Spot::Vault,
+        local,
+    })
+}
+
+/// Opens the vault at `path` once iCloud has downloaded its `vault.yaml`, or
+/// listed the folder on this device at all; gives up after a minute.
+fn wait_for_vault(app: &tauri::AppHandle, path: &Path) -> CmdResult<Vault> {
+    const WAIT: std::time::Duration = std::time::Duration::from_secs(60);
+    const ASK_AGAIN: std::time::Duration = std::time::Duration::from_secs(5);
+    let start = std::time::Instant::now();
+    let mut asked: Option<std::time::Instant> = None;
+    loop {
+        match Vault::open_with(path, coordinator()) {
+            Ok(vault) => return Ok(vault),
+            Err(
+                e @ (VaultError::NotDownloaded(_)
+                | VaultError::NotAVault(_)
+                | VaultError::NotADirectory(_)),
+            ) => {
+                if start.elapsed() >= WAIT {
+                    return Err(e.into());
+                }
+                if asked.is_none_or(|at| at.elapsed() >= ASK_AGAIN) {
+                    request_download(app, &path.join(VAULT_FILE));
+                    asked = Some(std::time::Instant::now());
+                }
+                std::thread::sleep(std::time::Duration::from_millis(500));
+            }
+            Err(e) => return Err(e.into()),
+        }
     }
 }
 
@@ -1003,6 +1130,9 @@ pub fn run() {
             pick_vault,
             restore_vault,
             create_vault,
+            first_start,
+            wait_for_icloud,
+            open_default_vault,
             list_notes,
             tag_folders,
             search_notes,

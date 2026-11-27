@@ -31,6 +31,13 @@ export interface MovedNotes {
   /** Notes whose links were rewritten to keep working (ADR-0016). */
   relinked: string[];
 }
+/** Why the default vault is on this device only (src-tauri `LocalWhy`). */
+export type LocalWhy = "iCloudOff" | "noICloudFolder" | "chosen" | "noICloud";
+/** What the first start did (src-tauri `FirstStart`, ADR-0048, ADR-0050). */
+export type FirstStart =
+  | { kind: "notFirst" }
+  | { kind: "opened"; vault: VaultInfo; made: boolean; local: LocalWhy | null }
+  | { kind: "offline" };
 /** Result of picking or restoring a folder (src-tauri `Opened`). */
 export type Opened = ({ kind: "vault" } & VaultInfo) | ({ kind: "setup" } & FolderSetup);
 export interface NoteEntry {

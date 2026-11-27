@@ -21,6 +21,7 @@ import { musicMenu } from "./snippets";
 import { t } from "./strings";
 import type { SongHost } from "./song";
 import type {
+  FirstStart,
   VaultInfo,
   FolderSetup,
   StrayNotes,
@@ -290,6 +291,7 @@ const retag = createRetag({
 
 function vaultOpened(info: VaultInfo): void {
   ui.setup.hidden = true;
+  ui.firstStart.hidden = true;
   ui.vaultName.textContent = info.name;
   ui.vaultHint.textContent = info.path;
   readOnly = info.readOnly;
@@ -1294,7 +1296,8 @@ ui.undoDelete.addEventListener("click", () => {
   void restoreNote(trashed);
 });
 
-ui.pick.addEventListener("click", () => {
+function pickVault(): void {
+  firstStartAnswered = true;
   void leaveNote()
     .then(async (left) => {
       if (!left) return;
@@ -1304,6 +1307,83 @@ ui.pick.addEventListener("click", () => {
     .catch((e: unknown) => {
       setStatus(asError(e).message);
     });
+}
+ui.pick.addEventListener("click", pickVault);
+
+// The first start (ADR-0048, ADR-0050): with no vault remembered, the app
+// makes or opens the default vault. On the iPhone offline it asks instead and
+// keeps waiting for iCloud.
+
+/** The user chose a vault, so a late answer from iCloud opens nothing by itself. */
+let firstStartAnswered = false;
+
+async function firstStartDone(first: FirstStart): Promise<void> {
+  switch (first.kind) {
+    case "notFirst":
+      ui.empty.textContent = t.list.noVault;
+      return;
+    case "offline":
+      ui.empty.textContent = t.list.noVault;
+      ui.firstStartText.textContent = t.firstStart.offline;
+      ui.firstStartLocal.hidden = false;
+      ui.firstStartPick.hidden = false;
+      ui.firstStartICloud.hidden = true;
+      ui.firstStart.hidden = false;
+      void waitForICloud();
+      return;
+    case "opened": {
+      await folderOpened({ kind: "vault", ...first.vault });
+      const name = first.vault.name;
+      const done = first.made ? t.firstStart.made(name) : t.firstStart.opened(name);
+      setStatus(done + (first.local === null ? t.firstStart.inICloud : t.firstStart[first.local]));
+      return;
+    }
+  }
+}
+
+function openDefault(local: boolean): void {
+  firstStartAnswered = true;
+  ui.firstStart.hidden = true;
+  void leaveNote()
+    .then(async (left) => {
+      if (!left) return;
+      if (!vaultIsOpen) ui.empty.textContent = t.firstStart.waiting;
+      await firstStartDone(await invoke<FirstStart>("open_default_vault", { local }));
+    })
+    .catch((e: unknown) => {
+      if (!vaultIsOpen) ui.empty.textContent = t.list.noVault;
+      setStatus(t.firstStart.notMade(asError(e).message));
+    });
+}
+
+/** Offline at the first start: once iCloud answers, opens the default vault,
+ * or, if the user chose another meanwhile, offers the one iCloud has. */
+async function waitForICloud(): Promise<void> {
+  try {
+    const vault = await invoke<string | null>("wait_for_icloud");
+    if (!firstStartAnswered) {
+      openDefault(false);
+    } else if (vault !== null) {
+      ui.firstStartText.textContent = t.firstStart.arrived(vault);
+      ui.firstStartLocal.hidden = true;
+      ui.firstStartPick.hidden = true;
+      ui.firstStartICloud.hidden = false;
+      ui.firstStart.hidden = false;
+    }
+  } catch (e: unknown) {
+    setStatus(t.firstStart.notMade(asError(e).message));
+  }
+}
+
+ui.firstStartLocal.addEventListener("click", () => {
+  openDefault(true);
+});
+ui.firstStartPick.addEventListener("click", () => {
+  ui.firstStart.hidden = true;
+  pickVault();
+});
+ui.firstStartICloud.addEventListener("click", () => {
+  openDefault(false);
 });
 
 ui.setupCreate.addEventListener("click", () => {
@@ -1558,12 +1638,22 @@ ui.quitDialog.addEventListener("close", () => {
   void invoke("quit_cancelled");
 });
 
-invoke<Opened | null>("restore_vault")
-  .then(async (opened) => {
-    if (opened?.kind !== "vault") noStart();
-    if (opened) await folderOpened(opened);
-  })
-  .catch((e: unknown) => {
-    noStart();
-    setStatus(asError(e).message);
-  });
+async function startUp(): Promise<void> {
+  const opened = await invoke<Opened | null>("restore_vault");
+  if (opened?.kind !== "vault") noStart();
+  if (opened) {
+    await folderOpened(opened);
+    return;
+  }
+  ui.empty.textContent = t.firstStart.waiting;
+  try {
+    await firstStartDone(await invoke<FirstStart>("first_start"));
+  } catch (e: unknown) {
+    ui.empty.textContent = t.list.noVault;
+    setStatus(t.firstStart.notMade(asError(e).message));
+  }
+}
+startUp().catch((e: unknown) => {
+  noStart();
+  setStatus(asError(e).message);
+});
