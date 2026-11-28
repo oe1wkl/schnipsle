@@ -1,6 +1,6 @@
 # ADR-0051: The manual links its notes by relative links, and is built into the app
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-27
 - Deciders: Willi Kraml
 - Related: F-12, ADR-0016, ADR-0021, ADR-0048, ADR-0049
